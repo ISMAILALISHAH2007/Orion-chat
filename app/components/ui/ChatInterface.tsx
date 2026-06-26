@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { useChat } from '@/app/components/hooks/useChat';
+import { useChat } from '@/app/components/providers/ChatProvider';
 import { useVoice } from '@/app/components/hooks/useVoice';
 import { parseMarkdown } from '@/app/lib/utils/markdown';
 import { UltronAnimations } from '@/app/lib/animations';
@@ -8,7 +8,7 @@ import MessageBubble from './MessageBubble';
 
 export default function ChatInterface() {
   const [input, setInput] = useState('');
-  const { messages, sendMessage, isStreaming, startNewSession } = useChat();
+  const { messages, sendMessage, isStreaming } = useChat();
   const { isRecording, toggleRecording, transcript } = useVoice();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -41,26 +41,6 @@ export default function ChatInterface() {
 
   return (
     <section className="chat-section glass" style={{ position: 'relative' }}>
-      <div style={{ position: 'absolute', top: '10px', right: '15px', zIndex: 10 }}>
-        <button 
-          onClick={startNewSession}
-          style={{
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid var(--border-color)',
-            color: 'var(--text-main)',
-            padding: '5px 10px',
-            borderRadius: '4px',
-            fontSize: '0.8rem',
-            cursor: 'pointer',
-            transition: 'var(--transition-fast)'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-          onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-        >
-          + New Session
-        </button>
-      </div>
-
       <div id="chat-messages" className="messages-container" style={{ paddingTop: '2.5rem' }}>
         {messages.map((msg, idx) => (
           <MessageBubble key={idx} sender={msg.sender} text={msg.text} mode={msg.mode} />

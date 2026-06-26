@@ -46,3 +46,38 @@ export async function GET(req: Request) {
     return new NextResponse('Internal Error', { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const sessionId = searchParams.get('sessionId');
+
+    if (!sessionId) {
+      return new NextResponse('Session ID is required', { status: 400 });
+    }
+
+    const chatSession = await prisma.chatSession.findUnique({
+      where: { id: sessionId }
+    });
+
+    if (!chatSession || chatSession.userId !== userId) {
+      return new NextResponse('Not found or unauthorized', { status: 404 });
+    }
+
+    await prisma.chatSession.delete({
+      where: { id: sessionId }
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Chat delete API error:', error);
+    return new NextResponse('Internal Error', { status: 500 });
+  }
+}

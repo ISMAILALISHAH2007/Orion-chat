@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import Sidebar from '@/app/components/ui/Sidebar';
 import TopNav from '@/app/components/ui/TopNav';
 import { useEffect } from 'react';
+import { ChatProvider } from '@/app/components/providers/ChatProvider';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
@@ -18,15 +19,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!session) redirect('/sign-in');
 
   return (
-    <div className="app-container">
-      <Sidebar />
-      <main className="main-content">
-        <TopNav />
-        {children}
-      </main>
-      {/* Background glows */}
-      <div className="bg-glow bg-glow-1"></div>
-      <div className="bg-glow bg-glow-2"></div>
-    </div>
+    <ChatProvider>
+      <div className="app-container">
+        <Sidebar />
+        <main className="main-content">
+          <TopNav />
+          {children}
+        </main>
+        {/* Background glows */}
+        <div className="bg-glow bg-glow-1"></div>
+        <div className="bg-glow bg-glow-2"></div>
+      </div>
+    </ChatProvider>
   );
 }

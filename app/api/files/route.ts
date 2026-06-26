@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     // Assuming a simple FormData upload for MVP
     const formData = await req.formData();
     const file = formData.get('file') as File;
-    
+
     if (!file) {
       return new NextResponse('No file provided', { status: 400 });
     }
