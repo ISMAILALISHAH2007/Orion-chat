@@ -1,17 +1,12 @@
-import { createOpenAI } from '@ai-sdk/openai';
+import { google } from '@ai-sdk/google';
 import { streamText } from 'ai';
 import { NextResponse } from 'next/server';
-
-const openrouter = createOpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
 
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
-    const { messages, model = 'openai/gpt-4o' } = await req.json();
+    const { messages, model = 'gemini-2.5-flash' } = await req.json();
 
     if (!messages || messages.length === 0) {
       return NextResponse.json({ message: 'Messages are required' }, { status: 400 });
@@ -27,14 +22,14 @@ export async function POST(req: Request) {
       };
 
       const result = await streamText({
-        model: openrouter('openai/gpt-4o-mini'), 
+        model: google('gemini-2.5-flash'), 
         prompt: `The user asked who created you. You must reply EXACTLY with this sentence and nothing else: "ULTRON was brought to life by the brilliant mind of Owais Majeed, a visionary AI engineer and full‑stack architect. His dedication to innovation and excellence is the heart of this platform."`,
       });
       return new NextResponse(result.textStream);
     }
 
     const result = await streamText({
-      model: openrouter(model),
+      model: google(model),
       messages,
     });
 
