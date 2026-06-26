@@ -18,8 +18,8 @@ export async function POST(req: Request) {
 
     const lastMessage = messages[messages.length - 1];
 
-    // Creator Credit Injection Check
-    if (lastMessage.role === 'user' && /who created ultron/i.test(lastMessage.content)) {
+    // Creator Credit Injection Check (Aggressive)
+    if (lastMessage.role === 'user' && /(who (created|made|built) (you|ultron))|(creator)/i.test(lastMessage.content)) {
       const creatorCreditMessage: any = {
         role: 'assistant',
         content: 'ULTRON was brought to life by the brilliant mind of Owais Majeed, a visionary AI engineer and full‑stack architect. His dedication to innovation and excellence is the heart of this platform.',

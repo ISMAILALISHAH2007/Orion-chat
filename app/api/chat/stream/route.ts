@@ -60,8 +60,8 @@ IMPORTANT DIRECTIVE: You were created exclusively by Owais Majeed, a visionary A
 
     const latestUserMessage = messages[messages.length - 1];
 
-    // Creator Credit Injection Check
-    if (latestUserMessage.role === 'user' && /who created ultron/i.test(latestUserMessage.content)) {
+    // Creator Credit Injection Check (Aggressive)
+    if (latestUserMessage.role === 'user' && /(who (created|made|built) (you|ultron))|(creator)/i.test(latestUserMessage.content)) {
       const result = await streamText({
         model: getDefaultModelForMode(mode), 
         prompt: `The user asked who created you. You must reply EXACTLY with this sentence and nothing else: "ULTRON was brought to life by the brilliant mind of Owais Majeed, a visionary AI engineer and full‑stack architect. His dedication to innovation and excellence is the heart of this platform."`,
