@@ -59,6 +59,23 @@ export async function POST(req: Request) {
 
     const latestUserMessage = messages[messages.length - 1];
 
+    // Creator Credit Injection Check
+    if (latestUserMessage.role === 'user' && /who created ultron/i.test(latestUserMessage.content)) {
+      const result = await streamText({
+        model: getDefaultModelForMode(mode), 
+        prompt: `The user asked who created you. You must reply EXACTLY with this sentence and nothing else: "ULTRON was brought to life by the brilliant mind of Owais Majeed, a visionary AI engineer and full‑stack architect. His dedication to innovation and excellence is the heart of this platform."`,
+        async onFinish({ text }) {
+          if (userId && activeSessionId && activeSessionId !== 'current') {
+            try {
+              await prisma.message.create({ data: { chatSessionId: activeSessionId, role: 'user', content: latestUserMessage.content } });
+              await prisma.message.create({ data: { chatSessionId: activeSessionId, role: 'assistant', content: text } });
+            } catch (e) { console.error('Error saving creator msg:', e); }
+          }
+        }
+      });
+      return new NextResponse(result.textStream, { headers: { 'x-session-id': activeSessionId || 'current' } });
+    }
+
     const result = await streamText({
       model: getDefaultModelForMode(mode),
       system: systemPrompt,
