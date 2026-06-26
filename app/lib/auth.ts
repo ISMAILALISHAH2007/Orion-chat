@@ -1,4 +1,5 @@
 import { NextAuthOptions } from 'next-auth';
+import GoogleProvider from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from './db';
 import { compare } from 'bcryptjs';
@@ -16,6 +17,10 @@ declare module 'next-auth' {
 
 export const authOptions: NextAuthOptions = {
   providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID || '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    }),
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
@@ -45,6 +50,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           email: user.email,
           name: user.name,
+          image: user.image,
         };
       },
     }),
@@ -68,5 +74,6 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/sign-in',
+    newUser: '/sign-up',
   },
 };

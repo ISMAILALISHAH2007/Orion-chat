@@ -8,12 +8,12 @@ export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) return new NextResponse('Unauthorized', { status: 401 });
 
-    const memories = await prisma.memory.findMany({
+    const images = await prisma.image.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json(memories);
+    return NextResponse.json(images);
   } catch (error) {
     return new NextResponse('Internal Error', { status: 500 });
   }
@@ -24,18 +24,19 @@ export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) return new NextResponse('Unauthorized', { status: 401 });
 
-    const body = await req.json();
-    if (!body.content) return new NextResponse('Missing content', { status: 400 });
+    const { prompt } = await req.json();
+    if (!prompt) return new NextResponse('Missing prompt', { status: 400 });
 
-    const memory = await prisma.memory.create({
+    // Mock generation for now
+    const image = await prisma.image.create({
       data: {
         userId: session.user.id,
-        content: body.content,
-        // vector embedding logic would go here
+        prompt,
+        imageUrl: `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`, // placeholder free generator
       },
     });
 
-    return NextResponse.json(memory);
+    return NextResponse.json(image);
   } catch (error) {
     return new NextResponse('Internal Error', { status: 500 });
   }

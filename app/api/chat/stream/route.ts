@@ -2,6 +2,8 @@ import { streamText } from 'ai';
 import { getDefaultModelForMode } from '@/app/lib/ai/provider';
 import { checkRateLimit } from '@/app/lib/rate-limit';
 import { retrieveRelevantMemories } from '@/app/lib/memory/embeddings';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/lib/auth';
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
@@ -15,16 +17,26 @@ export async function POST(req: Request) {
 
     const { messages, mode, sessionId } = await req.json();
     
-    // In a real app, retrieve user from session
-    const userId = 'placeholder-user-id'; 
+    // Retrieve user from session
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id;
 
-    // Retrieve memories relevant to the latest message
-    const latestMessage = messages[messages.length - 1];
-    const memories = await retrieveRelevantMemories(userId, latestMessage.content);
+    // Resilient memory retrieval
+    let memories: string[] = [];
+    if (userId) {
+      try {
+        const latestMessage = messages[messages.length - 1];
+        if (latestMessage && latestMessage.content) {
+          memories = await retrieveRelevantMemories(userId, latestMessage.content);
+        }
+      } catch (memError) {
+        console.error('Failed to retrieve memories for user:', userId, memError);
+      }
+    }
     
-    let systemPrompt = `You are ULTRON, a highly advanced cognitive AI assistant. Current mode: ${mode.toUpperCase()}.`;
+    let systemPrompt = `You are ULTRON, a highly advanced cognitive AI assistant. Current mode: ${mode.toUpperCase()}. Response style should be precise, intelligent, and highly capable.`;
     if (memories.length > 0) {
-      systemPrompt += `\n\nRelevant memories:\n${memories.map(m => `- ${m}`).join('\n')}`;
+      systemPrompt += `\n\nRelevant operator history/memories:\n${memories.map(m => `- ${m}`).join('\n')}`;
     }
 
     const result = streamText({
@@ -35,7 +47,7 @@ export async function POST(req: Request) {
 
     return result.toTextStreamResponse();
   } catch (error) {
-    console.error('Chat stream error:', error);
+    console.error('Chat stream API error:', error);
     return new Response('Internal Server Error', { status: 500 });
   }
 }

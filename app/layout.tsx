@@ -11,14 +11,23 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 export const metadata: Metadata = {
   title: 'ULTRON // Cognitive Assistant',
   description: 'Next‑gen AI platform with memory, agents, and voice.',
+  keywords: ['AI', 'assistant', 'cognitive', 'ULTRON', 'neural', 'machine learning'],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${outfit.variable} ${inter.variable}`}>
       <body className="mode-casual">
-        <Script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" strategy="beforeInteractive" />
-        <Script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" strategy="beforeInteractive" />
+        {/* Load Three.js from CDN for WebGL visualizer */}
+        <Script
+          src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+          strategy="beforeInteractive"
+        />
+        {/* Load GSAP from CDN for animations */}
+        <Script
+          src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"
+          strategy="beforeInteractive"
+        />
         <AuthProvider>
           <ThemeProvider>
             {children}

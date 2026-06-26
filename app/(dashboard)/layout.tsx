@@ -15,7 +15,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
     );
   }
-  // if (!session) redirect('/sign-in'); // Disabled temporarily so you can view the UI
+  if (!session) redirect('/sign-in');
 
   return (
     <div className="app-container">

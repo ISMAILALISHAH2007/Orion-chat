@@ -7,7 +7,8 @@ export default function Visualizer() {
 
   useEffect(() => {
     if (canvasRef.current) {
-      initVisualizer(canvasRef.current);
+      const cleanup = initVisualizer(canvasRef.current);
+      return cleanup;
     }
   }, []);
 

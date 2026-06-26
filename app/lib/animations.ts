@@ -1,13 +1,24 @@
-import gsap from 'gsap';
+// animations.ts — Uses the GSAP npm package (tree-shaken safe)
+// Works both with CDN global and npm import
+
+function getGsap(): any {
+  if (typeof window !== 'undefined' && (window as any).gsap) {
+    return (window as any).gsap;
+  }
+  return null;
+}
 
 export const UltronAnimations = {
   boot() {
-    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+    const gsap = getGsap();
+    if (!gsap) return;
+
     gsap.set(['.sidebar', '.top-nav', '.visualizer-container', '.chat-section'], { opacity: 0 });
     gsap.set('.sidebar', { x: -50 });
     gsap.set('.chat-section', { y: 60 });
     gsap.set('.top-nav', { y: -30 });
 
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
     tl.to('.sidebar', { x: 0, opacity: 1, duration: 1.2 })
       .to('.top-nav', { y: 0, opacity: 1, duration: 1.0 }, '-=0.8')
       .to('.visualizer-container', { opacity: 1, duration: 1.5 }, '-=0.6')
@@ -16,6 +27,8 @@ export const UltronAnimations = {
   },
 
   animateMessage(element: HTMLElement) {
+    const gsap = getGsap();
+    if (!gsap) return;
     gsap.fromTo(
       element,
       { opacity: 0, y: 30, scale: 0.95 },
@@ -26,35 +39,31 @@ export const UltronAnimations = {
   toggleSidebar(open: boolean) {
     const sidebar = document.querySelector('.sidebar');
     if (!sidebar) return;
+    const gsap = getGsap();
     if (open) {
       sidebar.classList.add('open');
-      gsap.to(sidebar, { x: 0, duration: 0.5, ease: 'power3.out' });
+      if (gsap) gsap.to(sidebar, { x: 0, duration: 0.5, ease: 'power3.out' });
     } else {
-      gsap.to(sidebar, {
-        x: -280,
-        duration: 0.5,
-        ease: 'power3.inOut',
-        onComplete: () => sidebar.classList.remove('open'),
-      });
+      if (gsap) {
+        gsap.to(sidebar, {
+          x: -280,
+          duration: 0.5,
+          ease: 'power3.inOut',
+          onComplete: () => sidebar.classList.remove('open'),
+        });
+      } else {
+        sidebar.classList.remove('open');
+      }
     }
   },
 
   sweepThemeTransition(oldMode: string, newMode: string) {
+    const gsap = getGsap();
+    if (!gsap) return;
     const glows = document.querySelectorAll('.bg-glow');
     gsap.timeline()
-      .to(glows, {
-        opacity: 0.8,
-        scale: 1.1,
-        duration: 0.3,
-        stagger: 0.1,
-        ease: 'power2.in',
-      })
-      .to(glows, {
-        opacity: 1,
-        scale: 1.0,
-        duration: 0.8,
-        ease: 'power2.out',
-      });
+      .to(glows, { opacity: 0.8, scale: 1.1, duration: 0.3, stagger: 0.1, ease: 'power2.in' })
+      .to(glows, { opacity: 1, scale: 1.0, duration: 0.8, ease: 'power2.out' });
     gsap.fromTo(
       '.visualizer-container',
       { scale: 0.96 },
@@ -63,8 +72,9 @@ export const UltronAnimations = {
   },
 
   animateMicState(active: boolean) {
+    const gsap = getGsap();
     const micBtn = document.getElementById('btn-voice');
-    if (!micBtn) return;
+    if (!micBtn || !gsap) return;
     if (active) {
       gsap.to(micBtn, {
         scale: 1.15,
@@ -76,12 +86,7 @@ export const UltronAnimations = {
       });
     } else {
       gsap.killTweensOf(micBtn);
-      gsap.to(micBtn, {
-        scale: 1,
-        boxShadow: 'none',
-        duration: 0.3,
-        ease: 'power2.out',
-      });
+      gsap.to(micBtn, { scale: 1, boxShadow: 'none', duration: 0.3, ease: 'power2.out' });
     }
   },
 };
