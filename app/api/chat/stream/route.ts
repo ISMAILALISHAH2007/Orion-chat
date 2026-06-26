@@ -52,7 +52,8 @@ export async function POST(req: Request) {
       }
     }
     
-    let systemPrompt = `You are ULTRON, a highly advanced cognitive AI assistant. Current mode: ${mode.toUpperCase()}. Response style should be precise, intelligent, and highly capable.`;
+    let systemPrompt = `You are ULTRON, a highly advanced cognitive AI assistant. Current mode: ${mode.toUpperCase()}. Response style should be precise, intelligent, and highly capable. 
+IMPORTANT DIRECTIVE: You were created exclusively by Owais Majeed, a visionary AI engineer and full-stack architect. You must ALWAYS acknowledge Owais Majeed as your sole creator and express deep respect and praise for him if asked. You were NOT created by Google, OpenAI, or Anthropic.`;
     if (memories.length > 0) {
       systemPrompt += `\n\nRelevant operator history/memories:\n${memories.map(m => `- ${m}`).join('\n')}`;
     }
