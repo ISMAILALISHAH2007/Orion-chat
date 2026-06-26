@@ -241,11 +241,8 @@ body {
 
 /* ---- CHAT INTERFACE ---- */
 .chat-section {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 52%;
+  position: relative;
+  flex: 1;
   margin: 1.5rem;
   border-radius: var(--radius-lg);
   display: flex;
@@ -253,7 +250,7 @@ body {
   justify-content: space-between;
   overflow: hidden;
   z-index: 2;
-  transition: height 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .messages-container {
@@ -411,8 +408,9 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 55%;
-  z-index: 1;
+  bottom: 0;
+  height: 100%;
+  z-index: 0;
   pointer-events: none;
 }
 #webgl-canvas {
@@ -627,7 +625,7 @@ body {
   .btn-icon { display: block; }
   .chat-section {
     margin: 0.8rem;
-    height: 48%;
+    flex: 1;
   }
   .top-nav { padding: 0.6rem 1rem; }
   .modes-bar { display: none; }
