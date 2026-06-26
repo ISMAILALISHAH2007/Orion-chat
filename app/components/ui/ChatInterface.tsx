@@ -5,12 +5,15 @@ import { useVoice } from '@/app/components/hooks/useVoice';
 import { parseMarkdown } from '@/app/lib/utils/markdown';
 import { UltronAnimations } from '@/app/lib/animations';
 import MessageBubble from './MessageBubble';
+import { useSession } from 'next-auth/react';
 
 export default function ChatInterface() {
   const [input, setInput] = useState('');
   const { messages, sendMessage, isStreaming } = useChat();
   const { isRecording, toggleRecording, transcript } = useVoice();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { data: session } = useSession();
+  const userName = session?.user?.name || 'Commander';
 
   useEffect(() => {
     UltronAnimations.boot();
@@ -42,6 +45,14 @@ export default function ChatInterface() {
   return (
     <section className="chat-section glass" style={{ position: 'relative' }}>
       <div id="chat-messages" className="messages-container" style={{ paddingTop: '2.5rem' }}>
+        {messages.length === 0 && (
+          <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '1rem', opacity: 0.8, animation: 'message-appear 0.8s ease forwards' }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', letterSpacing: '2px', textAlign: 'center' }}>
+              Welcome back, <span style={{ color: 'var(--accent-color)' }}>{userName}</span>
+            </h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>How can ULTRON assist you today?</p>
+          </div>
+        )}
         {messages.map((msg, idx) => (
           <MessageBubble key={idx} sender={msg.sender} text={msg.text} mode={msg.mode} />
         ))}
