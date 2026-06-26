@@ -319,11 +319,11 @@ body {
 }
 .input-glass-wrapper {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   background: var(--input-bg);
   border: 1px solid var(--border-color);
-  border-radius: 60px;
-  padding: 6px 10px 6px 6px;
+  border-radius: var(--radius-lg);
+  padding: 10px 10px 10px 10px;
   transition: var(--transition-fast);
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
@@ -337,9 +337,12 @@ body {
   border: none;
   outline: none;
   color: var(--text-main);
-  padding: 12px 20px;
+  padding: 12px 16px;
   font-family: var(--font-sans);
   font-size: 1rem;
+  resize: none;
+  min-height: 80px;
+  line-height: 1.5;
 }
 #chat-input::placeholder {
   color: var(--text-muted);
