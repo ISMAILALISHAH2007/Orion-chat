@@ -1,10 +1,14 @@
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 export type AIProviderName = 'gemini';
 
+const googleProvider = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || '',
+});
+
 export function getProviderModel(provider: string, modelId: string) {
   // We strictly use gemini everywhere now
-  return google(modelId || 'gemini-2.5-flash');
+  return googleProvider(modelId || 'gemini-2.5-flash');
 }
 
 export function getDefaultModelForMode(mode: string) {

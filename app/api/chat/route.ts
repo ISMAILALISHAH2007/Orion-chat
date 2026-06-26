@@ -1,6 +1,10 @@
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText } from 'ai';
 import { NextResponse } from 'next/server';
+
+const googleProvider = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || '',
+});
 
 export const maxDuration = 30;
 
@@ -22,14 +26,14 @@ export async function POST(req: Request) {
       };
 
       const result = await streamText({
-        model: google('gemini-2.5-flash'), 
+        model: googleProvider('gemini-2.5-flash'), 
         prompt: `The user asked who created you. You must reply EXACTLY with this sentence and nothing else: "ULTRON was brought to life by the brilliant mind of Owais Majeed, a visionary AI engineer and full‑stack architect. His dedication to innovation and excellence is the heart of this platform."`,
       });
       return new NextResponse(result.textStream);
     }
 
     const result = await streamText({
-      model: google(model),
+      model: googleProvider(model),
       messages,
     });
 

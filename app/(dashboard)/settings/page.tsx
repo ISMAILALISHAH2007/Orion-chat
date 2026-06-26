@@ -118,63 +118,7 @@ export default function SettingsPage() {
           
           {/* Left Column: API Keys & Sub */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {/* API Keys Configuration Card */}
-            <div className="custom-card glass">
-              <h2 style={{ fontFamily: 'var(--font-display)', letterSpacing: '1px', fontSize: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-                NEURAL INTEGRATION KEYS
-              </h2>
-              {message && (
-                <div style={{ color: '#39ff14', fontSize: '0.85rem', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                  {message}
-                </div>
-              )}
-              
-              <form onSubmit={handleSaveKey} className="auth-form" style={{ gap: '1rem', marginTop: '0.5rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Key Provider</label>
-                  <select
-                    className="form-input"
-                    value={selectedProvider}
-                    onChange={(e) => setSelectedProvider(e.target.value)}
-                    style={{ background: 'var(--input-bg)' }}
-                  >
-                    <option value="openai">OpenAI (GPT-4o, GPT-4o-mini)</option>
-                    <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
-                    <option value="gemini">Google Gemini (Gemini 1.5 Pro)</option>
-                  </select>
-                </div>
-                
-                <div className="form-group">
-                  <label className="form-label">Key Passphrase</label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    placeholder="sk-proj-..."
-                    value={inputKey}
-                    onChange={(e) => setInputKey(e.target.value)}
-                    required
-                    disabled={submitting}
-                  />
-                </div>
-                
-                <button type="submit" className="auth-button" disabled={submitting}>
-                  {submitting ? 'COMMITTING KEY...' : 'COMMIT INTEGRATION KEY'}
-                </button>
-              </form>
-
-              {/* Show active saved keys */}
-              {keys.length > 0 && (
-                <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <span className="form-label" style={{ fontSize: '0.65rem' }}>ACTIVE DATABASE KEYS</span>
-                  {keys.map((k) => (
-                    <div key={k.provider} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.8rem' }}>
-                      <span style={{ fontWeight: 'bold', color: 'var(--accent-color)', textTransform: 'uppercase' }}>{k.provider}</span>
-                      <span style={{ color: 'var(--text-muted)', fontFamily: 'monospace' }}>{k.key}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* API Keys Configuration Card REMOVED - using global Gemini API Key */}
 
             {/* Subscription Node Card */}
             <div className="custom-card glass">
