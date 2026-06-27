@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef } from 'react';
-import { UltronAnimations } from '@/app/lib/animations';
+import { Sparkles } from 'lucide-react';
 import { parseMarkdown } from '@/app/lib/utils/markdown';
 
 interface MessageBubbleProps {
@@ -9,22 +9,55 @@ interface MessageBubbleProps {
   mode?: string;
 }
 
-export default function MessageBubble({ sender, text, mode = 'casual' }: MessageBubbleProps) {
-  const bubbleRef = useRef<HTMLDivElement>(null);
+export default function MessageBubble({ sender, text }: MessageBubbleProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
 
+  // Wire up "Copy" buttons inside rendered code blocks.
   useEffect(() => {
-    if (bubbleRef.current) {
-      UltronAnimations.animateMessage(bubbleRef.current);
-    }
-  }, []);
+    const root = contentRef.current;
+    if (!root) return;
+
+    const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('.code-copy'));
+    const cleanups: Array<() => void> = [];
+
+    buttons.forEach((btn) => {
+      const onClick = () => {
+        const code = btn.closest('.code-block')?.querySelector('code')?.textContent ?? '';
+        navigator.clipboard?.writeText(code).then(() => {
+          const original = btn.textContent;
+          btn.textContent = 'Copied!';
+          setTimeout(() => {
+            btn.textContent = original;
+          }, 2000);
+        });
+      };
+      btn.addEventListener('click', onClick);
+      cleanups.push(() => btn.removeEventListener('click', onClick));
+    });
+
+    return () => cleanups.forEach((c) => c());
+  }, [text]);
+
+  if (sender === 'user') {
+    return (
+      <div className="flex animate-fade-in-up justify-end">
+        <div className="max-w-[85%] rounded-2xl rounded-tr-md bg-surface-2 px-4 py-3">
+          <div className="whitespace-pre-wrap text-[0.975rem] leading-relaxed text-foreground">
+            {text}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div ref={bubbleRef} className={`message-bubble ${sender}`}>
-      <span className="msg-sender-label">
-        {sender === 'user' ? 'USER TRANSMISSION' : `ULTRON // ${(mode || 'casual').toUpperCase()}`}
+    <div className="flex animate-fade-in-up gap-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-accent">
+        <Sparkles size={16} />
       </span>
       <div
-        className="msg-content"
+        ref={contentRef}
+        className="msg-content min-w-0 flex-1 pt-1"
         dangerouslySetInnerHTML={{ __html: parseMarkdown(text) }}
       />
     </div>
