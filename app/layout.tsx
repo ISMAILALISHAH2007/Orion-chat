@@ -3,6 +3,7 @@ import { Outfit, Inter, JetBrains_Mono } from 'next/font/google';
 import '@/app/styles/globals.css';
 import { AuthProvider } from '@/app/components/providers/AuthProvider';
 import { ThemeProvider } from '@/app/components/providers/ThemeProvider';
+import InstallPrompt from '@/app/components/ui/InstallPrompt';
 
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' });
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
   title: 'ULTRON — AI Assistant',
   description: 'A premium conversational AI workspace with memory, agents, and voice.',
   keywords: ['AI', 'assistant', 'chatbot', 'ULTRON', 'conversation', 'productivity'],
+  manifest: '/manifest.json',
 };
 
 export const viewport: Viewport = {
@@ -32,7 +34,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="bg-background text-foreground font-sans antialiased">
         <AuthProvider>
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider>
+            <InstallPrompt />
+            {children}
+          </ThemeProvider>
         </AuthProvider>
       </body>
     </html>

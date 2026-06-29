@@ -11,8 +11,22 @@ export type ChatSessionItem = {
   updatedAt: string;
 };
 
+export type ChatAttachment = {
+  url: string;
+  mimeType: string;
+  name: string;
+};
+
+export type ChatMessage = {
+  sender: 'user' | 'ai';
+  text: string;
+  mode?: string;
+  image?: boolean;
+  attachments?: ChatAttachment[];
+};
+
 interface ChatContextType {
-  messages: Array<{ sender: 'user' | 'ai'; text: string; mode?: string }>;
+  messages: ChatMessage[];
   input: string;
   isStreaming: boolean;
   sessionId: string;
@@ -22,7 +36,7 @@ interface ChatContextType {
   startNewSession: () => void;
   loadSession: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
-  sendMessage: (textOrEvent?: string | React.FormEvent) => Promise<void>;
+  sendMessage: (textOrEvent?: string | React.FormEvent, attachments?: ChatAttachment[]) => Promise<void>;
   fetchSessionsList: () => Promise<void>;
 }
 
@@ -31,14 +45,15 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const { mode } = useMode();
-  
-  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; mode?: string }>>([]);
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [input, setInput] = useState('');
   const [sessionId, setSessionId] = useState<string>('current');
   const [sessionsList, setSessionsList] = useState<ChatSessionItem[]>([]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setInput(e.target.value);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setInput(e.target.value);
 
   const fetchSessionsList = useCallback(async () => {
     if (!session?.user) return;
@@ -64,10 +79,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         setSessionId(id);
-        const mapped = data.messages.map((m: any) => ({
+        const mapped: ChatMessage[] = (data.messages || []).map((m: any) => ({
           sender: m.role === 'assistant' ? 'ai' : 'user',
           text: m.content,
-          mode: data.mode
+          mode: data.mode,
         }));
         setMessages(mapped);
       }
@@ -76,38 +91,64 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const deleteSession = useCallback(async (id: string) => {
-    try {
-      const res = await fetch(`/api/chat/history?sessionId=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setSessionsList(prev => prev.filter(s => s.id !== id));
-        if (sessionId === id) {
-          startNewSession();
+  const deleteSession = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(`/api/chat/history?sessionId=${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          setSessionsList((prev) => prev.filter((s) => s.id !== id));
+          if (sessionId === id) {
+            startNewSession();
+          }
         }
+      } catch (err) {
+        console.error('Failed to delete session:', err);
       }
-    } catch (err) {
-      console.error('Failed to delete session:', err);
-    }
-  }, [sessionId, startNewSession]);
+    },
+    [sessionId, startNewSession]
+  );
 
   const sendMessage = useCallback(
-    async (textOrEvent?: string | React.FormEvent) => {
+    async (textOrEvent?: string | React.FormEvent, attachments: ChatAttachment[] = []) => {
       if (typeof textOrEvent === 'object' && textOrEvent.preventDefault) {
         textOrEvent.preventDefault();
       }
-      
+
       const text = typeof textOrEvent === 'string' ? textOrEvent : input;
-      if (!text.trim() || isStreaming) return;
+      if (!text.trim() && attachments.length === 0) return;
+      if (isStreaming) return;
 
       setIsStreaming(true);
       setInput('');
-      setMessages((prev) => [...prev, { sender: 'user', text }]);
+      setMessages((prev) => [...prev, { sender: 'user', text, attachments }]);
 
-      const payloadMessages = messages.map(m => ({
-        role: m.sender === 'ai' ? 'assistant' : 'user',
-        content: m.text
-      }));
-      payloadMessages.push({ role: 'user', content: text });
+      const payloadMessages = messages.map((m) => {
+        if (m.sender === 'user' && m.attachments && m.attachments.length > 0) {
+          return {
+            role: 'user',
+            content: [
+              { type: 'text', text: m.text || 'Attached file' },
+              ...m.attachments.map(att => ({ type: 'image', image: att.url }))
+            ]
+          };
+        }
+        return {
+          role: m.sender === 'ai' ? 'assistant' : 'user',
+          content: m.text,
+        };
+      });
+      
+      if (attachments && attachments.length > 0) {
+        payloadMessages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: text || 'Attached file' },
+            ...attachments.map(att => ({ type: 'image', image: att.url }))
+          ]
+        });
+      } else {
+        payloadMessages.push({ role: 'user', content: text });
+      }
 
       try {
         const response = await fetch('/api/chat/stream', {
@@ -123,10 +164,23 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const newSessionId = response.headers.get('x-session-id');
         let justCreated = false;
         if (newSessionId && newSessionId !== 'current') {
-          if (sessionId === 'current') {
-            justCreated = true;
-          }
+          if (sessionId === 'current') justCreated = true;
           setSessionId(newSessionId);
+        }
+
+        const contentType = response.headers.get('content-type') ?? '';
+        if (contentType.includes('application/json')) {
+          // Slash-command / image-intent response.
+          const data = await response.json();
+          const reply: ChatMessage = {
+            sender: 'ai',
+            text: data.text ?? '',
+            mode,
+            image: Boolean(data.image),
+          };
+          setMessages((prev) => [...prev, reply]);
+          if (justCreated) fetchSessionsList();
+          return;
         }
 
         const reader = response.body!.getReader();
@@ -137,7 +191,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           const { value, done } = await reader.read();
           if (done) break;
           accumulated += decoder.decode(value, { stream: true });
-          
+
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last && last.sender === 'ai') {
@@ -147,14 +201,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             }
           });
         }
-        
-        // Refresh list if it was a new session
-        if (justCreated) {
-          fetchSessionsList();
-        }
+
+        if (justCreated) fetchSessionsList();
       } catch (error) {
         console.error('Chat stream error:', error);
-        setMessages((prev) => [...prev, { sender: 'ai', text: '⚠️ Connection error.', mode: 'system' }]);
+        setMessages((prev) => [
+          ...prev,
+          { sender: 'ai', text: '⚠️ Connection error.', mode: 'system' },
+        ]);
       } finally {
         setIsStreaming(false);
       }
@@ -162,7 +216,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [messages, isStreaming, input, mode, sessionId, fetchSessionsList]
   );
 
-  // Initial load
   useEffect(() => {
     fetchSessionsList();
   }, [fetchSessionsList]);

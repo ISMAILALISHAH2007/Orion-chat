@@ -7,9 +7,10 @@ interface MessageBubbleProps {
   sender: 'user' | 'ai';
   text: string;
   mode?: string;
+  attachments?: { url: string; mimeType: string; name: string }[];
 }
 
-export default function MessageBubble({ sender, text }: MessageBubbleProps) {
+export default function MessageBubble({ sender, text, attachments }: MessageBubbleProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   // Wire up "Copy" buttons inside rendered code blocks.
@@ -45,6 +46,15 @@ export default function MessageBubble({ sender, text }: MessageBubbleProps) {
           <div className="whitespace-pre-wrap text-[0.975rem] leading-relaxed text-foreground">
             {text}
           </div>
+          {attachments && attachments.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {attachments.map((att, idx) => (
+                <div key={idx} className="h-20 w-20 overflow-hidden rounded-lg border border-border">
+                  <img src={att.url} alt={att.name} className="h-full w-full object-cover" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );

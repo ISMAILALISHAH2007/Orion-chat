@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowUp, Sparkles, Download, Image as ImageIcon } from 'lucide-react';
 
 interface GeneratedImage {
   id: string;
@@ -8,24 +9,88 @@ interface GeneratedImage {
   createdAt: string;
 }
 
+function ImageItem({ img, onDownload }: { img: GeneratedImage; onDownload: (url: string, prompt: string) => void }) {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <div className="flex animate-fade-in-up flex-col items-center w-full">
+      <div className="w-full text-center text-sm font-medium text-foreground mb-4">
+        "{img.prompt}"
+      </div>
+      <div className="group relative overflow-hidden rounded-2xl border border-border shadow-sm transition-all hover:shadow-md max-w-[512px] w-full bg-surface-2 aspect-square flex items-center justify-center">
+        
+        {/* Loading Skeleton */}
+        {!loaded && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-surface-2 gap-4">
+            <span className="flex h-12 w-12 shrink-0 animate-pulse items-center justify-center rounded-full border border-border bg-surface shadow-sm">
+              <Sparkles size={24} className="text-accent" />
+            </span>
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-xs font-medium uppercase tracking-widest text-muted animate-pulse">
+                Synthesizing Visual Matrix
+              </span>
+              <span className="thinking-dots opacity-50" aria-label="Loading">
+                <span></span><span></span><span></span>
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Actual Image */}
+        <img
+          src={img.imageUrl}
+          alt={img.prompt}
+          className={`h-auto w-full object-cover transition-opacity duration-700 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          loading="lazy"
+          onLoad={() => setLoaded(true)}
+        />
+        
+        {/* Hover Overlay with Download */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
+          <button
+            onClick={() => onDownload(img.imageUrl, img.prompt)}
+            className="flex items-center gap-2 rounded-full bg-white px-5 py-2.5 font-medium text-black shadow-xl transition-transform hover:scale-105 active:scale-95"
+          >
+            <Download size={18} />
+            Save Image
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ImagesPage() {
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [prompt, setPrompt] = useState('');
-  const [currentImage, setCurrentImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [message, setMessage] = useState('');
+  
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchImages();
   }, []);
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [images, generating]);
+
+  // Auto-grow textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+  }, [prompt]);
 
   const fetchImages = async () => {
     try {
       const res = await fetch('/api/images');
       if (res.ok) {
         const data = await res.json();
-        setImages(data.images || []);
+        setImages(Array.isArray(data) ? data.reverse() : []); // newest at bottom
       }
     } catch (err) {
       console.error('Failed to fetch images:', err);
@@ -34,142 +99,141 @@ export default function ImagesPage() {
     }
   };
 
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt.trim()) return;
+  const handleGenerate = async () => {
+    if (!prompt.trim() || generating) return;
 
+    const currentPrompt = prompt.trim();
+    setPrompt('');
     setGenerating(true);
-    setMessage('');
-    setCurrentImage(null);
 
     try {
-      // Create a unique seed to avoid browser caching of Pollinations AI image
       const seed = Math.floor(Math.random() * 1000000);
-      const generatedUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true&seed=${seed}`;
+      const generatedUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(currentPrompt)}?width=1024&height=1024&nologo=true&seed=${seed}`;
 
-      // Preload image in background
-      const img = new Image();
-      img.src = generatedUrl;
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-      });
-
-      setCurrentImage(generatedUrl);
-
-      // Save to database
+      // Save to DB
       const saveRes = await fetch('/api/images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, imageUrl: generatedUrl }),
+        body: JSON.stringify({ prompt: currentPrompt, imageUrl: generatedUrl }),
       });
 
       if (saveRes.ok) {
-        setMessage('Image generated and saved to neural archive.');
-        fetchImages();
+        const data = await saveRes.json();
+        setImages((prev) => [...prev, data]);
       }
     } catch (err) {
-      console.error(err);
-      setMessage('Failed to render holographic matrix.');
+      console.error('Image generation failed:', err);
     } finally {
       setGenerating(false);
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleGenerate();
+    }
+  };
+
+  const downloadImage = async (url: string, promptText: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `ultron-image-${promptText.replace(/\s+/g, '-').slice(0, 30)}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Failed to download image', error);
+      // Fallback
+      window.open(url, '_blank');
+    }
+  };
+
   return (
-    <div className="dashboard-subpage">
-      <div className="subpage-header">
-        <h1 className="subpage-title">IMAGING LABORATORY</h1>
-        <p className="subpage-description">Generate visual projections from textual directives</p>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2.5rem', alignItems: 'start' }}>
-        {/* Left Side: Generator & Active Image */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div className="custom-card glass">
-            <h2 style={{ fontFamily: 'var(--font-display)', letterSpacing: '1px', fontSize: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-              VISUALIZER MATRIX
-            </h2>
-            {message && (
-              <div style={{ color: '#39ff14', fontSize: '0.85rem', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '1rem' }}>
-                {message}
-              </div>
-            )}
-            <form onSubmit={handleGenerate} className="auth-form" style={{ gap: '1rem' }}>
-              <div className="form-group">
-                <label className="form-label">Image Directive Prompt</label>
-                <textarea
-                  className="form-input"
-                  placeholder="A futuristic holographic workspace in cyberpunk styling, glowing blue and purple arrays, photorealistic..."
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  rows={3}
-                  style={{ resize: 'none', borderRadius: 'var(--radius-sm)' }}
-                  required
-                  disabled={generating}
-                />
-              </div>
-              <button type="submit" className="auth-button" disabled={generating}>
-                {generating ? 'PROJECTIONS RENDERING...' : 'RENDER IMAGING'}
-              </button>
-            </form>
-          </div>
-
-          {/* Active Image Display */}
-          {(generating || currentImage) && (
-            <div className="custom-card glass" style={{ padding: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px', position: 'relative', overflow: 'hidden' }}>
-              {generating ? (
-                <div style={{ textAlign: 'center' }}>
-                  <div className="status-dot" style={{ margin: '0 auto 1rem', width: '12px', height: '12px' }}></div>
-                  <div className="orb-text-state">ASSEMBLING RASTER ARRAY...</div>
-                </div>
-              ) : (
-                currentImage && (
-                  <img
-                    src={currentImage}
-                    alt="Active neural projection"
-                    style={{ width: '100%', height: 'auto', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}
-                  />
-                )
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right Side: Archive Gallery */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', letterSpacing: '1px', fontSize: '1.25rem' }}>
-            PROJECTED GALLERY ARCHIVES
-          </h2>
+    <section className="relative flex min-h-0 flex-1 flex-col bg-background">
+      {/* Scrollable Image Feed */}
+      <div className="flex-1 overflow-y-auto px-4 py-8">
+        <div className="mx-auto w-full max-w-3xl space-y-12">
+          
           {loading ? (
-            <div className="orb-text-state" style={{ marginTop: '2rem' }}>SYNCHRONIZING ARCHIVES...</div>
-          ) : images.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', padding: '3rem', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
-              Neural image gallery is empty. Generate an image on the left.
+            <div className="flex h-full items-center justify-center py-20 text-muted">
+              Loading image archive...
+            </div>
+          ) : images.length === 0 && !generating ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center opacity-70">
+              <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface-2 text-muted">
+                <ImageIcon size={32} />
+              </span>
+              <h2 className="font-display text-xl font-semibold text-foreground">Imaging Laboratory</h2>
+              <p className="mt-2 text-sm text-muted max-w-md">
+                Describe any scene or concept, and ULTRON will synthesize a high-resolution visual projection.
+              </p>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              {images.map((img) => (
-                <div key={img.id} className="custom-card glass" style={{ padding: '0.5rem', gap: '0.5rem', overflow: 'hidden', position: 'relative' }}>
-                  <img
-                    src={img.imageUrl}
-                    alt={img.prompt}
-                    style={{ width: '100%', height: 'auto', borderRadius: 'var(--radius-sm)', objectFit: 'cover' }}
-                  />
-                  <div style={{ padding: '0.5rem' }}>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-main)', lineHeight: '1.4', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                      {img.prompt}
-                    </p>
-                    <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                      {new Date(img.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              ))}
+            images.map((img) => (
+              <ImageItem key={img.id} img={img} onDownload={downloadImage} />
+            ))
+          )}
+
+          {/* Loading Indicator */}
+          {generating && (
+            <div className="flex animate-fade-in flex-col items-center gap-4 py-8">
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface">
+                  <Sparkles size={16} className="text-accent" />
+                </span>
+                <span className="thinking-dots" aria-label="Synthesizing image">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </span>
+              </div>
+              <p className="text-xs font-medium text-muted uppercase tracking-widest">Synthesizing visual matrix</p>
             </div>
           )}
+          <div ref={scrollRef} className="h-4 w-full" />
         </div>
       </div>
-    </div>
+
+      {/* Docked Input Box */}
+      <div className="px-4 pb-6">
+        <div className="mx-auto w-full max-w-3xl">
+          <div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-2 shadow-sm transition-all focus-within:border-accent focus-within:ring-2 focus-within:ring-[var(--accent-soft)]">
+            <textarea
+              ref={textareaRef}
+              value={prompt}
+              rows={1}
+              placeholder="Describe the image you want to create..."
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={generating}
+              className="max-h-[200px] w-full resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-foreground outline-none placeholder:text-muted disabled:opacity-60"
+            />
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-1 text-xs font-medium uppercase tracking-widest text-muted">
+                <span className="px-2">Imaging Mode</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={!prompt.trim() || generating}
+                aria-label="Generate Image"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-foreground transition-all hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted"
+              >
+                <ArrowUp size={18} />
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 text-center text-xs text-muted">
+            High-resolution visual synthesis powered by neural generation.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }

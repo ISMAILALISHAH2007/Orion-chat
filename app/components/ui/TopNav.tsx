@@ -3,11 +3,31 @@ import { useMode, useTheme } from '@/app/components/providers/ThemeProvider';
 import { useState, useRef, useEffect } from 'react';
 import { Menu, ChevronDown, Check, Sun, Moon, Sparkles } from 'lucide-react';
 
-const MODELS: { id: string; name: string; description: string }[] = [
-  { id: 'casual', name: 'ULTRON · Casual', description: 'Friendly, conversational replies' },
-  { id: 'developer', name: 'ULTRON · Developer', description: 'Precise, code-focused answers' },
-  { id: 'research', name: 'ULTRON · Research', description: 'In-depth, analytical responses' },
-  { id: 'professional', name: 'ULTRON · Professional', description: 'Concise, business-ready tone' },
+const MODELS: { id: string; name: string; description: string; placeholder: string }[] = [
+  {
+    id: 'casual',
+    name: 'Casual 2.5',
+    description: "Friendly, everyday conversations — chat naturally, I'm here for you.",
+    placeholder: "Chat naturally, I'm here for you.",
+  },
+  {
+    id: 'developer',
+    name: 'Developer 4.8',
+    description: 'Technical, code-oriented — write code, debug, or architect systems.',
+    placeholder: 'Write code, debug, or architect systems.',
+  },
+  {
+    id: 'research',
+    name: 'Research Deeping Mode',
+    description: 'Deep analysis, long-form answers — dive deep into research, analyse data.',
+    placeholder: 'Dive deep into research, analyse data.',
+  },
+  {
+    id: 'professional',
+    name: 'Professional',
+    description: 'Executive, concise, formal — data-driven insights.',
+    placeholder: 'Executive insights, concise and data-driven.',
+  },
 ];
 
 interface TopNavProps {

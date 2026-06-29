@@ -10,6 +10,7 @@ export default function SignUpPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,7 +77,7 @@ export default function SignUpPage() {
               className="form-input"
               id="name"
               type="text"
-              placeholder="Owais"
+              placeholder="your-username"
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={loading || success}
@@ -99,16 +100,36 @@ export default function SignUpPage() {
 
           <div className="form-group">
             <label className="form-label" htmlFor="password">Passphrase</label>
-            <input
-              className="form-input"
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={loading || success}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                className="form-input"
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={loading || success}
+                style={{ width: '100%', paddingRight: '60px' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </div>
 
           <button className="auth-button" type="submit" disabled={loading || success}>

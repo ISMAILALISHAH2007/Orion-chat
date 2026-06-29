@@ -59,6 +59,30 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt',
   },
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider === 'google') {
+        if (!user.email) return false;
+
+        let dbUser = await prisma.user.findUnique({
+          where: { email: user.email },
+        });
+
+        if (!dbUser) {
+          dbUser = await prisma.user.create({
+            data: {
+              email: user.email,
+              name: user.name || 'Google Operator',
+              image: user.image,
+            },
+          });
+        }
+        
+        // Attach the real DB ID to the user object so it gets passed to the jwt callback
+        user.id = dbUser.id;
+        return true;
+      }
+      return true; // allow credentials flow
+    },
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.sub as string;

@@ -1,8 +1,8 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import {
   SquarePen,
   Trash2,
@@ -25,13 +25,15 @@ const NAV_ITEMS = [
   { href: '/images', label: 'Image Generation', icon: ImageIcon },
 ];
 
-function groupSessions(sessions: ChatSessionItem[]) {
+type UnifiedItem = ChatSessionItem & { type: 'chat' | 'image' };
+
+function groupSessions(sessions: UnifiedItem[]) {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfYesterday = startOfToday - 86400000;
   const startOf7Days = startOfToday - 7 * 86400000;
 
-  const groups: { label: string; items: ChatSessionItem[] }[] = [
+  const groups: { label: string; items: UnifiedItem[] }[] = [
     { label: 'Today', items: [] },
     { label: 'Yesterday', items: [] },
     { label: 'Previous 7 Days', items: [] },
@@ -65,8 +67,51 @@ export default function Sidebar({
   const { sessionsList, startNewSession, loadSession, deleteSession, sessionId } = useChat();
   const { data: session } = useSession();
   const pathname = usePathname();
+  const router = useRouter();
 
-  const grouped = useMemo(() => groupSessions(sessionsList), [sessionsList]);
+  const [imagesList, setImagesList] = useState<UnifiedItem[]>([]);
+
+  // Fetch images for unified history
+  useEffect(() => {
+    if (session?.user) {
+      fetch('/api/images')
+        .then(res => res.ok ? res.json() : [])
+        .then(data => {
+          if (Array.isArray(data)) {
+            setImagesList(data.map((img: any) => ({
+              id: img.id,
+              title: img.prompt,
+              mode: 'image',
+              updatedAt: img.createdAt,
+              type: 'image'
+            })));
+          }
+        })
+        .catch(console.error);
+    }
+  }, [session]);
+
+  const deleteImage = async (id: string) => {
+    try {
+      const res = await fetch(`/api/images?imageId=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setImagesList(prev => prev.filter(img => img.id !== id));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const unifiedList = useMemo(() => {
+    const combined: UnifiedItem[] = [
+      ...sessionsList.map(s => ({ ...s, type: 'chat' as const })),
+      ...imagesList
+    ];
+    combined.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return combined;
+  }, [sessionsList, imagesList]);
+
+  const grouped = useMemo(() => groupSessions(unifiedList), [unifiedList]);
 
   const userName = session?.user?.name || 'Commander';
   const userEmail = session?.user?.email || '';
@@ -125,6 +170,7 @@ export default function Sidebar({
             onClick={() => {
               startNewSession();
               onCloseMobile();
+              if (pathname !== '/') router.push('/');
             }}
             className={[
               'flex w-full items-center rounded-lg border border-border bg-transparent py-2.5 text-sm font-medium text-foreground transition-all hover:bg-surface-2',
@@ -189,19 +235,31 @@ export default function Sidebar({
                         >
                           <button
                             onClick={() => {
-                              loadSession(item.id);
                               onCloseMobile();
+                              if (item.type === 'image') {
+                                if (pathname !== '/images') router.push('/images');
+                              } else {
+                                loadSession(item.id);
+                                if (pathname !== '/') router.push('/');
+                              }
                             }}
-                            className="flex-1 truncate text-left"
+                            className="flex-1 flex items-center gap-2 truncate text-left"
+                            title={item.title}
                           >
-                            {item.title || 'New conversation'}
+                            {item.type === 'image' && <ImageIcon size={14} className="shrink-0 opacity-70" />}
+                            <span className="truncate">{item.title || 'New conversation'}</span>
                           </button>
+
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              deleteSession(item.id);
+                              if (item.type === 'image') {
+                                deleteImage(item.id);
+                              } else {
+                                deleteSession(item.id);
+                              }
                             }}
-                            aria-label="Delete conversation"
+                            aria-label="Delete item"
                             className="shrink-0 rounded p-1 text-muted opacity-0 transition-all hover:text-danger group-hover:opacity-100"
                           >
                             <Trash2 size={15} />

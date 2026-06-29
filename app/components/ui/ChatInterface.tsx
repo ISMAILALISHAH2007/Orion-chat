@@ -9,8 +9,17 @@ import {
   Dumbbell,
   BarChart3,
   Code2,
+  Sparkles,
+  Image as ImageIcon,
+  Paintbrush,
+  HelpCircle,
+  Camera,
+  X,
+  Wand2,
 } from 'lucide-react';
-import { useChat } from '@/app/components/providers/ChatProvider';
+import { useChat, type ChatAttachment } from '@/app/components/providers/ChatProvider';
+import CameraModal from './CameraModal';
+import { useMode } from '@/app/components/providers/ThemeProvider';
 import { useVoice } from '@/app/components/hooks/useVoice';
 import MessageBubble from './MessageBubble';
 
@@ -21,16 +30,42 @@ const SUGGESTIONS = [
   { icon: Code2, title: 'Explain some code', prompt: 'Explain how async/await works in JavaScript with an example.' },
 ];
 
+const MODE_PLACEHOLDERS: Record<string, string> = {
+  casual: "Chat naturally, I'm here for you.",
+  developer: 'Write code, debug, or architect systems.',
+  research: 'Dive deep into research, analyse data.',
+  professional: 'Executive insights, concise and data-driven.',
+};
+
+const SLASH_COMMANDS = [
+  { cmd: 'img', label: 'Generate image', desc: 'Render a free pollinations.ai image from a prompt.', icon: ImageIcon },
+  { cmd: 'code', label: 'Code expert', desc: 'Switch into terse code-expert mode with fenced blocks.', icon: Code2 },
+  { cmd: 'design', label: 'Design concept', desc: 'Senior product-designer UI/UX response.', icon: Paintbrush },
+  { cmd: 'help', label: 'Show help', desc: 'List slash commands and modes.', icon: HelpCircle },
+];
+
 export default function ChatInterface() {
   const [input, setInput] = useState('');
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [showCamera, setShowCamera] = useState(false);
+  const [isImageMode, setIsImageMode] = useState(false);
   const { messages, sendMessage, isStreaming } = useChat();
+  const { mode } = useMode();
   const { isRecording, toggleRecording, transcript } = useVoice();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const slashRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
   const userName = session?.user?.name?.split(' ')[0] || 'there';
 
   const isEmpty = messages.length === 0;
+  
+  let placeholder = MODE_PLACEHOLDERS[mode] ?? MODE_PLACEHOLDERS.casual;
+  if (isImageMode) placeholder = "Describe the image you want to create...";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -50,17 +85,154 @@ export default function ChatInterface() {
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   }, [input]);
 
+  // Slash-command popover — show when input starts with `/`.
+  const slashQuery = input.startsWith('/') ? input.split(/\s+/)[0].slice(1).toLowerCase() : '';
+  const filteredCommands = SLASH_COMMANDS.filter((c) =>
+    slashQuery ? c.cmd.startsWith(slashQuery) : true
+  );
+  const showSlash = slashOpen && input.startsWith('/') && filteredCommands.length > 0;
+
+  // Detect image intent in developer mode for an inline preview notice.
+  useEffect(() => {
+    const imageIntent = mode === 'developer' && /(draw|generate|render|create).*(image|picture|illustration|photo|logo|icon)/i.test(input);
+    if (imageIntent && input.trim()) {
+      setNotice('Detected image intent — Developer mode will auto-route to image generation.');
+    } else if (input.startsWith('/img ')) {
+      setNotice('Slash command /img — image generation.');
+    } else {
+      setNotice(null);
+    }
+  }, [input, mode]);
+
+  useEffect(() => {
+    if (input.startsWith('/') && !slashOpen) {
+      setSlashOpen(true);
+      setSlashIndex(0);
+    } else if (!input.startsWith('/') && slashOpen) {
+      setSlashOpen(false);
+    }
+  }, [input, slashOpen]);
+
+  // Click-outside dismissal for slash popover.
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (slashRef.current && !slashRef.current.contains(e.target as Node)) {
+        setSlashOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const applyCommand = (cmd: string) => {
+    setInput(`/${cmd} `);
+    setSlashOpen(false);
+    textareaRef.current?.focus();
+  };
+
   const handleSend = () => {
-    if (!input.trim() || isStreaming) return;
-    sendMessage(input);
+    if ((!input.trim() && attachments.length === 0) || isStreaming) return;
+    
+    let finalInput = input;
+    if (isImageMode && !finalInput.startsWith('/img')) {
+      finalInput = `/img ${finalInput.trim()}`;
+    }
+
+    sendMessage(finalInput, attachments);
     setInput('');
+    setAttachments([]);
+    setIsImageMode(false);
+    setNotice(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showSlash) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashIndex((i) => (i + 1) % filteredCommands.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashIndex((i) => (i - 1 + filteredCommands.length) % filteredCommands.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        if (filteredCommands[slashIndex]) {
+          e.preventDefault();
+          applyCommand(filteredCommands[slashIndex].cmd);
+          return;
+        }
+      }
+      if (e.key === 'Escape') {
+        setSlashOpen(false);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const newAttachments: ChatAttachment[] = [];
+    for (const file of files) {
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        const dataUri = await new Promise<string>((resolve) => {
+          reader.onload = (ev) => resolve(ev.target?.result as string);
+          reader.readAsDataURL(file);
+        });
+        
+        // Compress image to prevent crashing vision models
+        const img = new Image();
+        const compressedUri = await new Promise<string>((resolve) => {
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let { width, height } = img;
+            const MAX_DIMENSION = 800; // safe max dimension for base64 payloads
+            if (width > height && width > MAX_DIMENSION) {
+              height *= MAX_DIMENSION / width;
+              width = MAX_DIMENSION;
+            } else if (height > MAX_DIMENSION) {
+              width *= MAX_DIMENSION / height;
+              height = MAX_DIMENSION;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              resolve(canvas.toDataURL('image/jpeg', 0.8));
+            } else {
+              resolve(dataUri); // fallback
+            }
+          };
+          img.src = dataUri;
+        });
+
+        newAttachments.push({ url: compressedUri, mimeType: 'image/jpeg', name: file.name });
+      } else {
+        setNotice('Currently, only images are supported for analysis.');
+        window.setTimeout(() => setNotice(null), 3000);
+      }
+    }
+    setAttachments((prev) => [...prev, ...newAttachments]);
+    // Reset inputs
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleCameraCapture = (dataUri: string) => {
+    setAttachments((prev) => [...prev, { url: dataUri, mimeType: 'image/jpeg', name: `camera-${Date.now()}.jpg` }]);
+    setShowCamera(false);
+  };
+
+  const removeAttachment = (idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const lastMessage = messages[messages.length - 1];
@@ -68,6 +240,9 @@ export default function ChatInterface() {
 
   return (
     <section className="relative flex min-h-0 flex-1 flex-col bg-background">
+      {showCamera && (
+        <CameraModal onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />
+      )}
       {/* Conversation window */}
       <div className="flex-1 overflow-y-auto">
         {isEmpty ? (
@@ -102,11 +277,13 @@ export default function ChatInterface() {
         ) : (
           <div className="mx-auto w-full max-w-3xl space-y-8 px-4 py-8">
             {messages.map((msg, idx) => (
-              <MessageBubble key={idx} sender={msg.sender} text={msg.text} mode={msg.mode} />
+              <MessageBubble key={idx} sender={msg.sender} text={msg.text} mode={msg.mode} attachments={msg.attachments} />
             ))}
             {showThinking && (
               <div className="flex animate-fade-in items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface" />
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface">
+                  <Sparkles size={16} className="text-accent" />
+                </span>
                 <span className="thinking-dots" aria-label="Assistant is thinking">
                   <span></span>
                   <span></span>
@@ -122,52 +299,145 @@ export default function ChatInterface() {
       {/* Docked input */}
       <div className="px-4 pb-6">
         <div className="mx-auto w-full max-w-3xl">
-          <div className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-2 shadow-sm transition-all focus-within:border-accent focus-within:ring-2 focus-within:ring-[var(--accent-soft)]">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              rows={1}
-              placeholder="Message ULTRON…"
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isStreaming}
-              className="max-h-[200px] w-full resize-none bg-transparent px-3 py-2 text-[0.975rem] leading-relaxed text-foreground outline-none placeholder:text-muted disabled:opacity-60"
-            />
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-1">
+          {notice && (
+            <div className="mb-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent animate-fade-in">
+              {notice}
+            </div>
+          )}
+
+          <div ref={slashRef} className="relative">
+            {showSlash && (
+              <div
+                role="listbox"
+                className="absolute bottom-full left-0 right-0 z-40 mb-2 overflow-hidden rounded-xl border border-border bg-surface p-1.5 shadow-lg animate-fade-in"
+              >
+                {filteredCommands.map((c, i) => {
+                  const Icon = c.icon;
+                  const active = i === slashIndex;
+                  return (
+                    <button
+                      key={c.cmd}
+                      role="option"
+                      aria-selected={active}
+                      onMouseEnter={() => setSlashIndex(i)}
+                      onClick={() => applyCommand(c.cmd)}
+                      className={[
+                        'flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+                        active ? 'bg-surface-2' : 'hover:bg-surface-2',
+                      ].join(' ')}
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface-2 text-accent">
+                        <Icon size={16} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground">/{c.cmd}</span>
+                        <span className="block text-xs text-muted">{c.desc}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+                <div className="border-t border-border px-3 py-1.5 text-[11px] text-muted">
+                  ↑↓ navigate · Enter/Tab select · Esc dismiss
+                </div>
+              </div>
+            )}
+
+            <div className={['flex flex-col gap-2 rounded-2xl border bg-surface p-2 shadow-sm transition-all focus-within:ring-2 focus-within:ring-[var(--accent-soft)]', isImageMode ? 'border-[#a855f7] focus-within:border-[#a855f7]' : 'border-border focus-within:border-accent'].join(' ')}>
+              {/* Attachments Preview */}
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-2 pt-2">
+                  {attachments.map((att, idx) => (
+                    <div key={idx} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-border">
+                      <img src={att.url} alt={att.name} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(idx)}
+                        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <textarea
+                ref={textareaRef}
+                value={input}
+                rows={1}
+                placeholder={placeholder}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={isStreaming}
+                className="max-h-[200px] w-full resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-foreground outline-none placeholder:text-muted disabled:opacity-60"
+              />
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-1">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsImageMode(!isImageMode)}
+                    aria-label="Toggle image generation mode"
+                    className={[
+                      'rounded-lg p-2 transition-colors',
+                      isImageMode
+                        ? 'bg-[#a855f7]/10 text-[#a855f7]'
+                        : 'text-muted hover:bg-surface-2 hover:text-foreground',
+                    ].join(' ')}
+                  >
+                    <Wand2 size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach image"
+                    className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                  >
+                    <Paperclip size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCamera(true)}
+                    aria-label="Take photo"
+                    className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                  >
+                    <Camera size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleRecording}
+                    aria-label={isRecording ? 'Stop recording' : 'Start voice input'}
+                    className={[
+                      'relative rounded-lg p-2 transition-colors',
+                      isRecording
+                        ? 'voice-active bg-[var(--danger)] text-white'
+                        : 'text-muted hover:bg-surface-2 hover:text-foreground',
+                    ].join(' ')}
+                  >
+                    <span className="pulse-ring" aria-hidden="true" />
+                    <Mic size={18} />
+                  </button>
+                </div>
                 <button
                   type="button"
-                  aria-label="Attach file"
-                  className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                  onClick={handleSend}
+                  disabled={(!input.trim() && attachments.length === 0) || isStreaming}
+                  aria-label="Send message"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-foreground transition-all hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted"
                 >
-                  <Paperclip size={18} />
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleRecording}
-                  aria-label={isRecording ? 'Stop recording' : 'Start voice input'}
-                  className={[
-                    'relative rounded-lg p-2 transition-colors',
-                    isRecording
-                      ? 'voice-active bg-[var(--danger)] text-white'
-                      : 'text-muted hover:bg-surface-2 hover:text-foreground',
-                  ].join(' ')}
-                >
-                  <span className="pulse-ring" aria-hidden="true" />
-                  <Mic size={18} />
+                  <ArrowUp size={18} />
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={handleSend}
-                disabled={!input.trim() || isStreaming}
-                aria-label="Send message"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-foreground transition-all hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted"
-              >
-                <ArrowUp size={18} />
-              </button>
             </div>
           </div>
+
           <p className="mt-2 text-center text-xs text-muted">
             ULTRON can make mistakes. Verify important information.
           </p>

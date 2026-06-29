@@ -7,13 +7,15 @@
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:openrouter": "node scripts/check-or.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.86",
     "@ai-sdk/google": "^3.0.83",
     "@ai-sdk/openai": "^3.0.74",
     "@ai-sdk/react": "^3.0.211",
+    "@openrouter/ai-sdk-provider": "^2.10.0",
     "ai": "^6.0.209",
     "bcryptjs": "^3.0.3",
     "gsap": "^3.15.0",
