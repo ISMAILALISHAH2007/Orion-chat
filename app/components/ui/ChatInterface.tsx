@@ -277,7 +277,14 @@ export default function ChatInterface() {
         ) : (
           <div className="mx-auto w-full max-w-3xl space-y-8 px-4 py-8">
             {messages.map((msg, idx) => (
-              <MessageBubble key={idx} sender={msg.sender} text={msg.text} mode={msg.mode} attachments={msg.attachments} />
+              <MessageBubble 
+                key={idx} 
+                sender={msg.sender} 
+                text={msg.text} 
+                mode={msg.mode} 
+                attachments={msg.attachments} 
+                isStreaming={isStreaming && idx === messages.length - 1 && msg.sender === 'ai'}
+              />
             ))}
             {showThinking && (
               <div className="flex animate-fade-in items-center gap-3">

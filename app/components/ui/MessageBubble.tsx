@@ -8,9 +8,10 @@ interface MessageBubbleProps {
   text: string;
   mode?: string;
   attachments?: { url: string; mimeType: string; name: string }[];
+  isStreaming?: boolean;
 }
 
-export default function MessageBubble({ sender, text, attachments }: MessageBubbleProps) {
+export default function MessageBubble({ sender, text, attachments, isStreaming }: MessageBubbleProps) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   // Wire up "Copy" buttons inside rendered code blocks.
@@ -68,7 +69,7 @@ export default function MessageBubble({ sender, text, attachments }: MessageBubb
       <div
         ref={contentRef}
         className="msg-content min-w-0 flex-1 pt-1"
-        dangerouslySetInnerHTML={{ __html: parseMarkdown(text) }}
+        dangerouslySetInnerHTML={{ __html: parseMarkdown(text) + (isStreaming ? '<span class="ml-1 inline-block h-4 w-2 animate-pulse bg-accent align-middle shadow-[0_0_8px_var(--accent)] rounded-full"></span>' : '') }}
       />
     </div>
   );
