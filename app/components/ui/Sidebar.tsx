@@ -73,22 +73,27 @@ export default function Sidebar({
 
   // Fetch images for unified history
   useEffect(() => {
-    if (session?.user) {
-      fetch('/api/images')
-        .then(res => res.ok ? res.json() : [])
-        .then(data => {
-          if (Array.isArray(data)) {
-            setImagesList(data.map((img: any) => ({
-              id: img.id,
-              title: img.prompt,
-              mode: 'image',
-              updatedAt: img.createdAt,
-              type: 'image'
-            })));
-          }
-        })
-        .catch(console.error);
-    }
+    const fetchImages = () => {
+      if (session?.user) {
+        fetch('/api/images')
+          .then(res => res.ok ? res.json() : [])
+          .then(data => {
+            if (Array.isArray(data)) {
+              setImagesList(data.map((img: any) => ({
+                id: img.id,
+                title: img.prompt,
+                mode: 'image',
+                updatedAt: img.createdAt,
+                type: 'image'
+              })));
+            }
+          })
+          .catch(console.error);
+      }
+    };
+    fetchImages();
+    window.addEventListener('images-updated', fetchImages);
+    return () => window.removeEventListener('images-updated', fetchImages);
   }, [session]);
 
   const deleteImage = async (id: string) => {

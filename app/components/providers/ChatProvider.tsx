@@ -179,7 +179,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             image: Boolean(data.image),
           };
           setMessages((prev) => [...prev, reply]);
-          if (justCreated) fetchSessionsList();
+          if (justCreated) {
+            fetchSessionsList();
+            setTimeout(fetchSessionsList, 3000);
+          }
+          if (reply.image) {
+            window.dispatchEvent(new Event('images-updated'));
+          }
           return;
         }
 
@@ -202,7 +208,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           });
         }
 
-        if (justCreated) fetchSessionsList();
+        if (justCreated) {
+          fetchSessionsList();
+          setTimeout(fetchSessionsList, 3000);
+        }
       } catch (error) {
         console.error('Chat stream error:', error);
         setMessages((prev) => [

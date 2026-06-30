@@ -120,6 +120,7 @@ export default function ImagesPage() {
       if (saveRes.ok) {
         const data = await saveRes.json();
         setImages((prev) => [...prev, data]);
+        window.dispatchEvent(new Event('images-updated'));
       }
     } catch (err) {
       console.error('Image generation failed:', err);
