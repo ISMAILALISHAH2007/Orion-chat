@@ -97,28 +97,11 @@ export async function POST(req: Request) {
 
     const { messages, mode, sessionId } = await req.json();
 
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
-
     if (!messages || messages.length === 0) {
       return new NextResponse('Messages are required', { status: 400 });
     }
 
-    let activeSessionId = sessionId;
-
-    let isNewSession = false;
-    // Create a new session if needed.
-    if (userId && (!activeSessionId || activeSessionId === 'current')) {
-      const chatSession = await prisma.chatSession.create({
-        data: {
-          userId,
-          mode: mode || 'casual',
-          title: 'New Chat',
-        },
-      });
-      activeSessionId = chatSession.id;
-      isNewSession = true;
-    }
+    const sessionPromise = getServerSession(authOptions);
 
     const latestUserMessage = messages[messages.length - 1];
     
@@ -132,11 +115,43 @@ export async function POST(req: Request) {
       Array.isArray(m.content) && m.content.some((c: any) => c.type === 'image')
     );
 
+    const session = await sessionPromise;
+    const userId = session?.user?.id;
+
+    let activeSessionId = sessionId;
+    let isNewSession = false;
+
+    // Start DB tasks in parallel
+    let sessionPromiseTask = Promise.resolve();
+    if (userId && (!activeSessionId || activeSessionId === 'current')) {
+      isNewSession = true;
+      sessionPromiseTask = prisma.chatSession.create({
+        data: {
+          userId,
+          mode: mode || 'casual',
+          title: 'New Chat',
+        },
+      }).then(chatSession => {
+        activeSessionId = chatSession.id;
+      }).catch(err => {
+        console.error('Failed to create chat session:', err);
+      });
+    }
+
+    let memoryPromise = Promise.resolve<string[]>([]);
+    if (userId) {
+      memoryPromise = retrieveRelevantMemories(userId, userContent).catch(err => {
+        console.error('Failed to retrieve memories:', err);
+        return [];
+      });
+    }
+
     // ----- 1. Creator-credit injection -----
     if (
       latestUserMessage?.role === 'user' &&
       /(who (created|made|built) (you|ultron))|(creator)/i.test(userContent)
     ) {
+      await sessionPromiseTask;
       const provider: AIProviderName = getActiveProvider(mode);
       const result = await streamText({
         model: getDefaultModelForMode(mode),
@@ -145,8 +160,6 @@ export async function POST(req: Request) {
           await persistExchange(userId, activeSessionId, userContent, text);
         },
       });
-      // Use the AI SDK's response helper — it sets the right Content-Type
-      // and headers for chunked streaming, which avoids dev-mode hangs.
       return result.toTextStreamResponse({
         headers: {
           'x-session-id': activeSessionId || 'current',
@@ -159,6 +172,7 @@ export async function POST(req: Request) {
     const slash = parseSlashCommand(userContent);
 
     if (slash?.command === 'help') {
+      await sessionPromiseTask;
       await persistExchange(userId, activeSessionId, userContent, HELP_TEXT);
       return NextResponse.json(
         { text: HELP_TEXT, sessionId: activeSessionId },
@@ -167,6 +181,7 @@ export async function POST(req: Request) {
     }
 
     if (slash?.command === 'img') {
+      await sessionPromiseTask;
       const text = await generateImageInline(userId, slash.prompt);
       await persistExchange(userId, activeSessionId, userContent, text);
       return NextResponse.json(
@@ -184,6 +199,7 @@ export async function POST(req: Request) {
           : null;
 
     if (imageIntent) {
+      await sessionPromiseTask;
       const prompt = imageIntent;
       const text = await generateImageInline(userId, prompt);
       await persistExchange(userId, activeSessionId, userContent, text);
@@ -194,14 +210,10 @@ export async function POST(req: Request) {
     }
 
     // ----- 4. Long-term memory retrieval -----
-    let memories: string[] = [];
-    if (userId) {
-      try {
-        memories = await retrieveRelevantMemories(userId, userContent);
-      } catch (memError) {
-        console.error('Failed to retrieve memories:', memError);
-      }
-    }
+    const [_, memories] = await Promise.all([
+      sessionPromiseTask,
+      memoryPromise
+    ]);
 
     // ----- 5. System prompt — base + slash overrides + memories -----
     let systemPrompt = `You are ULTRON, a highly advanced cognitive AI assistant. Current mode: ${String(mode).toUpperCase()}. Response style should be precise, intelligent, and highly capable.

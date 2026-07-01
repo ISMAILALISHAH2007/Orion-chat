@@ -54,14 +54,14 @@ const openrouter = openrouterApiKey
       baseURL: process.env.OPENROUTER_BASE_URL,
       appName: 'ULTRON',
       appUrl: process.env.NEXTAUTH_URL ?? 'http://localhost:8000',
-      fetch: (url, init) => fetchWithTimeout(url, init, 3500), // 3.5 seconds timeout
+      fetch: (url, init) => fetchWithTimeout(url, init, 5000), // 5 seconds timeout
     })
   : null;
 
 const google = process.env.GEMINI_API_KEY
   ? createGoogleGenerativeAI({
       apiKey: process.env.GEMINI_API_KEY,
-      fetch: (url, init) => fetchWithTimeout(url, init, 3500), // 3.5 seconds timeout
+      fetch: (url, init) => fetchWithTimeout(url, init, 5000), // 5 seconds timeout
     })
   : null;
 
@@ -69,7 +69,7 @@ const nvidia = process.env.NVIDIA_API_KEY
   ? createOpenAI({
       apiKey: process.env.NVIDIA_API_KEY,
       baseURL: 'https://integrate.api.nvidia.com/v1',
-      fetch: (url, init) => fetchWithTimeout(url, init, 3000), // 3 seconds timeout for fallback
+      fetch: (url, init) => fetchWithTimeout(url, init, 2000), // 2 seconds timeout for fallback
     })
   : null;
 
