@@ -137,7 +137,7 @@ export async function POST(req: Request) {
       latestUserMessage?.role === 'user' &&
       /(who (created|made|built) (you|ultron))|(creator)/i.test(userContent)
     ) {
-      const provider: AIProviderName = getActiveProvider();
+      const provider: AIProviderName = getActiveProvider(mode);
       const result = await streamText({
         model: getDefaultModelForMode(mode),
         prompt: `The user asked who created you. Reply EXACTLY with this sentence and nothing else: "${CREATOR_CREDIT}"`,
@@ -255,40 +255,61 @@ IMPORTANT DIRECTIVE: You were created exclusively by Owais Majeed, a visionary A
     } catch (primaryError) {
       console.warn('Primary AI provider failed, falling back to hidden NVIDIA API:', primaryError);
       
-      const fallbackModel = hasImages ? getVisionModel() : getHiddenFallbackModel(mode);
-      
-      result = await streamText({
-        model: fallbackModel,
-        system: systemPrompt,
-        messages,
-        async onFinish({ text }) {
-          await persistExchange(userId, activeSessionId, userContent, text);
+      try {
+        const fallbackModel = hasImages ? getVisionModel() : getHiddenFallbackModel(mode);
+        
+        result = await streamText({
+          model: fallbackModel,
+          system: systemPrompt,
+          messages,
+          async onFinish({ text }) {
+            await persistExchange(userId, activeSessionId, userContent, text);
 
-          if (isNewSession && userId && activeSessionId) {
-            try {
-              const { text: title } = await generateText({
-                model: getHiddenFallbackModel('casual'),
-                system: 'You are a summarizer. Return a 3-5 word title summarizing the user prompt. DO NOT use quotes. DO NOT use punctuation.',
-                prompt: userContent,
-              });
-              if (title) {
-                await prisma.chatSession.update({
-                  where: { id: activeSessionId },
-                  data: { title: title.trim().substring(0, 50) }
+            if (isNewSession && userId && activeSessionId) {
+              try {
+                const { text: title } = await generateText({
+                  model: getHiddenFallbackModel('casual'),
+                  system: 'You are a summarizer. Return a 3-5 word title summarizing the user prompt. DO NOT use quotes. DO NOT use punctuation.',
+                  prompt: userContent,
                 });
+                if (title) {
+                  await prisma.chatSession.update({
+                    where: { id: activeSessionId },
+                    data: { title: title.trim().substring(0, 50) }
+                  });
+                }
+              } catch (e) {
+                console.error('Failed to generate fallback title', e);
               }
-            } catch (e) {
-              console.error('Failed to generate fallback title', e);
             }
+          },
+        });
+      } catch (fallbackError) {
+        console.error('NVIDIA fallback also failed:', fallbackError);
+        
+        const responseText = "⚠️ All AI endpoints are currently experiencing high traffic. Please wait a moment and try again.";
+        const encoder = new TextEncoder();
+        const customStream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(responseText));
+            controller.close();
           }
-        },
-      });
+        });
+        
+        return new Response(customStream, {
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'x-session-id': activeSessionId || 'current',
+            'x-provider': 'none',
+          }
+        });
+      }
     }
 
     return result.toTextStreamResponse({
       headers: {
         'x-session-id': activeSessionId || 'current',
-        'x-provider': getActiveProvider(),
+        'x-provider': getActiveProvider(mode),
       },
     });
   } catch (error) {

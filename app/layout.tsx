@@ -4,6 +4,7 @@ import '@/app/styles/globals.css';
 import { AuthProvider } from '@/app/components/providers/AuthProvider';
 import { ThemeProvider } from '@/app/components/providers/ThemeProvider';
 import InstallPrompt from '@/app/components/ui/InstallPrompt';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' });
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ThemeProvider>
             <InstallPrompt />
             {children}
+            <SpeedInsights />
           </ThemeProvider>
         </AuthProvider>
       </body>

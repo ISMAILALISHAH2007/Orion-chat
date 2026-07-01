@@ -16,6 +16,7 @@
     "@ai-sdk/openai": "^3.0.74",
     "@ai-sdk/react": "^3.0.211",
     "@openrouter/ai-sdk-provider": "^2.10.0",
+    "@vercel/speed-insights": "^2.0.0",
     "ai": "^6.0.209",
     "bcryptjs": "^3.0.3",
     "gsap": "^3.15.0",
