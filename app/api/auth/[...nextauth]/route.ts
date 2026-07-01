@@ -1,15 +1,15 @@
 import NextAuth from 'next-auth';
 import { authOptions } from '@/app/lib/auth';
 
-// Dynamically set NEXTAUTH_URL on Vercel to match the exact deployment host
-if (process.env.VERCEL_URL) {
-  if (process.env.VERCEL_ENV === 'production') {
-    process.env.NEXTAUTH_URL = 'https://ultron-w527.vercel.app';
-  } else {
-    process.env.NEXTAUTH_URL = `https://${process.env.VERCEL_URL}`;
-  }
-}
+const authHandler = NextAuth(authOptions);
 
-const handler = NextAuth(authOptions);
+const handler = (req: Request, res: any) => {
+  const protocol = req.headers.get('x-forwarded-proto') || 'https';
+  const host = req.headers.get('host');
+  if (host) {
+    process.env.NEXTAUTH_URL = `${protocol}://${host}`;
+  }
+  return authHandler(req, res);
+};
 
 export { handler as GET, handler as POST };
