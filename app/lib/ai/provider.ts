@@ -68,8 +68,10 @@ function resolveProvider(mode: ChatMode): AIProviderName {
   if (mode === 'professional' && openrouter) return 'openrouter';
   if (mode === 'developer' && google) return 'gemini';
   
+  if (mode === 'casual' && google) return 'gemini';
+  
   // High-tier workloads go to NVIDIA
-  if ((mode === 'research' || mode === 'casual') && nvidia) return 'nvidia';
+  if (mode === 'research' && nvidia) return 'nvidia';
   
   if (google) return 'gemini';
   if (openrouter) return 'openrouter';
@@ -77,7 +79,10 @@ function resolveProvider(mode: ChatMode): AIProviderName {
 }
 
 function getModelId(mode: ChatMode, provider: AIProviderName): string {
-  if (provider === 'gemini') return process.env.MODEL_DEVELOPER || 'gemini-2.5-flash';
+  if (provider === 'gemini') {
+    if (mode === 'developer') return process.env.MODEL_DEVELOPER || 'gemini-2.5-flash';
+    return 'gemini-2.5-flash';
+  }
   
   if (provider === 'openrouter') {
     if (mode === 'professional') return process.env.MODEL_PROFESSIONAL || 'google/lyria-3-pro-preview';
