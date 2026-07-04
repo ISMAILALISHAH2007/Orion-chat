@@ -7,10 +7,10 @@ export type ChatMode = 'casual' | 'developer' | 'research' | 'professional';
 
 // Default model IDs for OpenRouter
 const DEFAULT_MODELS: Record<ChatMode, string> = {
-  casual: 'openrouter/free',
+  casual: 'gemini-2.5-flash',
   developer: 'gemini-2.5-flash',
-  research: 'nvidia/llama-3.1-nemotron-70b-instruct:free',
-  professional: 'nvidia/nemotron-3-super-120b-a12b:free',
+  research: 'gemini-2.5-flash',
+  professional: 'gemini-2.5-flash',
 };
 
 const ENV_MODEL_KEYS: Record<ChatMode, string> = {
@@ -30,10 +30,16 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
+
+  // If the SDK passes a signal, we want to abort if EITHER the SDK aborts OR our timeout fires
+  const signal = options?.signal
+    ? (AbortSignal.any ? AbortSignal.any([options.signal, controller.signal]) : controller.signal)
+    : controller.signal;
+
   try {
     const response = await fetch(url, {
       ...options,
-      signal: controller.signal,
+      signal,
     });
     clearTimeout(id);
     return response;
@@ -50,45 +56,40 @@ const openrouterApiKey = process.env.OPENROUTER_API_KEY ?? '';
 
 const openrouter = openrouterApiKey
   ? createOpenRouter({
-      apiKey: openrouterApiKey,
-      baseURL: process.env.OPENROUTER_BASE_URL,
-      appName: 'ULTRON',
-      appUrl: process.env.NEXTAUTH_URL ?? 'http://localhost:8000',
-      fetch: (url, init) => fetchWithTimeout(url, init, 60000), // 60 seconds timeout
-    })
+    apiKey: openrouterApiKey,
+    baseURL: process.env.OPENROUTER_BASE_URL,
+    appName: 'ULTRON',
+    appUrl: process.env.NEXTAUTH_URL ?? 'http://localhost:8000',
+    fetch: (url, init) => fetchWithTimeout(url, init, 60000), // 60 seconds timeout
+  })
   : null;
 
 const google = process.env.GEMINI_API_KEY
   ? createGoogleGenerativeAI({
-      apiKey: process.env.GEMINI_API_KEY,
-      fetch: (url, init) => fetchWithTimeout(url, init, 60000), // 60 seconds timeout
-    })
+    apiKey: process.env.GEMINI_API_KEY,
+    fetch: (url, init) => fetchWithTimeout(url, init, 60000), // 60 seconds timeout
+  })
   : null;
 
 const nvidia = process.env.NVIDIA_API_KEY
   ? createOpenAI({
-      apiKey: process.env.NVIDIA_API_KEY,
-      baseURL: 'https://integrate.api.nvidia.com/v1',
-      fetch: (url, init) => fetchWithTimeout(url, init, 30000), // 30 seconds timeout for fallback
-    })
+    apiKey: process.env.NVIDIA_API_KEY,
+    baseURL: 'https://integrate.api.nvidia.com/v1',
+    fetch: (url, init) => fetchWithTimeout(url, init, 30000), // 30 seconds timeout for fallback
+  })
   : null;
 
 function resolveProvider(mode: ChatMode): AIProviderName {
-  // developer mode prefers Gemini API; all others prefer OpenRouter
-  if (mode === 'developer') {
-    if (google) return 'gemini';
-    if (openrouter) return 'openrouter';
-  } else {
-    if (openrouter) return 'openrouter';
-    if (google) return 'gemini';
-  }
+  // OpenRouter is rate-limited out; route EVERYTHING to native Gemini
+  if (google) return 'gemini';
+  if (openrouter) return 'openrouter';
   return 'openrouter';
 }
 
 function getModelId(mode: ChatMode, provider: AIProviderName): string {
   const envKey = ENV_MODEL_KEYS[mode];
   const envModel = process.env[envKey]?.trim();
-  
+
   if (envModel) return envModel;
 
   if (provider === 'gemini') {
@@ -104,7 +105,7 @@ export function getDefaultModelForMode(mode: string) {
   const m = (mode as ChatMode) in DEFAULT_MODELS ? (mode as ChatMode) : 'casual';
   const provider = resolveProvider(m);
   const modelId = getModelId(m, provider);
-  
+
   if (provider === 'gemini' && google) {
     return google(modelId);
   }
@@ -134,7 +135,7 @@ export function getHiddenFallbackModel(mode: string) {
       default: return nvidia.chat('meta/llama-3.1-8b-instruct');
     }
   }
-  
+
   // If NVIDIA is not available, try the other primary provider
   const m = (mode as ChatMode) in DEFAULT_MODELS ? (mode as ChatMode) : 'casual';
   const primaryProvider = resolveProvider(m);
@@ -150,9 +151,9 @@ export function getHiddenFallbackModel(mode: string) {
 
   // If we only have OpenRouter and it's the primary, use a hardcoded ultra-reliable free fallback
   if (openrouter) {
-    return openrouter.chat('nvidia/llama-3.1-nemotron-70b-instruct:free');
+    return openrouter.chat('openrouter/auto');
   }
-  
+
   throw new Error('No fallback AI provider configured.');
 }
 
