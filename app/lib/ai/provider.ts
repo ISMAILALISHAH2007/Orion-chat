@@ -9,7 +9,7 @@ const DEFAULT_MODELS: Record<ChatMode, string> = {
   casual: 'openrouter/free',
   developer: 'gemini-2.5-flash',
   research: 'meta/llama-3.1-70b-instruct',
-  professional: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+  professional: 'meta/llama-3.3-70b-instruct',
 };
 
 const ENV_MODEL_KEYS: Record<ChatMode, string> = {
@@ -99,7 +99,7 @@ function getModelId(mode: ChatMode, provider: AIProviderName): string {
   }
   if (provider === 'nvidia') {
     if (mode === 'research') return 'meta/llama-3.1-70b-instruct';
-    if (mode === 'professional') return 'nvidia/llama-3.1-nemotron-ultra-253b-v1';
+    if (mode === 'professional') return 'meta/llama-3.3-70b-instruct';
     return 'meta/llama-3.1-8b-instruct';
   }
   
