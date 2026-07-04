@@ -9,8 +9,8 @@ export type ChatMode = 'casual' | 'developer' | 'research' | 'professional';
 const DEFAULT_MODELS: Record<ChatMode, string> = {
   casual: 'openrouter/free',
   developer: 'nvidia/nemotron-3-super-120b-a12b:free',
-  research: 'meta-llama/llama-3.1-8b-instruct:free',
-  professional: 'meta-llama/llama-3.1-8b-instruct:free',
+  research: 'openrouter/auto',
+  professional: 'openrouter/auto',
 };
 
 const ENV_MODEL_KEYS: Record<ChatMode, string> = {
@@ -147,7 +147,7 @@ export function getHiddenFallbackModel(mode: string) {
 
   // If we only have OpenRouter and it's the primary, use a hardcoded ultra-reliable free fallback
   if (openrouter) {
-    return openrouter.chat('meta-llama/llama-3.1-8b-instruct:free');
+    return openrouter.chat('openrouter/auto');
   }
   
   throw new Error('No fallback AI provider configured.');
