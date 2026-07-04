@@ -9,7 +9,7 @@ const DEFAULT_MODELS: Record<ChatMode, string> = {
   casual: 'openrouter/free',
   developer: 'gemini-2.5-flash',
   research: 'meta/llama-3.1-70b-instruct',
-  professional: 'meta/llama-3.3-70b-instruct',
+  professional: 'nvidia/llama-3.1-nemotron-70b-instruct',
 };
 
 const ENV_MODEL_KEYS: Record<ChatMode, string> = {
@@ -51,14 +51,14 @@ const openrouter = openrouterApiKey
       baseURL: process.env.OPENROUTER_BASE_URL,
       appName: 'ULTRON',
       appUrl: process.env.NEXTAUTH_URL ?? 'http://localhost:8000',
-      fetch: (url, init) => fetchWithTimeout(url, init, 60000),
+      fetch: (url, init) => fetchWithTimeout(url, init, 3000), // 3 second max timeout for OpenRouter to fail fast
     })
   : null;
 
 const google = process.env.GEMINI_API_KEY
   ? createGoogleGenerativeAI({
       apiKey: process.env.GEMINI_API_KEY,
-      fetch: (url, init) => fetchWithTimeout(url, init, 60000),
+      fetch: (url, init) => fetchWithTimeout(url, init, 15000),
     })
   : null;
 
@@ -66,7 +66,7 @@ const nvidia = process.env.NVIDIA_API_KEY
   ? createOpenAI({
       apiKey: process.env.NVIDIA_API_KEY,
       baseURL: 'https://integrate.api.nvidia.com/v1',
-      fetch: (url, init) => fetchWithTimeout(url, init, 30000),
+      fetch: (url, init) => fetchWithTimeout(url, init, 15000),
     })
   : null;
 
@@ -99,7 +99,7 @@ function getModelId(mode: ChatMode, provider: AIProviderName): string {
   }
   if (provider === 'nvidia') {
     if (mode === 'research') return 'meta/llama-3.1-70b-instruct';
-    if (mode === 'professional') return 'meta/llama-3.3-70b-instruct';
+    if (mode === 'professional') return 'nvidia/llama-3.1-nemotron-70b-instruct';
     return 'meta/llama-3.1-8b-instruct';
   }
   
