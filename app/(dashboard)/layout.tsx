@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation';
 import { useState } from 'react';
 import Sidebar from '@/app/components/ui/Sidebar';
 import TopNav from '@/app/components/ui/TopNav';
-import CreatorFooter from '@/app/components/CreatorFooter';
 import { ChatProvider } from '@/app/components/providers/ChatProvider';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -42,7 +41,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <TopNav onOpenSidebar={() => setMobileOpen(true)} />
           {children}
         </div>
-        <CreatorFooter />
       </div>
     </ChatProvider>
   );
