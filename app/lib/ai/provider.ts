@@ -9,8 +9,8 @@ export type ChatMode = 'casual' | 'developer' | 'research' | 'professional';
 const DEFAULT_MODELS: Record<ChatMode, string> = {
   casual: 'openrouter/free',
   developer: 'nvidia/nemotron-3-super-120b-a12b:free',
-  research: 'google/gemma-4-31b-it:free',
-  professional: 'google/gemma-4-31b-it:free', // Changed from meta-llama to gemma-4 as it is currently working well
+  research: 'meta-llama/llama-3.1-8b-instruct:free',
+  professional: 'meta-llama/llama-3.1-8b-instruct:free',
 };
 
 const ENV_MODEL_KEYS: Record<ChatMode, string> = {
@@ -143,6 +143,11 @@ export function getHiddenFallbackModel(mode: string) {
   }
   if (fallbackProvider === 'gemini' && google) {
     return google(modelId);
+  }
+
+  // If we only have OpenRouter and it's the primary, use a hardcoded ultra-reliable free fallback
+  if (openrouter) {
+    return openrouter.chat('meta-llama/llama-3.1-8b-instruct:free');
   }
   
   throw new Error('No fallback AI provider configured.');
