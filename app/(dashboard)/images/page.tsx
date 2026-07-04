@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { ArrowUp, Sparkles, Download, Image as ImageIcon } from 'lucide-react';
 
 interface GeneratedImage {
@@ -15,7 +16,7 @@ function ImageItem({ img, onDownload }: { img: GeneratedImage; onDownload: (url:
   return (
     <div className="flex animate-fade-in-up flex-col items-center w-full">
       <div className="w-full text-center text-sm font-medium text-foreground mb-4">
-        "{img.prompt}"
+        &ldquo;{img.prompt}&rdquo;
       </div>
       <div className="group relative overflow-hidden rounded-2xl border border-border shadow-sm transition-all hover:shadow-md max-w-[512px] w-full bg-surface-2 aspect-square flex items-center justify-center">
         
@@ -37,12 +38,14 @@ function ImageItem({ img, onDownload }: { img: GeneratedImage; onDownload: (url:
         )}
 
         {/* Actual Image */}
-        <img
+        <Image
           src={img.imageUrl}
           alt={img.prompt}
+          width={512}
+          height={512}
           className={`h-auto w-full object-cover transition-opacity duration-700 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          loading="lazy"
           onLoad={() => setLoaded(true)}
+          unoptimized
         />
         
         {/* Hover Overlay with Download */}
@@ -65,25 +68,9 @@ export default function ImagesPage() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    fetchImages();
-  }, []);
-
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [images, generating]);
-
-  // Auto-grow textarea
-  useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
-  }, [prompt]);
 
   const fetchImages = async () => {
     try {
@@ -98,6 +85,23 @@ export default function ImagesPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot data fetch on mount
+    fetchImages();
+  }, []);
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [images, generating]);
+
+  // Auto-grow textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+  }, [prompt]);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || generating) return;

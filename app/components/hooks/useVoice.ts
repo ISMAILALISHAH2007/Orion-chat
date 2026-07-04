@@ -1,15 +1,38 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
+type SpeechRecognitionEventLike = {
+  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+};
+
+type SpeechRecognitionErrorEventLike = {
+  error: string;
+};
+
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
 export function useVoice() {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const w = window as unknown as {
+      SpeechRecognition?: new () => SpeechRecognitionLike;
+      webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+    };
+    const SpeechRecognition = w.SpeechRecognition ?? w.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       console.warn('SpeechRecognition API not supported in this browser.');
@@ -29,12 +52,12 @@ export function useVoice() {
       setIsRecording(false);
     };
 
-    rec.onerror = (event: any) => {
+    rec.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
       setIsRecording(false);
     };
 
-    rec.onresult = (event: any) => {
+    rec.onresult = (event) => {
       const resultText = event.results[0]?.[0]?.transcript;
       if (resultText) {
         setTranscript(resultText);

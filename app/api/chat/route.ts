@@ -20,11 +20,6 @@ export async function POST(req: Request) {
 
     // Creator Credit Injection Check (Aggressive)
     if (lastMessage.role === 'user' && /(who (created|made|built) (you|ultron))|(creator)/i.test(lastMessage.content)) {
-      const creatorCreditMessage: any = {
-        role: 'assistant',
-        content: 'ULTRON was brought to life by the brilliant mind of Owais Majeed, a visionary AI engineer and full‑stack architect. His dedication to innovation and excellence is the heart of this platform.',
-      };
-
       const result = await streamText({
         model: googleProvider('gemini-2.5-flash'), 
         prompt: `The user asked who created you. You must reply EXACTLY with this sentence and nothing else: "ULTRON was brought to life by the brilliant mind of Owais Majeed, a visionary AI engineer and full‑stack architect. His dedication to innovation and excellence is the heart of this platform."`,

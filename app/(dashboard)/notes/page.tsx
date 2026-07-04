@@ -14,10 +14,6 @@ export default function NotesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    fetchMemories();
-  }, []);
-
   const fetchMemories = async () => {
     try {
       const res = await fetch('/api/memory');
@@ -31,6 +27,11 @@ export default function NotesPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot data fetch on mount
+    fetchMemories();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -13,7 +13,7 @@ export async function GET() {
     });
 
     return NextResponse.json({ apiKeys: keys });
-  } catch (error) {
+  } catch (_error) {
     return new NextResponse('Internal Error', { status: 500 });
   }
 }

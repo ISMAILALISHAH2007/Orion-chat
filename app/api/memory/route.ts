@@ -14,7 +14,7 @@ export async function GET() {
     });
 
     return NextResponse.json(memories);
-  } catch (error) {
+  } catch (_error) {
     return new NextResponse('Internal Error', { status: 500 });
   }
 }
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(memory);
-  } catch (error) {
+  } catch (_error) {
     return new NextResponse('Internal Error', { status: 500 });
   }
 }

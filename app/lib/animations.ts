@@ -1,9 +1,12 @@
 // animations.ts — Uses the GSAP npm package (tree-shaken safe)
 // Works both with CDN global and npm import
 
-function getGsap(): any {
-  if (typeof window !== 'undefined' && (window as any).gsap) {
-    return (window as any).gsap;
+type GsapGlobal = typeof import('gsap').gsap;
+
+function getGsap(): GsapGlobal | null {
+  if (typeof window !== 'undefined') {
+    const w = window as unknown as { gsap?: GsapGlobal };
+    if (w.gsap) return w.gsap;
   }
   return null;
 }

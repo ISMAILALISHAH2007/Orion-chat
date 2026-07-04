@@ -16,7 +16,7 @@ export async function proxy(request: NextRequest) {
   if (pathname.startsWith('/api')) {
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
     const now = Date.now();
-    
+
     if (!rateLimitCache.has(ip)) {
       rateLimitCache.set(ip, { count: 1, timestamp: now });
     } else {
@@ -47,7 +47,7 @@ export async function proxy(request: NextRequest) {
 
   // 3. Authentication Check (for /dashboard and /api)
   const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-  
+
   if (!token) {
     // If it's an API route without a token, return 401
     if (pathname.startsWith('/api')) {
@@ -56,7 +56,7 @@ export async function proxy(request: NextRequest) {
         { status: 401, headers: { 'Content-Type': 'application/json' } }
       );
     }
-    
+
     // Otherwise redirect to sign-in
     const signInUrl = new URL('/sign-in', request.url);
     signInUrl.searchParams.set('callbackUrl', pathname);

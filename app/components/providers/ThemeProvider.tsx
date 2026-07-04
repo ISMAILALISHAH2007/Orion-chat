@@ -1,4 +1,5 @@
 'use client';
+import * as React from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
 
 type Theme = 'light' | 'dark';
@@ -21,16 +22,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // "mode" controls the assistant persona sent to the chat API.
   const [mode, setMode] = useState('casual');
   // "theme" controls light/dark appearance (dark is the default).
-  const [theme, setTheme] = useState<Theme>('dark');
-
-  // Restore saved theme preference on mount.
-  useEffect(() => {
-    const saved = (typeof window !== 'undefined' &&
-      (localStorage.getItem('ultron-theme') as Theme)) || null;
-    if (saved === 'light' || saved === 'dark') {
-      setTheme(saved);
-    }
-  }, []);
+  // Initialize from localStorage so SSR + first client paint match.
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === 'undefined') return 'dark';
+    const saved = localStorage.getItem('ultron-theme') as Theme | null;
+    return saved === 'light' || saved === 'dark' ? saved : 'dark';
+  });
 
   // Apply theme to <html> and persist it.
   useEffect(() => {

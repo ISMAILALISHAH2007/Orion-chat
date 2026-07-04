@@ -23,7 +23,7 @@ export function useChat() {
       if (res.ok) {
         const data = await res.json();
         setSessionId(id);
-        const mapped = data.messages.map((m: any) => ({
+        const mapped = data.messages.map((m: { role: string; content: string }) => ({
           sender: m.role === 'assistant' ? 'ai' : 'user',
           text: m.content,
           mode: data.mode
@@ -96,7 +96,8 @@ export function useChat() {
         setIsStreaming(false);
       }
     },
-    [session, messages, isStreaming, input, mode, sessionId]
+    [messages, isStreaming, input, mode, sessionId]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- session is intentionally read-only here
   );
 
   // Initialize with latest session if none is loaded (optional auto-load logic)

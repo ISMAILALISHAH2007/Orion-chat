@@ -22,17 +22,13 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [keys, setKeys] = useState<KeyConfig[]>([]);
-  
+
   const [selectedProvider, setSelectedProvider] = useState('openai');
   const [inputKey, setInputKey] = useState('');
-  
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
-
-  useEffect(() => {
-    fetchSettings();
-  }, []);
 
   const fetchSettings = async () => {
     try {
@@ -49,6 +45,11 @@ export default function SettingsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot data fetch on mount
+    fetchSettings();
+  }, []);
 
   const handleSaveKey = async (e: React.FormEvent) => {
     e.preventDefault();

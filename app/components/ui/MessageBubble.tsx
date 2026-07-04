@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { Sparkles } from 'lucide-react';
 import { parseMarkdown } from '@/app/lib/utils/markdown';
 
@@ -50,8 +51,8 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
           {attachments && attachments.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {attachments.map((att, idx) => (
-                <div key={idx} className="h-20 w-20 overflow-hidden rounded-lg border border-border">
-                  <img src={att.url} alt={att.name} className="h-full w-full object-cover" />
+                <div key={idx} className="relative h-20 w-20 overflow-hidden rounded-lg border border-border">
+                  <Image src={att.url} alt={att.name} fill className="object-cover" unoptimized />
                 </div>
               ))}
             </div>

@@ -440,3 +440,115 @@ body {
     bottom: 0.5rem;
   }
 }
+
+/* ==========================================================================
+   GEMINI & GLASSMORPHISM DESIGN SYSTEM
+   ========================================================================== */
+
+/* Glass Panels */
+.glass-panel {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.glass-pill {
+  background: color-mix(in srgb, var(--surface-2) 75%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+/* Gemini Gradients */
+.gemini-gradient-text {
+  background: linear-gradient(90deg, #4285f4, #9b72cb, #d96570, #4285f4);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: gemini-gradient-move 8s ease infinite;
+}
+
+.gemini-gradient-bg {
+  background: linear-gradient(90deg, #4285f4, #9b72cb, #d96570, #4285f4);
+  background-size: 300% 100%;
+  animation: gemini-gradient-move 8s ease infinite;
+}
+
+@keyframes gemini-gradient-move {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Live Voice Animations */
+.live-voice-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.6;
+  animation: blob-float 10s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: -1;
+}
+
+.live-voice-blob-1 {
+  background: #4285f4;
+  width: 300px;
+  height: 300px;
+  top: 20%;
+  left: 20%;
+}
+
+.live-voice-blob-2 {
+  background: #d96570;
+  width: 250px;
+  height: 250px;
+  top: 40%;
+  right: 20%;
+  animation-delay: -3s;
+}
+
+.live-voice-blob-3 {
+  background: #9b72cb;
+  width: 350px;
+  height: 350px;
+  bottom: 10%;
+  left: 30%;
+  animation-delay: -6s;
+}
+
+@keyframes blob-float {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(10%, 15%) scale(1.1); }
+  100% { transform: translate(-10%, -5%) scale(0.9); }
+}
+
+.live-voice-wave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 60px;
+}
+
+.live-voice-bar {
+  width: 8px;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #4285f4, #9b72cb);
+  animation: voice-bar-bounce 1s infinite ease-in-out alternate;
+}
+
+.live-voice-bar:nth-child(1) { animation-delay: -0.4s; height: 40%; }
+.live-voice-bar:nth-child(2) { animation-delay: -0.2s; height: 70%; }
+.live-voice-bar:nth-child(3) { animation-delay: 0s; height: 100%; }
+.live-voice-bar:nth-child(4) { animation-delay: -0.2s; height: 70%; }
+.live-voice-bar:nth-child(5) { animation-delay: -0.4s; height: 40%; }
+
+@keyframes voice-bar-bounce {
+  0% { transform: scaleY(0.5); opacity: 0.6; }
+  100% { transform: scaleY(1.2); opacity: 1; }
+}

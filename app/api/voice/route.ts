@@ -7,12 +7,12 @@ export async function POST(req: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) return new NextResponse('Unauthorized', { status: 401 });
 
-    const { text, voiceId } = await req.json();
+    const { text } = await req.json();
     if (!text) return new NextResponse('Missing text', { status: 400 });
 
     // Placeholder for ElevenLabs integration
     return NextResponse.json({ audioUrl: 'https://placeholder.audio/url' });
-  } catch (error) {
+  } catch (_error) {
     return new NextResponse('Internal Error', { status: 500 });
   }
 }

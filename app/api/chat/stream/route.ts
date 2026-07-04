@@ -106,13 +106,13 @@ export async function POST(req: Request) {
     const latestUserMessage = messages[messages.length - 1];
     
     // Extract raw text from multimodal payloads (array content) or simple strings
-    const userContent: string = Array.isArray(latestUserMessage?.content) 
-      ? latestUserMessage.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n') 
+    const userContent: string = Array.isArray(latestUserMessage?.content)
+      ? latestUserMessage.content.filter((c: { type: string }) => c.type === 'text').map((c: { text: string }) => c.text).join('\n')
       : latestUserMessage?.content ?? '';
 
     // Check if the chat history has images to force the vision model
-    const hasImages = messages.some((m: any) => 
-      Array.isArray(m.content) && m.content.some((c: any) => c.type === 'image')
+    const hasImages = messages.some((m: { content: unknown }) =>
+      Array.isArray(m.content) && m.content.some((c: { type: string }) => c.type === 'image')
     );
 
     const session = await sessionPromise;
@@ -210,7 +210,7 @@ export async function POST(req: Request) {
     }
 
     // ----- 4. Long-term memory retrieval -----
-    const [_, memories] = await Promise.all([
+    const [, memories] = await Promise.all([
       sessionPromiseTask,
       memoryPromise
     ]);

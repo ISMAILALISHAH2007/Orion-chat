@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, X, RefreshCcw } from 'lucide-react';
 
 interface CameraModalProps {
@@ -12,7 +12,7 @@ export default function CameraModal({ onCapture, onClose }: CameraModalProps) {
   const streamRef = useRef<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
 
-  const startCamera = async (mode: 'user' | 'environment') => {
+  const startCamera = useCallback(async (mode: 'user' | 'environment') => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
@@ -36,7 +36,7 @@ export default function CameraModal({ onCapture, onClose }: CameraModalProps) {
       alert('Camera access is required to take a photo. Please check your browser permissions.');
       onClose();
     }
-  };
+  }, [onClose]);
 
   useEffect(() => {
     startCamera(facingMode);
@@ -45,7 +45,7 @@ export default function CameraModal({ onCapture, onClose }: CameraModalProps) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, [facingMode]);
+  }, [facingMode, startCamera]);
 
   const handleSnap = () => {
     if (!videoRef.current) return;
@@ -61,8 +61,8 @@ export default function CameraModal({ onCapture, onClose }: CameraModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in p-2 sm:p-4">
-      <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-black border border-white/10 shadow-2xl">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-fade-in sm:p-4">
+      <div className="relative h-full w-full overflow-hidden bg-black sm:max-h-[85vh] sm:max-w-md sm:rounded-[36px] sm:border sm:border-white/10 sm:shadow-2xl">
         {/* Header */}
         <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent p-4">
           <button onClick={() => setFacingMode(m => m === 'user' ? 'environment' : 'user')} className="rounded-full bg-white/10 p-3 text-white backdrop-blur-sm transition-colors hover:bg-white/20">
@@ -74,7 +74,7 @@ export default function CameraModal({ onCapture, onClose }: CameraModalProps) {
         </div>
 
         {/* Video Feed */}
-        <div className="relative aspect-[3/4] sm:aspect-square w-full bg-zinc-900">
+        <div className="relative h-full w-full bg-black">
           <video
             ref={videoRef}
             autoPlay

@@ -1,9 +1,37 @@
 // app/lib/webgl.ts
 
+// Loose typing for the global THREE library loaded via script tag.
+// We don't import from 'three' so the npm types aren't required.
+type ThreeGlobal = {
+  Scene: new () => { add: (object: unknown) => void };
+  PerspectiveCamera: new (fov: number, aspect: number, near: number, far: number) => {
+    position: { z: number; x?: number; y?: number };
+    aspect: number;
+    updateProjectionMatrix: () => void;
+  };
+  WebGLRenderer: new (opts: { canvas: HTMLCanvasElement; antialias?: boolean; alpha?: boolean }) => {
+    setPixelRatio: (ratio: number) => void;
+    setSize: (w: number, h: number, updateStyle?: boolean) => void;
+    render: (scene: unknown, camera: unknown) => void;
+  };
+  IcosahedronGeometry: new (radius: number, detail: number) => {
+    attributes: { position: { array: ArrayLike<number> } };
+  };
+  MeshBasicMaterial: new (opts: { color: number; wireframe?: boolean; transparent?: boolean; opacity?: number }) => { color: { setHex: (h: number) => void } };
+  Mesh: new (geometry: unknown, material: unknown) => { rotation: { y: number; x: number }; scale: { set: (x: number, y: number, z: number) => void } };
+  BufferGeometry: new () => { setAttribute: (name: string, attr: unknown) => void };
+  BufferAttribute: new (array: ArrayLike<number>, itemSize: number) => unknown;
+  PointsMaterial: new (opts: { color: number; size: number; transparent?: boolean; opacity?: number }) => { color: { setHex: (h: number) => void } };
+  Points: new (geometry: unknown, material: unknown) => { rotation: { y: number; x: number }; scale: { set: (x: number, y: number, z: number) => void } };
+  AmbientLight: new (color: number, intensity: number) => unknown;
+  PointLight: new (color: number, intensity: number, distance: number) => { position: { set: (x: number, y: number, z: number) => void } };
+  Clock: new () => { getElapsedTime: () => number };
+};
+
 export function initVisualizer(canvas: HTMLCanvasElement) {
   if (typeof window === 'undefined') return;
 
-  const THREE = (window as any).THREE;
+  const THREE: ThreeGlobal | undefined = (window as unknown as { THREE?: ThreeGlobal }).THREE;
   if (!THREE) {
     console.error("Three.js library is not available in the global scope.");
     return;

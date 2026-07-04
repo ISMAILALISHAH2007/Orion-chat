@@ -53,7 +53,7 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
   const current = MODELS.find((m) => m.id === mode) ?? MODELS[0];
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/70 px-3 backdrop-blur-md sm:px-6">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/10 bg-transparent px-3 glass-panel sm:px-6">
       {/* Left: mobile menu */}
       <div className="flex items-center gap-2">
         <button

@@ -2,8 +2,13 @@
 import { useState, useEffect } from 'react';
 import { DownloadCloud, X } from 'lucide-react';
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
 export default function InstallPrompt() {
-  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
@@ -21,7 +26,7 @@ export default function InstallPrompt() {
       // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
       // Stash the event so it can be triggered later.
-      setInstallPromptEvent(e);
+      setInstallPromptEvent(e as BeforeInstallPromptEvent);
       // Show our custom UI
       setShowPrompt(true);
     };
@@ -73,26 +78,26 @@ export default function InstallPrompt() {
   if (!showPrompt) return null;
 
   return (
-    <div className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between bg-accent px-4 py-3 text-accent-foreground shadow-lg animate-fade-in-down sm:left-auto sm:right-4 sm:top-4 sm:rounded-2xl sm:px-6">
+    <div className="fixed left-3 right-3 top-4 z-50 flex items-center justify-between rounded-2xl px-4 py-3 shadow-2xl animate-fade-in-down glass-panel border border-white/20 sm:left-auto sm:right-6 sm:top-6 sm:w-[380px]">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20 text-white backdrop-blur-md">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-accent/20 text-accent backdrop-blur-md">
           <DownloadCloud size={20} />
         </div>
         <div className="flex flex-col">
-          <span className="text-sm font-bold text-white">Get the ULTRON App</span>
-          <span className="text-xs text-white/80">Add to home screen for a native experience.</span>
+          <span className="text-[15px] font-semibold text-foreground">Get the ULTRON App</span>
+          <span className="text-[13px] text-muted">Add to home screen for a native experience.</span>
         </div>
       </div>
       
       <div className="ml-6 flex items-center gap-3">
         <button
           onClick={handleInstallClick}
-          className="rounded-full bg-white px-4 py-1.5 text-sm font-bold text-accent shadow-sm transition-transform hover:scale-105 active:scale-95"
+          className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-105 active:scale-95"
         >
           Install
         </button>
-        <button onClick={handleDismiss} className="text-white/60 hover:text-white" aria-label="Dismiss">
-          <X size={20} />
+        <button onClick={handleDismiss} className="rounded-full bg-surface-2 p-1.5 text-muted hover:text-foreground transition-colors" aria-label="Dismiss">
+          <X size={16} />
         </button>
       </div>
     </div>

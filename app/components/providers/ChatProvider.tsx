@@ -51,6 +51,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [input, setInput] = useState('');
   const [sessionId, setSessionId] = useState<string>('current');
   const [sessionsList, setSessionsList] = useState<ChatSessionItem[]>([]);
+  const [hasFetchedSessions, setHasFetchedSessions] = useState(false);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setInput(e.target.value);
@@ -62,11 +63,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         setSessionsList(data.sessions || []);
+        setHasFetchedSessions(true);
       }
     } catch (err) {
       console.error('Failed to fetch sessions:', err);
     }
   }, [session]);
+
+  // Initial fetch: wait until we know whether we're logged in, then fetch once.
+  useEffect(() => {
+    if (session?.user && !hasFetchedSessions) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot session bootstrap on auth state change
+      void fetchSessionsList();
+    }
+  }, [session?.user, hasFetchedSessions, fetchSessionsList]);
 
   const startNewSession = useCallback(() => {
     setSessionId('current');
@@ -79,7 +89,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         setSessionId(id);
-        const mapped: ChatMessage[] = (data.messages || []).map((m: any) => ({
+        const mapped: ChatMessage[] = (data.messages || []).map((m: { role: string; content: string }) => ({
           sender: m.role === 'assistant' ? 'ai' : 'user',
           text: m.content,
           mode: data.mode,
@@ -224,10 +234,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     },
     [messages, isStreaming, input, mode, sessionId, fetchSessionsList]
   );
-
-  useEffect(() => {
-    fetchSessionsList();
-  }, [fetchSessionsList]);
 
   return (
     <ChatContext.Provider

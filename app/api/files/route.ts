@@ -14,7 +14,7 @@ export async function GET() {
     });
 
     return NextResponse.json(files);
-  } catch (error) {
+  } catch (_error) {
     return new NextResponse('Internal Error', { status: 500 });
   }
 }
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(document);
-  } catch (error) {
+  } catch (_error) {
     return new NextResponse('Internal Error', { status: 500 });
   }
 }

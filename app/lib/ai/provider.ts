@@ -10,7 +10,7 @@ const DEFAULT_MODELS: Record<ChatMode, string> = {
   casual: 'openrouter/free',
   developer: 'nvidia/nemotron-3-super-120b-a12b:free',
   research: 'google/gemma-4-31b-it:free',
-  professional: 'meta-llama/llama-3.3-70b-instruct:free',
+  professional: 'google/gemma-4-31b-it:free', // Changed from meta-llama to gemma-4 as it is currently working well
 };
 
 const ENV_MODEL_KEYS: Record<ChatMode, string> = {
@@ -37,9 +37,9 @@ async function fetchWithTimeout(
     });
     clearTimeout(id);
     return response;
-  } catch (error: any) {
+  } catch (error) {
     clearTimeout(id);
-    if (error.name === 'AbortError') {
+    if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(`API Request timed out after ${timeoutMs}ms`);
     }
     throw error;

@@ -79,7 +79,7 @@ export default function Sidebar({
           .then(res => res.ok ? res.json() : [])
           .then(data => {
             if (Array.isArray(data)) {
-              setImagesList(data.map((img: any) => ({
+              setImagesList(data.map((img: { id: string; prompt: string; createdAt: string }) => ({
                 id: img.id,
                 title: img.prompt,
                 mode: 'image',
@@ -137,7 +137,7 @@ export default function Sidebar({
 
       <aside
         className={[
-          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border bg-surface',
+          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-white/10 bg-transparent glass-panel',
           'transition-transform duration-300 ease-out',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
           'md:static md:translate-x-0 md:transition-[width] md:duration-300',

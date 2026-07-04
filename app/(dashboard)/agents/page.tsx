@@ -16,14 +16,10 @@ export default function AgentsPage() {
   const [description, setDescription] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [model, setModel] = useState('meta/llama-3.3-70b-instruct');
-  
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
-
-  useEffect(() => {
-    fetchAgents();
-  }, []);
 
   const fetchAgents = async () => {
     try {
@@ -38,6 +34,11 @@ export default function AgentsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot data fetch on mount
+    fetchAgents();
+  }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

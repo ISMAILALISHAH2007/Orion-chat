@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import {
   Paperclip,
@@ -72,9 +73,8 @@ export default function ChatInterface() {
   }, [messages]);
 
   useEffect(() => {
-    if (transcript) {
-      setInput((prev) => (prev ? prev + ' ' + transcript : transcript));
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing external speech-recognition state into the controlled input
+    if (transcript) setInput((prev) => (prev ? prev + ' ' + transcript : transcript));
   }, [transcript]);
 
   // Auto-grow the textarea.
@@ -85,33 +85,26 @@ export default function ChatInterface() {
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   }, [input]);
 
-  // Slash-command popover — show when input starts with `/`.
+  // Slash-command popover — derived from input + manually controlled open state.
   const slashQuery = input.startsWith('/') ? input.split(/\s+/)[0].slice(1).toLowerCase() : '';
   const filteredCommands = SLASH_COMMANDS.filter((c) =>
     slashQuery ? c.cmd.startsWith(slashQuery) : true
   );
-  const showSlash = slashOpen && input.startsWith('/') && filteredCommands.length > 0;
+
+  // Derive slash-open from input unless the user has manually dismissed it.
+  const effectiveSlashOpen = slashOpen && input.startsWith('/') && filteredCommands.length > 0;
 
   // Detect image intent in developer mode for an inline preview notice.
-  useEffect(() => {
+  const noticeText = (() => {
     const imageIntent = mode === 'developer' && /(draw|generate|render|create).*(image|picture|illustration|photo|logo|icon)/i.test(input);
     if (imageIntent && input.trim()) {
-      setNotice('Detected image intent — Developer mode will auto-route to image generation.');
-    } else if (input.startsWith('/img ')) {
-      setNotice('Slash command /img — image generation.');
-    } else {
-      setNotice(null);
+      return 'Detected image intent — Developer mode will auto-route to image generation.';
     }
-  }, [input, mode]);
-
-  useEffect(() => {
-    if (input.startsWith('/') && !slashOpen) {
-      setSlashOpen(true);
-      setSlashIndex(0);
-    } else if (!input.startsWith('/') && slashOpen) {
-      setSlashOpen(false);
+    if (input.startsWith('/img ')) {
+      return 'Slash command /img — image generation.';
     }
-  }, [input, slashOpen]);
+    return null;
+  })();
 
   // Click-outside dismissal for slash popover.
   useEffect(() => {
@@ -132,7 +125,7 @@ export default function ChatInterface() {
 
   const handleSend = () => {
     if ((!input.trim() && attachments.length === 0) || isStreaming) return;
-    
+
     let finalInput = input;
     if (isImageMode && !finalInput.startsWith('/img')) {
       finalInput = `/img ${finalInput.trim()}`;
@@ -142,11 +135,10 @@ export default function ChatInterface() {
     setInput('');
     setAttachments([]);
     setIsImageMode(false);
-    setNotice(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (showSlash) {
+    if (effectiveSlashOpen) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSlashIndex((i) => (i + 1) % filteredCommands.length);
@@ -189,7 +181,7 @@ export default function ChatInterface() {
         });
         
         // Compress image to prevent crashing vision models
-        const img = new Image();
+        const img = new window.Image();
         const compressedUri = await new Promise<string>((resolve) => {
           img.onload = () => {
             const canvas = document.createElement('canvas');
@@ -239,7 +231,39 @@ export default function ChatInterface() {
   const showThinking = isStreaming && (!lastMessage || lastMessage.sender === 'user');
 
   return (
-    <section className="relative flex min-h-0 flex-1 flex-col bg-background">
+    <section className="relative flex min-h-0 flex-1 flex-col bg-background/50">
+      {/* Live Voice Overlay */}
+      {isRecording && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-3xl animate-fade-in">
+          <div className="live-voice-blob live-voice-blob-1" />
+          <div className="live-voice-blob live-voice-blob-2" />
+          <div className="live-voice-blob live-voice-blob-3" />
+          
+          <h2 className="mb-12 font-display text-4xl font-semibold text-foreground md:text-6xl">
+            Listening...
+          </h2>
+          
+          <div className="live-voice-wave mb-16">
+            <div className="live-voice-bar" />
+            <div className="live-voice-bar" />
+            <div className="live-voice-bar" />
+            <div className="live-voice-bar" />
+            <div className="live-voice-bar" />
+          </div>
+          
+          <p className="max-w-xl text-center text-xl font-medium text-foreground/80">
+            {transcript || "Speak now..."}
+          </p>
+          
+          <button
+            onClick={toggleRecording}
+            className="absolute bottom-12 rounded-full bg-danger px-8 py-4 font-semibold text-white shadow-xl transition-transform hover:scale-105 active:scale-95"
+          >
+            Stop Listening
+          </button>
+        </div>
+      )}
+
       {showCamera && (
         <CameraModal onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />
       )}
@@ -247,11 +271,11 @@ export default function ChatInterface() {
       <div className="flex-1 overflow-y-auto">
         {isEmpty ? (
           <div className="mx-auto flex h-full w-full max-w-3xl flex-col items-center justify-center px-4 py-10">
-            <h1 className="text-balance text-center font-display text-3xl font-semibold text-foreground sm:text-4xl">
-              How can I help you{userName !== 'there' ? `, ${userName}` : ''} today?
+            <h1 className="gemini-gradient-text text-balance text-center font-display text-4xl font-bold sm:text-5xl">
+              Hello, {userName !== 'there' ? userName : 'Commander'}
             </h1>
-            <p className="mt-3 text-center text-sm text-muted">
-              Ask anything, or start with one of these.
+            <p className="mt-3 text-center text-xl text-muted font-medium">
+              How can I help you today?
             </p>
             <div className="mt-8 grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
               {SUGGESTIONS.map(({ icon: Icon, title, prompt }) => (
@@ -306,14 +330,14 @@ export default function ChatInterface() {
       {/* Docked input */}
       <div className="px-4 pb-6">
         <div className="mx-auto w-full max-w-3xl">
-          {notice && (
+          {(noticeText ?? notice) && (
             <div className="mb-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent animate-fade-in">
-              {notice}
+              {noticeText ?? notice}
             </div>
           )}
 
           <div ref={slashRef} className="relative">
-            {showSlash && (
+            {effectiveSlashOpen && (
               <div
                 role="listbox"
                 className="absolute bottom-full left-0 right-0 z-40 mb-2 overflow-hidden rounded-xl border border-border bg-surface p-1.5 shadow-lg animate-fade-in"
@@ -349,13 +373,13 @@ export default function ChatInterface() {
               </div>
             )}
 
-            <div className={['flex flex-col gap-2 rounded-2xl border bg-surface p-2 shadow-sm transition-all focus-within:ring-2 focus-within:ring-[var(--accent-soft)]', isImageMode ? 'border-[#a855f7] focus-within:border-[#a855f7]' : 'border-border focus-within:border-accent'].join(' ')}>
+            <div className={['flex flex-col gap-2 rounded-[28px] border p-2 shadow-sm transition-all glass-pill', isImageMode ? 'border-[#a855f7] focus-within:border-[#a855f7]' : 'border-border focus-within:border-accent focus-within:shadow-md'].join(' ')}>
               {/* Attachments Preview */}
               {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-2 pt-2">
                   {attachments.map((att, idx) => (
                     <div key={idx} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-border">
-                      <img src={att.url} alt={att.name} className="h-full w-full object-cover" />
+                      <Image src={att.url} alt={att.name} fill className="object-cover" unoptimized />
                       <button
                         type="button"
                         onClick={() => removeAttachment(idx)}
@@ -373,7 +397,17 @@ export default function ChatInterface() {
                 value={input}
                 rows={1}
                 placeholder={placeholder}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setInput(value);
+                  // Sync slash-popover open state with the input.
+                  if (value.startsWith('/')) {
+                    if (!slashOpen) setSlashIndex(0);
+                    setSlashOpen(true);
+                  } else if (slashOpen) {
+                    setSlashOpen(false);
+                  }
+                }}
                 onKeyDown={handleKeyDown}
                 disabled={isStreaming}
                 className="max-h-[200px] w-full resize-none bg-transparent px-3 py-2 text-base leading-relaxed text-foreground outline-none placeholder:text-muted disabled:opacity-60"
