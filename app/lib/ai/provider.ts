@@ -6,18 +6,13 @@ export type ChatMode = 'casual' | 'developer' | 'research' | 'professional';
 export type AIProviderName = 'openrouter' | 'gemini' | 'nvidia';
 
 const DEFAULT_MODELS: Record<ChatMode, string> = {
-  casual: 'google/lyria-3-pro-preview',
+  casual: 'meta/llama-3.1-70b-instruct',
   developer: 'gemini-2.5-flash',
   research: 'meta/llama-3.1-8b-instruct',
-  professional: 'meta/llama-3.1-70b-instruct',
+  professional: 'google/lyria-3-pro-preview',
 };
 
-const ENV_MODEL_KEYS: Record<ChatMode, string> = {
-  casual: 'MODEL_CASUAL',
-  developer: 'MODEL_DEVELOPER',
-  research: 'MODEL_RESEARCH',
-  professional: 'MODEL_PROFESSIONAL',
-};
+
 
 async function fetchWithTimeout(
   url: string | URL | Request,
@@ -70,11 +65,11 @@ const nvidia = process.env.NVIDIA_API_KEY
   : null;
 
 function resolveProvider(mode: ChatMode): AIProviderName {
-  if (mode === 'casual' && openrouter) return 'openrouter';
+  if (mode === 'professional' && openrouter) return 'openrouter';
   if (mode === 'developer' && google) return 'gemini';
   
   // High-tier workloads go to NVIDIA
-  if ((mode === 'research' || mode === 'professional') && nvidia) return 'nvidia';
+  if ((mode === 'research' || mode === 'casual') && nvidia) return 'nvidia';
   
   if (google) return 'gemini';
   if (openrouter) return 'openrouter';
@@ -83,11 +78,15 @@ function resolveProvider(mode: ChatMode): AIProviderName {
 
 function getModelId(mode: ChatMode, provider: AIProviderName): string {
   if (provider === 'gemini') return process.env.MODEL_DEVELOPER || 'gemini-2.5-flash';
-  if (provider === 'openrouter') return process.env.MODEL_CASUAL || 'google/lyria-3-pro-preview';
+  
+  if (provider === 'openrouter') {
+    if (mode === 'professional') return process.env.MODEL_PROFESSIONAL || 'google/lyria-3-pro-preview';
+    if (mode === 'casual') return process.env.MODEL_CASUAL || 'google/lyria-3-pro-preview';
+    return 'google/lyria-3-pro-preview';
+  }
   
   if (provider === 'nvidia') {
-    // Only these two models are guaranteed to work on all free NVIDIA keys without 404s
-    if (mode === 'professional') return 'meta/llama-3.1-70b-instruct';
+    if (mode === 'casual') return 'meta/llama-3.1-70b-instruct';
     return 'meta/llama-3.1-8b-instruct';
   }
   
@@ -107,7 +106,7 @@ export function getDefaultModelForMode(mode: string) {
   throw new Error('No AI provider configured.');
 }
 
-export function getHiddenFallbackModel(mode: string) {
+export function getHiddenFallbackModel(_mode: string) {
   if (google) return google('gemini-2.5-flash');
   if (nvidia) return nvidia.chat('meta/llama-3.1-8b-instruct');
   if (openrouter) return openrouter.chat('openrouter/auto');

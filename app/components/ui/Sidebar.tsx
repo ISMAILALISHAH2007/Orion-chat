@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import {
   SquarePen,
   Trash2,
@@ -11,7 +11,6 @@ import {
   MessageSquare,
   Bot,
   NotebookPen,
-  ImageIcon,
   Settings,
   LogOut,
   X,
@@ -22,7 +21,6 @@ const NAV_ITEMS = [
   { href: '/', label: 'Chat', icon: MessageSquare },
   { href: '/agents', label: 'Custom Agents', icon: Bot },
   { href: '/notes', label: 'Notes & Memory', icon: NotebookPen },
-  { href: '/images', label: 'Image Generation', icon: ImageIcon },
 ];
 
 type UnifiedItem = ChatSessionItem & { type: 'chat' | 'image' };
@@ -69,52 +67,13 @@ export default function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
 
-  const [imagesList, setImagesList] = useState<UnifiedItem[]>([]);
-
-  // Fetch images for unified history
-  useEffect(() => {
-    const fetchImages = () => {
-      if (session?.user) {
-        fetch('/api/images')
-          .then(res => res.ok ? res.json() : [])
-          .then(data => {
-            if (Array.isArray(data)) {
-              setImagesList(data.map((img: { id: string; prompt: string; createdAt: string }) => ({
-                id: img.id,
-                title: img.prompt,
-                mode: 'image',
-                updatedAt: img.createdAt,
-                type: 'image'
-              })));
-            }
-          })
-          .catch(console.error);
-      }
-    };
-    fetchImages();
-    window.addEventListener('images-updated', fetchImages);
-    return () => window.removeEventListener('images-updated', fetchImages);
-  }, [session]);
-
-  const deleteImage = async (id: string) => {
-    try {
-      const res = await fetch(`/api/images?imageId=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setImagesList(prev => prev.filter(img => img.id !== id));
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const unifiedList = useMemo(() => {
     const combined: UnifiedItem[] = [
-      ...sessionsList.map(s => ({ ...s, type: 'chat' as const })),
-      ...imagesList
+      ...sessionsList.map(s => ({ ...s, type: 'chat' as const }))
     ];
     combined.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
     return combined;
-  }, [sessionsList, imagesList]);
+  }, [sessionsList]);
 
   const grouped = useMemo(() => groupSessions(unifiedList), [unifiedList]);
 
@@ -241,28 +200,19 @@ export default function Sidebar({
                           <button
                             onClick={() => {
                               onCloseMobile();
-                              if (item.type === 'image') {
-                                if (pathname !== '/images') router.push('/images');
-                              } else {
-                                loadSession(item.id);
-                                if (pathname !== '/') router.push('/');
-                              }
+                              loadSession(item.id);
+                              if (pathname !== '/') router.push('/');
                             }}
                             className="flex-1 flex items-center gap-2 truncate text-left"
                             title={item.title}
                           >
-                            {item.type === 'image' && <ImageIcon size={14} className="shrink-0 opacity-70" />}
                             <span className="truncate">{item.title || 'New conversation'}</span>
                           </button>
 
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (item.type === 'image') {
-                                deleteImage(item.id);
-                              } else {
-                                deleteSession(item.id);
-                              }
+                              deleteSession(item.id);
                             }}
                             aria-label="Delete item"
                             className="shrink-0 rounded p-1 text-muted opacity-0 transition-all hover:text-danger group-hover:opacity-100"

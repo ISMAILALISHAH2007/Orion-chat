@@ -25,8 +25,9 @@ async function testMode(mode: string) {
       prompt: 'Respond with exactly one word: "Success".'
     });
     console.log(`✅ Primary Success in ${Date.now() - start}ms! Response: "${result.text.trim()}"`);
-  } catch (err: any) {
-    console.log(`❌ Primary Failed: ${err.message}`);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`❌ Primary Failed: ${msg}`);
   }
 
   // Test Fallback Model
@@ -40,8 +41,9 @@ async function testMode(mode: string) {
       prompt: 'Respond with exactly one word: "Success".'
     });
     console.log(`✅ Fallback Success in ${Date.now() - start}ms! Response: "${result.text.trim()}"`);
-  } catch (err: any) {
-    console.log(`❌ Fallback Failed: ${err.message}`);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`❌ Fallback Failed: ${msg}`);
   }
 }
 

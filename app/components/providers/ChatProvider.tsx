@@ -236,8 +236,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           fetchSessionsList();
           setTimeout(fetchSessionsList, 3000);
         }
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name === 'AbortError') {
           console.log('Stream aborted by user');
         } else {
           console.error('Chat stream error:', error);

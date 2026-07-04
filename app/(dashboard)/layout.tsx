@@ -31,7 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <ChatProvider>
-      <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+      <div className="flex h-[100dvh] w-screen overflow-hidden bg-background text-foreground">
         <Sidebar
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((c) => !c)}

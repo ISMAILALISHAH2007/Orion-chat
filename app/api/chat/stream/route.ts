@@ -34,11 +34,11 @@ const HELP_TEXT = `**ULTRON — Slash commands**
 **Modes**
 
 - **Casual 2.5** — Chat naturally, I'm here for you.
-- **Developer 4.8** — Write code, debug, or architect systems. *(Auto-switches to image gen when you ask for an image.)*
+- **Developer 4.8** — Write code, debug, or architect systems.
 - **Research Deeping Mode** — Dive deep into research, analyse data.
 - **Professional** — Executive insights, concise and data-driven.
 
-**Tip:** In Developer mode, prompts like "draw me a logo for a coffee shop" auto-route to image generation.`;
+**Tip:** Across all modes, prompts like "draw me a logo for a coffee shop" will auto-route to image generation.`;
 
 function parseSlashCommand(text: string): { command: SlashCommand; prompt: string } | null {
   const match = text.match(/^\/(\w+)\s*([\s\S]*)$/);
@@ -190,11 +190,11 @@ export async function POST(req: Request) {
       );
     }
 
-    // ----- 3. Developer-mode image-intent auto-switch -----
+    // ----- 3. Universal image-intent auto-switch -----
     const imageIntent =
       slash?.command === 'code' || slash?.command === 'design'
         ? null
-        : mode === 'developer' && IMAGE_INTENT_REGEX.test(userContent)
+        : IMAGE_INTENT_REGEX.test(userContent)
           ? userContent.replace(/^\s*\/img\s*/i, '').trim() || userContent
           : null;
 

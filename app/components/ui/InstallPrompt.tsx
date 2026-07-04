@@ -50,7 +50,7 @@ export default function InstallPrompt() {
 
   const handleInstallClick = async () => {
     if (!installPromptEvent) {
-      alert('To install ULTRON as a native app on this device, tap your browser menu (the 3 dots or Share icon) and select "Add to Home Screen" or "Install App".');
+      alert("As a modern Web App, ULTRON doesn't use an APK file! To install it natively, just tap your browser's menu (the 3 dots or Share icon) and select 'Add to Home Screen' or 'Install App'.");
       setShowPrompt(false);
       return;
     }
