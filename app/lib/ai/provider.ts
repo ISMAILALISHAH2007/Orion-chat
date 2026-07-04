@@ -2,15 +2,14 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 
-// Modes the chat route understands. Keep in sync with app/lib/validation.
 export type ChatMode = 'casual' | 'developer' | 'research' | 'professional';
+export type AIProviderName = 'openrouter' | 'gemini' | 'nvidia';
 
-// Default model IDs for OpenRouter
 const DEFAULT_MODELS: Record<ChatMode, string> = {
-  casual: 'gemini-2.5-flash',
+  casual: 'openrouter/free',
   developer: 'gemini-2.5-flash',
-  research: 'gemini-2.5-flash',
-  professional: 'gemini-2.5-flash',
+  research: 'meta/llama-3.1-70b-instruct',
+  professional: 'meta/llama-3.1-405b-instruct',
 };
 
 const ENV_MODEL_KEYS: Record<ChatMode, string> = {
@@ -20,9 +19,6 @@ const ENV_MODEL_KEYS: Record<ChatMode, string> = {
   professional: 'MODEL_PROFESSIONAL',
 };
 
-export type AIProviderName = 'openrouter' | 'gemini';
-
-// Helper for fetch timeout to prevent API hangs and slow responses
 async function fetchWithTimeout(
   url: string | URL | Request,
   options?: RequestInit,
@@ -31,16 +27,12 @@ async function fetchWithTimeout(
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
 
-  // If the SDK passes a signal, we want to abort if EITHER the SDK aborts OR our timeout fires
   const signal = options?.signal
     ? (AbortSignal.any ? AbortSignal.any([options.signal, controller.signal]) : controller.signal)
     : controller.signal;
 
   try {
-    const response = await fetch(url, {
-      ...options,
-      signal,
-    });
+    const response = await fetch(url, { ...options, signal });
     clearTimeout(id);
     return response;
   } catch (error) {
@@ -53,36 +45,39 @@ async function fetchWithTimeout(
 }
 
 const openrouterApiKey = process.env.OPENROUTER_API_KEY ?? '';
-
 const openrouter = openrouterApiKey
   ? createOpenRouter({
-    apiKey: openrouterApiKey,
-    baseURL: process.env.OPENROUTER_BASE_URL,
-    appName: 'ULTRON',
-    appUrl: process.env.NEXTAUTH_URL ?? 'http://localhost:8000',
-    fetch: (url, init) => fetchWithTimeout(url, init, 60000), // 60 seconds timeout
-  })
+      apiKey: openrouterApiKey,
+      baseURL: process.env.OPENROUTER_BASE_URL,
+      appName: 'ULTRON',
+      appUrl: process.env.NEXTAUTH_URL ?? 'http://localhost:8000',
+      fetch: (url, init) => fetchWithTimeout(url, init, 60000),
+    })
   : null;
 
 const google = process.env.GEMINI_API_KEY
   ? createGoogleGenerativeAI({
-    apiKey: process.env.GEMINI_API_KEY,
-    fetch: (url, init) => fetchWithTimeout(url, init, 60000), // 60 seconds timeout
-  })
+      apiKey: process.env.GEMINI_API_KEY,
+      fetch: (url, init) => fetchWithTimeout(url, init, 60000),
+    })
   : null;
 
 const nvidia = process.env.NVIDIA_API_KEY
   ? createOpenAI({
-    apiKey: process.env.NVIDIA_API_KEY,
-    baseURL: 'https://integrate.api.nvidia.com/v1',
-    fetch: (url, init) => fetchWithTimeout(url, init, 30000), // 30 seconds timeout for fallback
-  })
+      apiKey: process.env.NVIDIA_API_KEY,
+      baseURL: 'https://integrate.api.nvidia.com/v1',
+      fetch: (url, init) => fetchWithTimeout(url, init, 30000),
+    })
   : null;
 
 function resolveProvider(mode: ChatMode): AIProviderName {
-  // OpenRouter is rate-limited out; route EVERYTHING to native Gemini
-  if (google) return 'gemini';
+  if (mode === 'casual' && openrouter) return 'openrouter';
+  if (mode === 'developer' && google) return 'gemini';
+  if ((mode === 'research' || mode === 'professional') && nvidia) return 'nvidia';
+  
+  // Failsafes if requested keys are missing
   if (openrouter) return 'openrouter';
+  if (google) return 'gemini';
   return 'openrouter';
 }
 
@@ -90,88 +85,68 @@ function getModelId(mode: ChatMode, provider: AIProviderName): string {
   const envKey = ENV_MODEL_KEYS[mode];
   const envModel = process.env[envKey]?.trim();
 
-  if (envModel) return envModel;
+  // Validate env models for the specific provider
+  if (envModel && provider === 'gemini' && envModel.includes('gemini')) return envModel;
+  if (envModel && provider === 'openrouter' && (envModel.includes('openrouter') || envModel.includes(':free') || envModel.includes('llama'))) return envModel;
+  if (envModel && provider === 'nvidia' && !envModel.includes(':free')) return envModel;
 
-  if (provider === 'gemini') {
-    return 'gemini-2.5-pro';
+  // Defaults per provider
+  if (provider === 'gemini') return 'gemini-2.5-flash';
+  if (provider === 'openrouter') {
+    if (mode === 'casual') return 'openrouter/free';
+    if (mode === 'developer') return 'openrouter/auto';
+    return 'nvidia/nemotron-3-super-120b-a12b:free';
   }
+  if (provider === 'nvidia') {
+    if (mode === 'research') return 'meta/llama-3.1-70b-instruct';
+    if (mode === 'professional') return 'meta/llama-3.1-405b-instruct';
+    return 'meta/llama-3.1-8b-instruct';
+  }
+  
   return DEFAULT_MODELS[mode];
 }
 
-/**
- * Get a model instance for a given mode.
- */
 export function getDefaultModelForMode(mode: string) {
   const m = (mode as ChatMode) in DEFAULT_MODELS ? (mode as ChatMode) : 'casual';
   const provider = resolveProvider(m);
   const modelId = getModelId(m, provider);
 
-  if (provider === 'gemini' && google) {
-    return google(modelId);
+  if (provider === 'gemini' && google) return google(modelId);
+  if (provider === 'nvidia' && nvidia) return nvidia.chat(modelId);
+  if (provider === 'openrouter' && openrouter) return openrouter.chat(modelId);
+
+  // Ultimate fallback
+  if (google) return google('gemini-2.5-flash');
+  throw new Error('No AI provider configured.');
+}
+
+export function getHiddenFallbackModel(mode: string) {
+  const m = (mode as ChatMode) in DEFAULT_MODELS ? (mode as ChatMode) : 'casual';
+  const primaryProvider = resolveProvider(m);
+
+  if (primaryProvider !== 'nvidia' && nvidia) {
+    console.warn('[AI Fallback] Primary failed, switching directly to NVIDIA API');
+    return nvidia.chat('meta/llama-3.1-8b-instruct');
   }
 
-  if (openrouter) {
-    return openrouter.chat(modelId);
-  }
-
-  if (google) {
+  if (primaryProvider === 'nvidia' && google) {
+    console.warn('[AI Fallback] NVIDIA failed, switching to Google Gemini API');
     return google('gemini-2.5-flash');
   }
 
-  throw new Error('No AI provider configured. Set GEMINI_API_KEY or OPENROUTER_API_KEY in .env.local.');
-}
-
-/**
- * Get a fallback model instance if the primary fails.
- */
-export function getHiddenFallbackModel(mode: string) {
-  if (nvidia) {
-    // NVIDIA fallback models (using meta/llama-3.1-8b-instruct for high speed and reliability)
-    switch (mode as ChatMode) {
-      case 'casual': return nvidia.chat('meta/llama-3.1-8b-instruct');
-      case 'developer': return nvidia.chat('meta/llama-3.1-8b-instruct');
-      case 'research': return nvidia.chat('meta/llama-3.1-8b-instruct');
-      case 'professional': return nvidia.chat('meta/llama-3.1-8b-instruct');
-      default: return nvidia.chat('meta/llama-3.1-8b-instruct');
-    }
-  }
-
-  // If NVIDIA is not available, try the other primary provider
-  const m = (mode as ChatMode) in DEFAULT_MODELS ? (mode as ChatMode) : 'casual';
-  const primaryProvider = resolveProvider(m);
-  const fallbackProvider = primaryProvider === 'gemini' ? 'openrouter' : 'gemini';
-  const modelId = getModelId(m, fallbackProvider);
-
-  if (fallbackProvider === 'openrouter' && openrouter) {
-    return openrouter.chat(modelId);
-  }
-  if (fallbackProvider === 'gemini' && google) {
-    return google(modelId);
-  }
-
-  // If we only have OpenRouter and it's the primary, use a hardcoded ultra-reliable free fallback
-  if (openrouter) {
-    return openrouter.chat('openrouter/auto');
-  }
+  // Failsafes
+  if (openrouter) return openrouter.chat('openrouter/auto');
+  if (google) return google('gemini-2.5-flash');
 
   throw new Error('No fallback AI provider configured.');
 }
 
-/**
- * Get a specific vision-capable model.
- */
 export function getVisionModel() {
-  if (google) {
-    return google('gemini-2.5-flash');
-  }
-  if (openrouter) {
-    // Free vision endpoint that reliably supports image payloads
-    return openrouter.chat('meta-llama/llama-3.2-90b-vision-instruct:free');
-  }
+  if (google) return google('gemini-2.5-flash');
+  if (openrouter) return openrouter.chat('meta-llama/llama-3.2-90b-vision-instruct:free');
   throw new Error('No AI provider configured for vision.');
 }
 
-/** Read-only inspection helpers — used by debug panels and admin views. */
 export function getActiveProvider(mode?: string): AIProviderName {
   const m = (mode as ChatMode) in DEFAULT_MODELS ? (mode as ChatMode) : 'casual';
   return resolveProvider(m);
