@@ -8,7 +8,7 @@ export type ChatMode = 'casual' | 'developer' | 'research' | 'professional';
 // Default model IDs for OpenRouter
 const DEFAULT_MODELS: Record<ChatMode, string> = {
   casual: 'openrouter/free',
-  developer: 'nvidia/nemotron-3-super-120b-a12b:free',
+  developer: 'gemini-2.5-flash',
   research: 'nvidia/llama-3.1-nemotron-70b-instruct:free',
   professional: 'nvidia/nemotron-3-super-120b-a12b:free',
 };
@@ -86,12 +86,15 @@ function resolveProvider(mode: ChatMode): AIProviderName {
 }
 
 function getModelId(mode: ChatMode, provider: AIProviderName): string {
-  if (provider === 'gemini') {
-    // gemini-2.5-flash is stable and working under current free tier limits
-    return 'gemini-2.5-flash';
-  }
   const envKey = ENV_MODEL_KEYS[mode];
-  return process.env[envKey]?.trim() || DEFAULT_MODELS[mode];
+  const envModel = process.env[envKey]?.trim();
+  
+  if (envModel) return envModel;
+
+  if (provider === 'gemini') {
+    return 'gemini-2.5-pro';
+  }
+  return DEFAULT_MODELS[mode];
 }
 
 /**
