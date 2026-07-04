@@ -6,7 +6,7 @@ export type ChatMode = 'casual' | 'developer' | 'research' | 'professional';
 export type AIProviderName = 'openrouter' | 'gemini' | 'nvidia';
 
 const DEFAULT_MODELS: Record<ChatMode, string> = {
-  casual: 'gemini-2.5-flash',
+  casual: 'google/lyria-3-pro-preview',
   developer: 'gemini-2.5-flash',
   research: 'meta/llama-3.1-8b-instruct',
   professional: 'meta/llama-3.1-70b-instruct',
@@ -71,9 +71,8 @@ const nvidia = process.env.NVIDIA_API_KEY
   : null;
 
 function resolveProvider(mode: ChatMode): AIProviderName {
-  // CRITICAL FIX: OpenRouter silent rate-limits crash streams. 
-  // Map all base workloads directly to ultra-reliable Gemini.
-  if ((mode === 'casual' || mode === 'developer') && google) return 'gemini';
+  if (mode === 'casual' && openrouter) return 'openrouter';
+  if (mode === 'developer' && google) return 'gemini';
   
   // High-tier workloads go to NVIDIA
   if ((mode === 'research' || mode === 'professional') && nvidia) return 'nvidia';
@@ -85,7 +84,7 @@ function resolveProvider(mode: ChatMode): AIProviderName {
 
 function getModelId(mode: ChatMode, provider: AIProviderName): string {
   if (provider === 'gemini') return 'gemini-2.5-flash';
-  if (provider === 'openrouter') return 'openrouter/auto';
+  if (provider === 'openrouter') return process.env.MODEL_CASUAL || 'google/lyria-3-pro-preview';
   
   if (provider === 'nvidia') {
     // Only these two models are guaranteed to work on all free NVIDIA keys without 404s
