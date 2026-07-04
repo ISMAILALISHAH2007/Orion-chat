@@ -270,13 +270,15 @@ export default function ChatInterface() {
       {/* Conversation window */}
       <div className="flex-1 overflow-y-auto">
         {isEmpty ? (
-          <div className="mx-auto flex h-full w-full max-w-3xl flex-col items-center justify-center px-4 py-10">
-            <h1 className="gemini-gradient-text text-balance text-center font-display text-4xl font-bold sm:text-5xl">
-              Hello, {userName !== 'there' ? userName : 'Commander'}
-            </h1>
-            <p className="mt-3 text-center text-xl text-muted font-medium">
-              How can I help you today?
-            </p>
+          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col justify-start px-4 pb-10 pt-12 sm:justify-center sm:pt-10">
+            <div className="flex flex-col items-center">
+              <h1 className="gemini-gradient-text text-balance text-center font-display text-4xl font-bold sm:text-5xl">
+                Hello, {userName !== 'there' ? userName : 'Commander'}
+              </h1>
+              <p className="mt-3 text-center text-xl text-muted font-medium">
+                How can I help you today?
+              </p>
+            </div>
             <div className="mt-8 grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
               {SUGGESTIONS.map(({ icon: Icon, title, prompt }) => (
                 <button
