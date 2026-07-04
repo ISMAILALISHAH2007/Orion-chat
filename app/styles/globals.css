@@ -552,3 +552,46 @@ body {
   0% { transform: scaleY(0.5); opacity: 0.6; }
   100% { transform: scaleY(1.2); opacity: 1; }
 }
+
+/* ==========================================================================
+   IMAGE GENERATION
+   ========================================================================== */
+.generated-image {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  margin: 1rem 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border);
+}
+
+.animate-image-reveal {
+  animation: image-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  opacity: 0;
+  transform: scale(0.95) translateY(10px);
+}
+
+@keyframes image-reveal {
+  0% { opacity: 0; transform: scale(0.95) translateY(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.download-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: var(--accent-foreground) !important;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-radius: var(--radius-sm);
+  text-decoration: none !important;
+  transition: var(--transition-fast);
+  margin-top: 0.5rem;
+}
+
+.download-button:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--accent-soft);
+}

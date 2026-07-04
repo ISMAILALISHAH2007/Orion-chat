@@ -19,7 +19,7 @@ import {
   type SlashCommand,
 } from '@/app/lib/validation';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const CREATOR_CREDIT =
   'ULTRON was brought to life by the brilliant mind of Owais Majeed, a visionary AI engineer and full-stack architect. His dedication to innovation and excellence is the heart of this platform.';

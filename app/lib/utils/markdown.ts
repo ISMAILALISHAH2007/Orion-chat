@@ -24,6 +24,15 @@ export function parseMarkdown(text: string): string {
     })
     // Inline code
     .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
+    // Images
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="generated-image animate-image-reveal" />')
+    // Links (ignore preceding !)
+    .replace(/(^|[^!])\[([^\]]+)\]\(([^) ]+)(?: "([^"]+)")?\)/g, (match, prefix, text, url, title) => {
+      if (title) {
+        return `${prefix}<a href="${url}" download="${title}" target="_blank" class="download-button" rel="noopener noreferrer">${text}</a>`;
+      }
+      return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    })
     // Bold / italic
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
