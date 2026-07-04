@@ -53,7 +53,7 @@ export default function ChatInterface() {
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [showCamera, setShowCamera] = useState(false);
   const [isImageMode, setIsImageMode] = useState(false);
-  const { messages, sendMessage, isStreaming } = useChat();
+  const { messages, sendMessage, isStreaming, stop } = useChat();
   const { mode } = useMode();
   const { isRecording, toggleRecording, transcript } = useVoice();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -466,15 +466,26 @@ export default function ChatInterface() {
                     <Mic size={18} />
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSend}
-                  disabled={(!input.trim() && attachments.length === 0) || isStreaming}
-                  aria-label="Send message"
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-foreground transition-all hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted"
-                >
-                  <ArrowUp size={18} />
-                </button>
+                {isStreaming ? (
+                  <button
+                    type="button"
+                    onClick={stop}
+                    aria-label="Stop generation"
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-foreground transition-all hover:bg-danger hover:text-white"
+                  >
+                    <div className="h-3.5 w-3.5 rounded-[2px] bg-current" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSend}
+                    disabled={!input.trim() && attachments.length === 0}
+                    aria-label="Send message"
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-accent-foreground transition-all hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted"
+                  >
+                    <ArrowUp size={18} />
+                  </button>
+                )}
               </div>
             </div>
           </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useMode } from '@/app/components/providers/ThemeProvider';
 
@@ -38,6 +38,7 @@ interface ChatContextType {
   deleteSession: (id: string) => Promise<void>;
   sendMessage: (textOrEvent?: string | React.FormEvent, attachments?: ChatAttachment[]) => Promise<void>;
   fetchSessionsList: () => Promise<void>;
+  stop: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -52,9 +53,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [sessionId, setSessionId] = useState<string>('current');
   const [sessionsList, setSessionsList] = useState<ChatSessionItem[]>([]);
   const [hasFetchedSessions, setHasFetchedSessions] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setInput(e.target.value);
+
+  const stop = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsStreaming(false);
+  }, []);
 
   const fetchSessionsList = useCallback(async () => {
     if (!session?.user) return;
@@ -79,9 +89,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [session?.user, hasFetchedSessions, fetchSessionsList]);
 
   const startNewSession = useCallback(() => {
+    stop();
     setSessionId('current');
     setMessages([]);
-  }, []);
+  }, [stop]);
 
   const loadSession = useCallback(async (id: string) => {
     try {
@@ -131,6 +142,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setIsStreaming(true);
       setInput('');
       setMessages((prev) => [...prev, { sender: 'user', text, attachments }]);
+      
+      abortControllerRef.current = new AbortController();
 
       const payloadMessages = messages.map((m) => {
         if (m.sender === 'user' && m.attachments && m.attachments.length > 0) {
@@ -169,6 +182,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             sessionId,
             mode,
           }),
+          signal: abortControllerRef.current.signal,
         });
 
         const newSessionId = response.headers.get('x-session-id');
@@ -222,14 +236,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           fetchSessionsList();
           setTimeout(fetchSessionsList, 3000);
         }
-      } catch (error) {
-        console.error('Chat stream error:', error);
-        setMessages((prev) => [
-          ...prev,
-          { sender: 'ai', text: '⚠️ Connection error.', mode: 'system' },
-        ]);
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          console.log('Stream aborted by user');
+        } else {
+          console.error('Chat stream error:', error);
+          setMessages((prev) => [
+            ...prev,
+            { sender: 'ai', text: '⚠️ Connection error.', mode: 'system' },
+          ]);
+        }
       } finally {
         setIsStreaming(false);
+        abortControllerRef.current = null;
       }
     },
     [messages, isStreaming, input, mode, sessionId, fetchSessionsList]
@@ -250,6 +269,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         deleteSession,
         sendMessage,
         fetchSessionsList,
+        stop,
       }}
     >
       {children}
