@@ -86,7 +86,7 @@ function getModelId(mode: ChatMode, provider: AIProviderName): string {
   }
   
   if (provider === 'nvidia') {
-    if (mode === 'casual') return 'meta/llama-3.1-70b-instruct';
+    if (mode === 'casual') return process.env.MODEL_CASUAL || 'meta/llama-3.1-70b-instruct';
     return 'meta/llama-3.1-8b-instruct';
   }
   
