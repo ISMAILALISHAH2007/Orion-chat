@@ -58,7 +58,6 @@ const openrouter = openrouterApiKey
 const google = process.env.GEMINI_API_KEY
   ? createGoogleGenerativeAI({
       apiKey: process.env.GEMINI_API_KEY,
-      fetch: (url, init) => fetchWithTimeout(url, init, 15000),
     })
   : null;
 
@@ -83,7 +82,7 @@ function resolveProvider(mode: ChatMode): AIProviderName {
 }
 
 function getModelId(mode: ChatMode, provider: AIProviderName): string {
-  if (provider === 'gemini') return 'gemini-2.5-flash';
+  if (provider === 'gemini') return process.env.MODEL_DEVELOPER || 'gemini-2.5-flash';
   if (provider === 'openrouter') return process.env.MODEL_CASUAL || 'google/lyria-3-pro-preview';
   
   if (provider === 'nvidia') {
