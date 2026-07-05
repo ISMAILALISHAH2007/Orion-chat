@@ -65,7 +65,7 @@ const nvidia = process.env.NVIDIA_API_KEY
   : null;
 
 function resolveProvider(mode: ChatMode): AIProviderName {
-  if (mode === 'professional' && openrouter) return 'openrouter';
+  if (mode === 'professional' && nvidia) return 'nvidia';
   if (mode === 'developer' && google) return 'gemini';
   
   // High-tier workloads go to NVIDIA
@@ -87,6 +87,7 @@ function getModelId(mode: ChatMode, provider: AIProviderName): string {
   
   if (provider === 'nvidia') {
     if (mode === 'casual') return 'meta/llama-3.1-8b-instruct';
+    if (mode === 'professional') return 'nvidia/llama-3.1-nemotron-70b-instruct';
     return 'meta/llama-3.1-8b-instruct';
   }
   

@@ -1,12 +1,25 @@
 'use client';
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 
 export interface TTSVoice {
   uri: string;
   name: string;
   lang: string;
-  voice: SpeechSynthesisVoice;
+  voice: any;
 }
+
+const CLOUD_VOICES: TTSVoice[] = [
+  { uri: 'en', name: 'English (US)', lang: 'en', voice: null },
+  { uri: 'en-GB', name: 'English (UK)', lang: 'en-GB', voice: null },
+  { uri: 'es', name: 'Spanish', lang: 'es', voice: null },
+  { uri: 'fr', name: 'French', lang: 'fr', voice: null },
+  { uri: 'de', name: 'German', lang: 'de', voice: null },
+  { uri: 'it', name: 'Italian', lang: 'it', voice: null },
+  { uri: 'hi', name: 'Hindi', lang: 'hi', voice: null },
+  { uri: 'ar', name: 'Arabic', lang: 'ar', voice: null },
+  { uri: 'zh-CN', name: 'Chinese', lang: 'zh-CN', voice: null },
+  { uri: 'ja', name: 'Japanese', lang: 'ja', voice: null },
+];
 
 interface TTSContextType {
   voices: TTSVoice[];
@@ -23,132 +36,129 @@ interface TTSContextType {
 const TTSContext = createContext<TTSContextType | undefined>(undefined);
 
 export function TTSProvider({ children }: { children: React.ReactNode }) {
-  const [voices, setVoices] = useState<TTSVoice[]>([]);
-  const [selectedVoiceUri, setSelectedVoiceUri] = useState<string>('');
+  const voices = CLOUD_VOICES;
+  const [selectedVoiceUri, setSelectedVoiceUri] = useState<string>('en');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [liveVoiceMode, setLiveVoiceMode] = useState(false);
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  const audioQueueRef = useRef<HTMLAudioElement[]>([]);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
-    const loadVoices = () => {
-      const availableVoices = window.speechSynthesis.getVoices();
-      if (availableVoices.length > 0) {
-        const mapped = availableVoices.map(v => ({
-          uri: v.voiceURI,
-          name: v.name,
-          lang: v.lang,
-          voice: v,
-        }));
-        
-        // Priority logic: sort Google voices first
-        mapped.sort((a, b) => {
-          const aGoogle = a.name.toLowerCase().includes('google');
-          const bGoogle = b.name.toLowerCase().includes('google');
-          if (aGoogle && !bGoogle) return -1;
-          if (!aGoogle && bGoogle) return 1;
-          return 0;
-        });
-
-        setVoices(mapped);
-        
-        // Set default voice if none selected
-        setSelectedVoiceUri(prev => {
-          if (!prev) {
-            const googleEn = mapped.find(v => v.name.toLowerCase().includes('google') && v.lang.startsWith('en'));
-            const anyEn = mapped.find(v => v.lang.startsWith('en'));
-            return (googleEn || anyEn || mapped[0])?.uri || '';
-          }
-          return prev;
-        });
-      }
-    };
-
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-
-    return () => {
-      window.speechSynthesis.onvoiceschanged = null;
-    };
+  const stopSpeaking = useCallback(() => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+      currentAudioRef.current = null;
+    }
+    audioQueueRef.current.forEach(a => {
+      a.pause();
+      a.src = '';
+    });
+    audioQueueRef.current = [];
+    setIsSpeaking(false);
   }, []);
 
   const speak = useCallback((text: string, voiceUriOverride?: string, onEnd?: () => void) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    stopSpeaking();
     
-    // Stop any ongoing speech
-    window.speechSynthesis.cancel();
-    
-    // Clean up text (remove markdown, special tags)
+    // Clean text
     const cleanText = text
       .replace(/\[VOICE:[^\]]+\]/gi, '')
       .replace(/```[\s\S]*?```/g, ' Code block omitted. ')
       .replace(/!\[.*?\]\(.*?\)/g, '')
-      .replace(/[*_#`]/g, '');
+      .replace(/[*_#`]/g, '')
+      .trim();
 
-    if (!cleanText.trim()) {
+    if (!cleanText) {
       onEnd?.();
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
+    // Determine language mapping
+    const requestedLang = (voiceUriOverride || selectedVoiceUri || 'en').toLowerCase();
+    let langCode = 'en';
+    if (requestedLang.includes('es') || requestedLang.includes('spanish')) langCode = 'es';
+    else if (requestedLang.includes('fr') || requestedLang.includes('french')) langCode = 'fr';
+    else if (requestedLang.includes('de') || requestedLang.includes('german')) langCode = 'de';
+    else if (requestedLang.includes('it') || requestedLang.includes('italian')) langCode = 'it';
+    else if (requestedLang.includes('hi') || requestedLang.includes('hindi')) langCode = 'hi';
+    else if (requestedLang.includes('ar') || requestedLang.includes('arabic')) langCode = 'ar';
+    else if (requestedLang.includes('zh') || requestedLang.includes('chinese')) langCode = 'zh-CN';
+    else if (requestedLang.includes('ja') || requestedLang.includes('japanese')) langCode = 'ja';
+    else if (requestedLang.includes('uk')) langCode = 'en-GB';
+
+    // Chunk text by punctuation or 150 chars to respect Google TTS limit
+    const chunks: string[] = [];
+    let currentChunk = '';
+    const words = cleanText.split(/\s+/);
     
-    const uriToUse = voiceUriOverride || selectedVoiceUri;
-    if (uriToUse) {
-      // 1. Try exact URI
-      let voice = voices.find(v => v.uri === uriToUse);
-      // 2. Try Exact Lang (e.g., 'es-ES')
-      if (!voice) voice = voices.find(v => v.lang?.toLowerCase() === uriToUse.toLowerCase());
-      // 3. Try Name Inclusion (e.g., 'Google français')
-      if (!voice) voice = voices.find(v => v.name?.toLowerCase().includes(uriToUse.toLowerCase()));
-      // 4. Try Lang Prefix (e.g., 'es' for 'es-ES' or 'es-MX')
-      if (!voice) voice = voices.find(v => v.lang?.toLowerCase().startsWith(uriToUse.toLowerCase()));
-
-      if (voice) {
-        utterance.voice = voice.voice;
-        utterance.lang = voice.lang;
+    for (const word of words) {
+      if (currentChunk.length + word.length > 150) {
+        chunks.push(currentChunk.trim());
+        currentChunk = word + ' ';
+      } else {
+        currentChunk += word + ' ';
+        if (word.match(/[.!?:]$/)) {
+          chunks.push(currentChunk.trim());
+          currentChunk = '';
+        }
       }
     }
+    if (currentChunk.trim()) {
+      chunks.push(currentChunk.trim());
+    }
 
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => {
-      setIsSpeaking(false);
+    if (chunks.length === 0) {
       onEnd?.();
-      // Only clear if this exact utterance is still the active one
-      if (typeof window !== 'undefined' && (window as any).__tts_utterance === utterance) {
-        (window as any).__tts_utterance = null;
-      }
-    };
-    utterance.onerror = (e) => {
-      console.error('TTS Error', e);
-      setIsSpeaking(false);
-      onEnd?.();
-      if (typeof window !== 'undefined' && (window as any).__tts_utterance === utterance) {
-        (window as any).__tts_utterance = null;
-      }
-    };
-
-    // CRITICAL FIX: Prevent the browser's Garbage Collector from destroying 
-    // the utterance object mid-speech, which causes onend to never fire
-    // and permanently breaks the loop after ~3 uses.
-    if (typeof window !== 'undefined') {
-      (window as any).__tts_utterance = utterance;
+      return;
     }
 
-    window.speechSynthesis.speak(utterance);
-  }, [selectedVoiceUri, voices]);
+    setIsSpeaking(true);
 
-  const stopSpeaking = useCallback(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
-  }, []);
+    const playNext = () => {
+      if (audioQueueRef.current.length === 0) {
+        setIsSpeaking(false);
+        onEnd?.();
+        return;
+      }
+      
+      const nextAudio = audioQueueRef.current.shift()!;
+      currentAudioRef.current = nextAudio;
+      
+      nextAudio.onended = () => {
+        playNext();
+      };
+      
+      nextAudio.onerror = () => {
+        playNext(); // Skip broken chunks
+      };
+      
+      nextAudio.play().catch(e => {
+        console.error('Mobile Audio Autoplay blocked:', e);
+        playNext(); // Skip if autoplay is strictly blocked
+      });
+    };
+
+    audioQueueRef.current = chunks.map(chunk => {
+      const url = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=${langCode}&q=${encodeURIComponent(chunk)}`;
+      return new Audio(url);
+    });
+
+    playNext();
+
+  }, [selectedVoiceUri, stopSpeaking]);
 
   const toggleLiveVoice = useCallback(() => {
     setLiveVoiceMode(prev => {
       const next = !prev;
       if (!next && isSpeaking) {
         stopSpeaking();
+      } else if (next) {
+        // Prime audio context on mobile devices
+        if (typeof window !== 'undefined') {
+          const dummy = new Audio('');
+          dummy.play().catch(() => {});
+        }
       }
       return next;
     });
