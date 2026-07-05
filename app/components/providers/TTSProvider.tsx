@@ -41,23 +41,38 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [liveVoiceMode, setLiveVoiceMode] = useState(false);
 
-  // Single global audio element attached to the DOM to bypass iOS/Safari autoplay blocks
-  const globalAudioRef = useRef<HTMLAudioElement | null>(null);
-  const audioQueueRef = useRef<string[]>([]);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const isPlayingQueueRef = useRef(false);
 
-  const stopSpeaking = useCallback(() => {
-    if (globalAudioRef.current) {
-      globalAudioRef.current.pause();
-      globalAudioRef.current.currentTime = 0;
-      globalAudioRef.current.src = '';
+  // Initialize AudioContext exactly once on user interaction
+  const initAudioContext = () => {
+    if (!audioCtxRef.current && typeof window !== 'undefined') {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        audioCtxRef.current = new AudioContextClass();
+      }
     }
-    audioQueueRef.current = [];
+    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
+  };
+
+  const stopSpeaking = useCallback(() => {
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.stop();
+        sourceNodeRef.current.disconnect();
+      } catch (e) {
+        // ignore
+      }
+      sourceNodeRef.current = null;
+    }
     isPlayingQueueRef.current = false;
     setIsSpeaking(false);
   }, []);
 
-  const speak = useCallback((text: string, voiceUriOverride?: string, onEnd?: () => void) => {
+  const speak = useCallback(async (text: string, voiceUriOverride?: string, onEnd?: () => void) => {
     stopSpeaking();
     
     const cleanText = text
@@ -109,42 +124,56 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    audioQueueRef.current = chunks.map(chunk => 
-      `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=${langCode}&q=${encodeURIComponent(chunk)}`
-    );
-
     setIsSpeaking(true);
     isPlayingQueueRef.current = true;
+    
+    // Ensure context is alive
+    initAudioContext();
+    const ctx = audioCtxRef.current;
+    if (!ctx) {
+      setIsSpeaking(false);
+      onEnd?.();
+      return;
+    }
 
-    const playNext = () => {
-      if (!isPlayingQueueRef.current) return; // Stopped
-      if (audioQueueRef.current.length === 0) {
-        setIsSpeaking(false);
-        isPlayingQueueRef.current = false;
-        onEnd?.();
-        return;
-      }
-      
-      const nextUrl = audioQueueRef.current.shift()!;
-      if (globalAudioRef.current) {
-        globalAudioRef.current.src = nextUrl;
-        
-        globalAudioRef.current.onended = () => {
-          playNext();
-        };
-        
-        globalAudioRef.current.onerror = () => {
-          playNext(); 
-        };
-        
-        globalAudioRef.current.play().catch(e => {
-          console.error('Mobile Audio Autoplay blocked:', e);
-          playNext();
-        });
+    // Fetch and decode concurrently
+    const playQueue = async () => {
+      try {
+        for (let i = 0; i < chunks.length; i++) {
+          if (!isPlayingQueueRef.current) break; // aborted
+
+          const url = `/api/voice/tts?lang=${langCode}&text=${encodeURIComponent(chunks[i])}`;
+          const res = await fetch(url);
+          if (!res.ok) continue; // Skip broken chunks
+          const arrayBuffer = await res.arrayBuffer();
+          
+          if (!isPlayingQueueRef.current) break;
+          
+          const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+          
+          if (!isPlayingQueueRef.current) break;
+          
+          await new Promise<void>((resolve) => {
+            const source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(ctx.destination);
+            source.onended = () => resolve();
+            sourceNodeRef.current = source;
+            source.start(0);
+          });
+        }
+      } catch (err) {
+        console.error('Web Audio API playback failed', err);
+      } finally {
+        if (isPlayingQueueRef.current) {
+          setIsSpeaking(false);
+          isPlayingQueueRef.current = false;
+          onEnd?.();
+        }
       }
     };
 
-    playNext();
+    playQueue();
 
   }, [selectedVoiceUri, stopSpeaking]);
 
@@ -154,11 +183,8 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       if (!next && isSpeaking) {
         stopSpeaking();
       } else if (next) {
-        // Unlock the global audio element strictly on user tap!
-        if (globalAudioRef.current) {
-          globalAudioRef.current.src = 'data:audio/mp3;base64,//OExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq';
-          globalAudioRef.current.play().catch(() => {});
-        }
+        // Unlock audio context explicitly on user tap
+        initAudioContext();
       }
       return next;
     });
@@ -177,8 +203,6 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       setLiveVoiceMode
     }}>
       {children}
-      {/* Physically rendered hidden audio element ensures iOS Safari allows programmatic `.play()` later */}
-      <audio ref={globalAudioRef} className="hidden" playsInline />
     </TTSContext.Provider>
   );
 }
