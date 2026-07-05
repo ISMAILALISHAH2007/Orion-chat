@@ -177,7 +177,14 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
           await new Promise<void>((resolve) => {
             const source = ctx.createBufferSource();
             source.buffer = audioBuffer;
-            source.connect(ctx.destination);
+            
+            // Add a GainNode to double the volume
+            const gainNode = ctx.createGain();
+            gainNode.gain.value = 2.0;
+            
+            source.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            
             source.onended = () => resolve();
             sourceNodeRef.current = source;
             source.start(0);

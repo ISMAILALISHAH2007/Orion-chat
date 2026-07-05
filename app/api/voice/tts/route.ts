@@ -33,7 +33,7 @@ export async function GET(req: Request) {
   const voice = gender === 'male' ? voiceSet.male : voiceSet.female;
 
   try {
-    const tts = new EdgeTTS({ voice });
+    const tts = new EdgeTTS({ voice, volume: '+50%' });
     const tmpPath = path.join(os.tmpdir(), `edge-tts-${Date.now()}-${Math.random().toString(36).substring(7)}.mp3`);
     
     await tts.ttsPromise(text, tmpPath);
