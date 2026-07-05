@@ -109,12 +109,26 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
     utterance.onend = () => {
       setIsSpeaking(false);
       onEnd?.();
+      // Clear the reference when done
+      if (typeof window !== 'undefined') {
+        (window as any).__tts_utterance = null;
+      }
     };
     utterance.onerror = (e) => {
       console.error('TTS Error', e);
       setIsSpeaking(false);
       onEnd?.();
+      if (typeof window !== 'undefined') {
+        (window as any).__tts_utterance = null;
+      }
     };
+
+    // CRITICAL FIX: Prevent the browser's Garbage Collector from destroying 
+    // the utterance object mid-speech, which causes onend to never fire
+    // and permanently breaks the loop after ~3 uses.
+    if (typeof window !== 'undefined') {
+      (window as any).__tts_utterance = utterance;
+    }
 
     window.speechSynthesis.speak(utterance);
   }, [selectedVoiceUri, voices]);
