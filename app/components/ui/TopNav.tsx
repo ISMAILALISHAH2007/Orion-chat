@@ -86,7 +86,7 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
         {open && (
           <div
             role="menu"
-            className="absolute left-1/2 top-full z-40 mt-2 w-72 -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-surface p-1.5 shadow-lg animate-fade-in"
+            className="absolute left-0 top-full z-40 mt-2 w-[calc(100vw-24px)] md:w-72 md:left-1/2 md:-translate-x-1/2 overflow-hidden rounded-xl border border-border bg-surface p-1.5 shadow-lg animate-fade-in"
           >
             {MODELS.map((m) => {
               const active = m.id === mode;

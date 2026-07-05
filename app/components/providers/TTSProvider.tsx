@@ -55,8 +55,9 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
         // Set default voice if none selected
         setSelectedVoiceUri(prev => {
           if (!prev) {
-            const defaultVoice = mapped.find(v => v.name.toLowerCase().includes('google') && v.lang.startsWith('en')) || mapped[0];
-            return defaultVoice?.uri || '';
+            const googleEn = mapped.find(v => v.name.toLowerCase().includes('google') && v.lang.startsWith('en'));
+            const anyEn = mapped.find(v => v.lang.startsWith('en'));
+            return (googleEn || anyEn || mapped[0])?.uri || '';
           }
           return prev;
         });
@@ -93,12 +94,15 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
     
     const uriToUse = voiceUriOverride || selectedVoiceUri;
     if (uriToUse) {
-      // Find exact voice or try to match by name
+      // 1. Try exact URI
       let voice = voices.find(v => v.uri === uriToUse);
-      if (!voice) {
-        // Fallback to name search if URI didn't match perfectly
-        voice = voices.find(v => v.name.toLowerCase().includes(uriToUse.toLowerCase()));
-      }
+      // 2. Try Exact Lang (e.g., 'es-ES')
+      if (!voice) voice = voices.find(v => v.lang.toLowerCase() === uriToUse.toLowerCase());
+      // 3. Try Name Inclusion (e.g., 'Google français')
+      if (!voice) voice = voices.find(v => v.name.toLowerCase().includes(uriToUse.toLowerCase()));
+      // 4. Try Lang Prefix (e.g., 'es' for 'es-ES' or 'es-MX')
+      if (!voice) voice = voices.find(v => v.lang.toLowerCase().startsWith(uriToUse.toLowerCase()));
+
       if (voice) {
         utterance.voice = voice.voice;
         utterance.lang = voice.lang;

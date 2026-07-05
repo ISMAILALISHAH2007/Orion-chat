@@ -215,7 +215,7 @@ export default function Sidebar({
                               deleteSession(item.id);
                             }}
                             aria-label="Delete item"
-                            className="shrink-0 rounded p-1 text-muted opacity-0 transition-all hover:text-danger group-hover:opacity-100"
+                            className="shrink-0 rounded p-1 text-muted transition-all hover:text-danger opacity-100 md:opacity-0 md:group-hover:opacity-100"
                           >
                             <Trash2 size={15} />
                           </button>
