@@ -32,6 +32,8 @@ export function parseMarkdown(text: string): string {
     .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
     // Images
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<div class="relative flex items-center justify-center min-h-[200px] w-full max-w-sm rounded-lg bg-surface-2 overflow-hidden my-3"><div class="absolute inset-0 flex items-center justify-center image-loader"><span class="h-6 w-6 rounded-full border-2 border-accent border-t-transparent animate-spin"></span></div><img src="$2" alt="$1" class="generated-image z-10 w-full h-auto" onload="this.previousSibling.style.display=\'none\'; this.style.opacity=1" style="opacity: 0; transition: opacity 0.5s" /></div>')
+    // Videos with Watermark
+    .replace(/\[VIDEO:\s*([^\]]+)\]/gi, '<div class="relative flex items-center justify-center min-h-[200px] w-full max-w-sm rounded-lg bg-black overflow-hidden my-3 group shadow-xl"><div class="absolute inset-0 flex items-center justify-center image-loader"><span class="h-6 w-6 rounded-full border-2 border-accent border-t-transparent animate-spin"></span></div><video src="$1" class="generated-video z-10 w-full h-auto" autoplay loop muted playsinline onloadeddata="this.previousSibling.style.display=\'none\'; this.style.opacity=1" style="opacity: 0; transition: opacity 0.5s"></video><div class="absolute bottom-2 right-2 px-2 py-0.5 bg-black/60 backdrop-blur-md text-[10px] font-bold text-white/90 rounded border border-white/10 z-20 pointer-events-none tracking-widest uppercase transition-opacity">✨ ULTRON AI</div></div>')
     // Links (ignore preceding !)
     .replace(/(^|[^!])\[([^\]]+)\]\(([^) ]+)(?: "([^"]+)")?\)/g, (match, prefix, text, url, title) => {
       if (title) {

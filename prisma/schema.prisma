@@ -25,6 +25,7 @@ model User {
   folders       Folder[]
   documents     Document[]
   images        Image[]
+  videos        Video[]
   voiceProfiles VoiceProfile[]
   apiKeys       ApiKey[]
   usages        Usage[]
@@ -143,6 +144,16 @@ model Image {
   userId    String
   prompt    String   @db.Text
   imageUrl  String
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Video {
+  id        String   @id @default(cuid())
+  userId    String
+  prompt    String   @db.Text
+  videoUrl  String
   
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())

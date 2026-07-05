@@ -11,7 +11,7 @@ export const authSchema = z.object({
   password: z.string().min(6),
 });
 
-export const SLASH_COMMANDS = ['img', 'code', 'design', 'help'] as const;
+export const SLASH_COMMANDS = ['img', 'video', 'code', 'design', 'help'] as const;
 export type SlashCommand = (typeof SLASH_COMMANDS)[number];
 
 export const slashCommandSchema = z.object({
@@ -22,3 +22,7 @@ export const slashCommandSchema = z.object({
 /** Detect image-generation intent in plain English (used in Developer mode). */
 export const IMAGE_INTENT_REGEX =
   /^\s*(\/img\b)|(\b(draw|generate|render|create|make)\b.{0,40}\b(image|picture|illustration|photo|logo|icon|artwork|wallpaper|avatar)\b)/i;
+
+/** Detect video-generation intent. */
+export const VIDEO_INTENT_REGEX =
+  /^\s*(\/video\b)|(\b(generate|create|make|animate|render)\b.{0,40}\b(video|animation|gif|mp4|clip)\b)/i;

@@ -16,6 +16,7 @@ import { buildPollinationsImageUrl } from '@/app/lib/images/pollinations';
 import {
   SLASH_COMMANDS,
   IMAGE_INTENT_REGEX,
+  VIDEO_INTENT_REGEX,
   type SlashCommand,
 } from '@/app/lib/validation';
 
@@ -27,6 +28,7 @@ const CREATOR_CREDIT =
 const HELP_TEXT = `**ULTRON — Slash commands**
 
 - \`/img <prompt>\` — Generate an image from a description (free, no key needed).
+- \`/video <prompt>\` — Generate an AI video using Hugging Face ZeroGPU.
 - \`/code <request>\` — Switch the assistant into terse code-expert mode with fenced code blocks.
 - \`/design <request>\` — Switch the assistant into senior product-designer mode.
 - \`/help\` — Show this help message.
@@ -67,6 +69,49 @@ async function generateImageInline(userId: string | undefined, prompt: string) {
     ``,
     `[Download image](/api/download?url=${encodeURIComponent(imageUrl)}&name=${encodeURIComponent(downloadName)} "${downloadName}")`,
   ].join('\n');
+}
+
+async function generateVideoInline(userId: string | undefined, prompt: string) {
+  try {
+    const res = await fetch("https://api-inference.huggingface.co/models/cerspense/zeroscope_v2_576w", {
+      headers: {
+        "Authorization": `Bearer ${process.env.HUGGINGFACE_API_KEY || ''}`,
+        "Content-Type": "application/json"
+      },
+      method: "POST",
+      body: JSON.stringify({ inputs: prompt })
+    });
+    
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("HF Video API Error:", err);
+      return `⚠️ **Video Generation Failed**: Hugging Face API returned an error or is blocked. Try again later or check your API key.`;
+    }
+    
+    const arrayBuffer = await res.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    
+    let record = null;
+    if (userId) {
+        record = await prisma.video.create({
+            data: { userId, prompt, videoUrl: base64 },
+            select: { id: true }
+        });
+    }
+    
+    // Fallback to huge data URI if no DB record was created
+    const videoUrl = record ? `/api/video?id=${record.id}` : `data:video/mp4;base64,${base64}`;
+    const downloadName = (record?.id ?? `ultron-video-${Date.now()}`);
+    
+    return [
+       `[VIDEO: ${videoUrl}]`,
+       ``,
+       `[Download Video](${videoUrl}&download=1 "${downloadName}")`
+    ].join('\n');
+  } catch (error) {
+    console.error('Failed to generate video:', error);
+    return `⚠️ **Video Generation Failed**: Could not connect to the Video API. If you are running locally, your network might be blocking Hugging Face. Try deploying to Vercel.`;
+  }
 }
 
 async function persistExchange(
@@ -189,19 +234,42 @@ export async function POST(req: Request) {
         { status: 200 }
       );
     }
+    
+    if (slash?.command === 'video') {
+      await sessionPromiseTask;
+      const text = await generateVideoInline(userId, slash.prompt);
+      await persistExchange(userId, activeSessionId, userContent, text);
+      return NextResponse.json(
+        { text, sessionId: activeSessionId, video: true },
+        { status: 200 }
+      );
+    }
 
-    // ----- 3. Universal image-intent auto-switch -----
-    const imageIntent =
-      slash?.command === 'code' || slash?.command === 'design'
-        ? null
-        : IMAGE_INTENT_REGEX.test(userContent)
-          ? userContent.replace(/^\s*\/img\s*/i, '').trim() || userContent
-          : null;
+    // ----- 3. Universal image and video intent auto-switch -----
+    let imageIntent = null;
+    let videoIntent = null;
+    
+    if (slash?.command !== 'code' && slash?.command !== 'design') {
+        if (VIDEO_INTENT_REGEX.test(userContent)) {
+            videoIntent = userContent.replace(/^\s*\/video\s*/i, '').trim() || userContent;
+        } else if (IMAGE_INTENT_REGEX.test(userContent)) {
+            imageIntent = userContent.replace(/^\s*\/img\s*/i, '').trim() || userContent;
+        }
+    }
+
+    if (videoIntent) {
+      await sessionPromiseTask;
+      const text = await generateVideoInline(userId, videoIntent);
+      await persistExchange(userId, activeSessionId, userContent, text);
+      return NextResponse.json(
+        { text, sessionId: activeSessionId, video: true },
+        { status: 200 }
+      );
+    }
 
     if (imageIntent) {
       await sessionPromiseTask;
-      const prompt = imageIntent;
-      const text = await generateImageInline(userId, prompt);
+      const text = await generateImageInline(userId, imageIntent);
       await persistExchange(userId, activeSessionId, userContent, text);
       return NextResponse.json(
         { text, sessionId: activeSessionId, image: true },
