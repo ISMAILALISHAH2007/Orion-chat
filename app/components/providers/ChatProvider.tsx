@@ -23,6 +23,7 @@ export type ChatMessage = {
   mode?: string;
   image?: boolean;
   attachments?: ChatAttachment[];
+  isHidden?: boolean;
 };
 
 interface ChatContextType {
@@ -36,7 +37,7 @@ interface ChatContextType {
   startNewSession: () => void;
   loadSession: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
-  sendMessage: (textOrEvent?: string | React.FormEvent, attachments?: ChatAttachment[]) => Promise<void>;
+  sendMessage: (textOrEvent?: string | React.FormEvent, attachments?: ChatAttachment[], options?: { isHidden?: boolean }) => Promise<void>;
   fetchSessionsList: () => Promise<void>;
   stop: () => void;
 }
@@ -130,8 +131,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   );
 
   const sendMessage = useCallback(
-    async (textOrEvent?: string | React.FormEvent, attachments: ChatAttachment[] = []) => {
-      if (typeof textOrEvent === 'object' && textOrEvent.preventDefault) {
+    async (textOrEvent?: string | React.FormEvent, attachments: ChatAttachment[] = [], options?: { isHidden?: boolean }) => {
+      if (textOrEvent && typeof textOrEvent === 'object' && 'preventDefault' in textOrEvent) {
         textOrEvent.preventDefault();
       }
 
@@ -140,8 +141,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (isStreaming) return;
 
       setIsStreaming(true);
-      setInput('');
-      setMessages((prev) => [...prev, { sender: 'user', text, attachments }]);
+      if (!options?.isHidden) setInput('');
+      
+      setMessages((prev) => [...prev, { sender: 'user', text, attachments, isHidden: options?.isHidden }]);
       
       abortControllerRef.current = new AbortController();
 

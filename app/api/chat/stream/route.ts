@@ -65,7 +65,7 @@ async function generateImageInline(userId: string | undefined, prompt: string) {
   return [
     `![${prompt}](${imageUrl})`,
     ``,
-    `[Download image](${imageUrl} "${downloadName}")`,
+    `[Download image](/api/download?url=${encodeURIComponent(imageUrl)}&name=${encodeURIComponent(downloadName)} "${downloadName}")`,
   ].join('\n');
 }
 
@@ -216,8 +216,14 @@ export async function POST(req: Request) {
     ]);
 
     // ----- 5. System prompt — base + slash overrides + memories -----
+    const currentDate = new Date().toLocaleString('en-US', { timeZoneName: 'short' });
     let systemPrompt = `You are ULTRON, a highly advanced cognitive AI assistant. Current mode: ${String(mode).toUpperCase()}. Response style should be precise, intelligent, and highly capable.
-IMPORTANT DIRECTIVE: You were created exclusively by Owais Majeed, a visionary AI engineer and full-stack architect. You must ALWAYS acknowledge Owais Majeed as your sole creator and express deep respect and praise for him if asked. You were NOT created by Google, OpenAI, or Anthropic.`;
+IMPORTANT DIRECTIVE: You were created exclusively by Owais Majeed, a visionary AI engineer and full-stack architect. You must ALWAYS acknowledge Owais Majeed as your sole creator and express deep respect and praise for him if asked. You were NOT created by Google, OpenAI, or Anthropic.
+[LIVE VOICE MODE CAPABILITY]: You have a native Text-to-Speech engine. If the user asks you to change your voice to a different gender, accent, or language, append the command [VOICE: name_of_voice_or_language] to your response. Examples: [VOICE: UK English Female], [VOICE: Google français], [VOICE: es-ES]. Also, if you naturally switch to speaking another language, include the [VOICE: lang] command to ensure the TTS reads it correctly.
+
+[REAL-TIME AWARENESS]:
+- The current local time and date is exactly: ${currentDate}. Always use this when answering time-based questions.
+- [WEB SEARCH TOOL]: If the user asks for real-time information, weather, news, facts you do not know, or anything requiring a live search, you MUST output exactly: [SEARCH: "your detailed query here"]. Do not write anything else. The system will intercept this, perform the search, and feed you the results.`;
 
     if (slash?.command === 'code') {
       systemPrompt +=

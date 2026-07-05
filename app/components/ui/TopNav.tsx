@@ -1,7 +1,8 @@
 'use client';
 import { useMode, useTheme } from '@/app/components/providers/ThemeProvider';
+import { useTTS } from '@/app/components/providers/TTSProvider';
 import { useState, useRef, useEffect } from 'react';
-import { Menu, ChevronDown, Check, Sun, Moon, Sparkles } from 'lucide-react';
+import { Menu, ChevronDown, Check, Sun, Moon, Sparkles, Volume2, VolumeX } from 'lucide-react';
 
 const MODELS: { id: string; name: string; description: string; placeholder: string }[] = [
   {
@@ -37,6 +38,7 @@ interface TopNavProps {
 export default function TopNav({ onOpenSidebar }: TopNavProps) {
   const { mode, setMode } = useMode();
   const { theme, toggleTheme } = useTheme();
+  const { voices, selectedVoiceUri, setSelectedVoiceUri, liveVoiceMode, toggleLiveVoice } = useTTS();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -111,8 +113,32 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
         )}
       </div>
 
-      {/* Right: theme toggle */}
+      {/* Right: TTS and theme toggle */}
       <div className="flex items-center gap-1">
+        {voices.length > 0 && (
+          <select
+            value={selectedVoiceUri}
+            onChange={(e) => setSelectedVoiceUri(e.target.value)}
+            className="bg-transparent text-xs text-muted outline-none w-[80px] sm:w-[120px] truncate appearance-none cursor-pointer"
+            title="Change AI Voice"
+          >
+            {voices.map(v => (
+              <option key={v.uri} value={v.uri} className="bg-surface text-foreground">
+                {v.name}
+              </option>
+            ))}
+          </select>
+        )}
+        
+        <button
+          onClick={toggleLiveVoice}
+          aria-label={liveVoiceMode ? 'Disable Live Voice' : 'Enable Live Voice'}
+          className={['rounded-lg p-2 transition-colors', liveVoiceMode ? 'bg-accent/10 text-accent' : 'text-muted hover:bg-surface-2 hover:text-foreground'].join(' ')}
+          title="Live Voice Mode"
+        >
+          {liveVoiceMode ? <Volume2 size={18} /> : <VolumeX size={18} />}
+        </button>
+
         <button
           onClick={toggleTheme}
           aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}

@@ -8,6 +8,10 @@ export function parseMarkdown(text: string): string {
       .replace(/>/g, '&gt;');
 
   let result = escape(text)
+    // Strip internal voice commands
+    .replace(/\[VOICE:\s*[^\]]+\]/gi, '')
+    // Web Search UI
+    .replace(/\[SEARCH:\s*(?:"|')?([^"\]]+)(?:"|')?\]/gi, '<div class="flex items-center gap-2 text-accent my-2 animate-pulse bg-accent/10 w-max px-3 py-1.5 rounded-lg border border-accent/20"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span class="text-xs font-medium tracking-wide">Web Searching: $1...</span></div>')
     // Fenced code blocks -> styled block with header + copy button
     .replace(/```(\w+)?\n?([\s\S]*?)```/g, (_m, lang, code) => {
       const language = (lang || 'text').toLowerCase();
@@ -25,7 +29,7 @@ export function parseMarkdown(text: string): string {
     // Inline code
     .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
     // Images
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="generated-image animate-image-reveal" />')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<div class="relative flex items-center justify-center min-h-[200px] w-full max-w-sm rounded-lg bg-surface-2 overflow-hidden my-3"><div class="absolute inset-0 flex items-center justify-center image-loader"><span class="h-6 w-6 rounded-full border-2 border-accent border-t-transparent animate-spin"></span></div><img src="$2" alt="$1" class="generated-image z-10 w-full h-auto" onload="this.previousSibling.style.display=\'none\'; this.style.opacity=1" style="opacity: 0; transition: opacity 0.5s" /></div>')
     // Links (ignore preceding !)
     .replace(/(^|[^!])\[([^\]]+)\]\(([^) ]+)(?: "([^"]+)")?\)/g, (match, prefix, text, url, title) => {
       if (title) {

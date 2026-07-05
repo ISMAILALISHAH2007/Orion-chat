@@ -3,6 +3,7 @@ import { Outfit, Inter, JetBrains_Mono } from 'next/font/google';
 import '@/app/styles/globals.css';
 import { AuthProvider } from '@/app/components/providers/AuthProvider';
 import { ThemeProvider } from '@/app/components/providers/ThemeProvider';
+import { TTSProvider } from '@/app/components/providers/TTSProvider';
 import InstallPrompt from '@/app/components/ui/InstallPrompt';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
@@ -36,9 +37,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-background text-foreground font-sans antialiased">
         <AuthProvider>
           <ThemeProvider>
-            <InstallPrompt />
-            {children}
-            <SpeedInsights />
+            <TTSProvider>
+              <InstallPrompt />
+              {children}
+              <SpeedInsights />
+            </TTSProvider>
           </ThemeProvider>
         </AuthProvider>
       </body>

@@ -24,6 +24,8 @@ import { useMode } from '@/app/components/providers/ThemeProvider';
 import { useVoice } from '@/app/components/hooks/useVoice';
 import MessageBubble from './MessageBubble';
 
+import { useTTS } from '@/app/components/providers/TTSProvider';
+
 const SUGGESTIONS = [
   { icon: PenLine, title: 'Help me write', prompt: 'Help me write a professional email to reschedule a meeting.' },
   { icon: Dumbbell, title: 'Create a workout plan', prompt: 'Create a 4-day workout plan for building strength at home.' },
@@ -56,10 +58,12 @@ export default function ChatInterface() {
   const { messages, sendMessage, isStreaming, stop } = useChat();
   const { mode } = useMode();
   const { isRecording, toggleRecording, transcript } = useVoice();
+  const { speak, liveVoiceMode } = useTTS();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const slashRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const prevStreamingRef = useRef(false);
   const { data: session } = useSession();
   const userName = session?.user?.name?.split(' ')[0] || 'there';
 
@@ -84,6 +88,51 @@ export default function ChatInterface() {
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   }, [input]);
+
+  // Handle Live Voice Mode TTS, mic auto-resume, and Web Search Loop
+  useEffect(() => {
+    if (prevStreamingRef.current && !isStreaming) {
+      // Streaming just finished
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && lastMessage.sender === 'ai') {
+        
+        // 1. Check for web search command
+        const searchMatch = lastMessage.text.match(/\[SEARCH:\s*(?:"|')?([^"\]]+)(?:"|')?\]/i);
+        if (searchMatch) {
+          const query = searchMatch[1];
+          // Fetch search results
+          fetch(`/api/search?q=${encodeURIComponent(query)}`)
+            .then(res => res.json())
+            .then(data => {
+              sendMessage(`[SYSTEM SEARCH RESULTS FOR "${query}"]\n${data.results}\n\nPlease provide your final answer to the user based on these results. Do not output another SEARCH command.`, undefined, { isHidden: true });
+            })
+            .catch(e => {
+              sendMessage(`[SYSTEM SEARCH ERROR] Failed to perform web search for "${query}". Please inform the user.`, undefined, { isHidden: true });
+            });
+          
+          prevStreamingRef.current = isStreaming;
+          return; // Skip TTS for the search command itself
+        }
+
+        // 2. TTS Voice
+        if (liveVoiceMode) {
+          let voiceOverride = undefined;
+          const voiceMatch = lastMessage.text.match(/\[VOICE:\s*([^\]]+)\]/i);
+          if (voiceMatch) {
+            voiceOverride = voiceMatch[1];
+          }
+
+          speak(lastMessage.text, voiceOverride, () => {
+            // Restart recording when AI finishes speaking if we are still in live mode
+            if (liveVoiceMode && !isRecording) {
+              toggleRecording();
+            }
+          });
+        }
+      }
+    }
+    prevStreamingRef.current = isStreaming;
+  }, [isStreaming, messages, liveVoiceMode, speak, toggleRecording, isRecording, sendMessage]);
 
   // Slash-command popover — derived from input + manually controlled open state.
   const slashQuery = input.startsWith('/') ? input.split(/\s+/)[0].slice(1).toLowerCase() : '';
@@ -302,14 +351,14 @@ export default function ChatInterface() {
           </div>
         ) : (
           <div className="mx-auto w-full max-w-3xl space-y-8 px-4 py-8">
-            {messages.map((msg, idx) => (
+            {messages.filter(m => !m.isHidden).map((msg, idx, arr) => (
               <MessageBubble 
                 key={idx} 
                 sender={msg.sender} 
                 text={msg.text} 
                 mode={msg.mode} 
                 attachments={msg.attachments} 
-                isStreaming={isStreaming && idx === messages.length - 1 && msg.sender === 'ai'}
+                isStreaming={isStreaming && idx === arr.length - 1 && msg.sender === 'ai'}
               />
             ))}
             {showThinking && (

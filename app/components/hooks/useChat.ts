@@ -5,7 +5,7 @@ import { useMode } from '@/app/components/providers/ThemeProvider';
 export function useChat() {
   const { data: session } = useSession();
   const { mode } = useMode();
-  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; mode?: string }>>([]);
+  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; mode?: string; isHidden?: boolean }>>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [input, setInput] = useState('');
   const [sessionId, setSessionId] = useState<string>('current');
@@ -36,8 +36,8 @@ export function useChat() {
   }, []);
 
   const sendMessage = useCallback(
-    async (textOrEvent?: string | React.FormEvent) => {
-      if (typeof textOrEvent === 'object' && textOrEvent.preventDefault) {
+    async (textOrEvent?: string | React.FormEvent, options?: { isHidden?: boolean }) => {
+      if (textOrEvent && typeof textOrEvent === 'object' && 'preventDefault' in textOrEvent) {
         textOrEvent.preventDefault();
       }
       
@@ -45,8 +45,9 @@ export function useChat() {
       if (!text.trim() || isStreaming) return;
 
       setIsStreaming(true);
-      setInput('');
-      setMessages((prev) => [...prev, { sender: 'user', text }]);
+      if (!options?.isHidden) setInput('');
+      
+      setMessages((prev) => [...prev, { sender: 'user', text, isHidden: options?.isHidden }]);
 
       // Map local messages to API structure for payload
       const payloadMessages = messages.map(m => ({
