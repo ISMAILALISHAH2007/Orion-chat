@@ -183,6 +183,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             messages: payloadMessages,
             sessionId,
             mode,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
           signal: abortControllerRef.current.signal,
         });

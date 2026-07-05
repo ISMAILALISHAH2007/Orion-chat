@@ -124,6 +124,23 @@ export default function ChatInterface() {
           return; // Skip TTS for the search command itself
         }
 
+        // 1.5 Check for maps command
+        const mapsMatch = lastMessage.text.match(/\[MAPS:\s*(?:"|')?([^"\]]+)(?:"|')?\]/i);
+        if (mapsMatch) {
+          const query = mapsMatch[1];
+          fetch(`/api/maps?q=${encodeURIComponent(query)}`)
+            .then(res => res.json())
+            .then(data => {
+              sendMessage(`[SYSTEM MAPS RESULTS FOR "${query}"]\n${data.results}\n\nPlease provide your final answer to the user based on these location results. Do not output another MAPS command.`, undefined, { isHidden: true });
+            })
+            .catch(e => {
+              sendMessage(`[SYSTEM MAPS ERROR] Failed to perform map search for "${query}". Please inform the user.`, undefined, { isHidden: true });
+            });
+          
+          prevStreamingRef.current = isStreaming;
+          return; // Skip TTS for the maps command itself
+        }
+
         // 2. TTS Voice
         if (liveVoiceMode) {
           let voiceOverride = undefined;
@@ -135,7 +152,9 @@ export default function ChatInterface() {
           speak(lastMessage.text, voiceOverride, () => {
             // Restart recording when AI finishes speaking if we are still in live mode
             if (liveVoiceModeRef.current) {
-              startRecording();
+              setTimeout(() => {
+                startRecording();
+              }, 300);
             }
           });
         }
