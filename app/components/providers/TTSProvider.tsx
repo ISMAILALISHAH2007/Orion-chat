@@ -97,11 +97,11 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       // 1. Try exact URI
       let voice = voices.find(v => v.uri === uriToUse);
       // 2. Try Exact Lang (e.g., 'es-ES')
-      if (!voice) voice = voices.find(v => v.lang.toLowerCase() === uriToUse.toLowerCase());
+      if (!voice) voice = voices.find(v => v.lang?.toLowerCase() === uriToUse.toLowerCase());
       // 3. Try Name Inclusion (e.g., 'Google français')
-      if (!voice) voice = voices.find(v => v.name.toLowerCase().includes(uriToUse.toLowerCase()));
+      if (!voice) voice = voices.find(v => v.name?.toLowerCase().includes(uriToUse.toLowerCase()));
       // 4. Try Lang Prefix (e.g., 'es' for 'es-ES' or 'es-MX')
-      if (!voice) voice = voices.find(v => v.lang.toLowerCase().startsWith(uriToUse.toLowerCase()));
+      if (!voice) voice = voices.find(v => v.lang?.toLowerCase().startsWith(uriToUse.toLowerCase()));
 
       if (voice) {
         utterance.voice = voice.voice;
@@ -113,8 +113,8 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
     utterance.onend = () => {
       setIsSpeaking(false);
       onEnd?.();
-      // Clear the reference when done
-      if (typeof window !== 'undefined') {
+      // Only clear if this exact utterance is still the active one
+      if (typeof window !== 'undefined' && (window as any).__tts_utterance === utterance) {
         (window as any).__tts_utterance = null;
       }
     };
@@ -122,7 +122,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       console.error('TTS Error', e);
       setIsSpeaking(false);
       onEnd?.();
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && (window as any).__tts_utterance === utterance) {
         (window as any).__tts_utterance = null;
       }
     };
