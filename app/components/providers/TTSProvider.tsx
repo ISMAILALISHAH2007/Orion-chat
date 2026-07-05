@@ -41,6 +41,8 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [liveVoiceMode, setLiveVoiceMode] = useState(false);
 
+  const [voiceGender, setVoiceGender] = useState<'female' | 'male'>('female');
+
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const isPlayingQueueRef = useRef(false);
@@ -75,6 +77,37 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const speak = useCallback(async (text: string, voiceUriOverride?: string, onEnd?: () => void) => {
     stopSpeaking();
     
+    let newLang = selectedVoiceUri;
+    let newGender = voiceGender;
+
+    const voiceMatch = text.match(/\[VOICE:\s*([^,\]]+)(?:,\s*([^\]]+))?\]/i);
+    if (voiceMatch) {
+      const matchedLang = voiceMatch[1].trim().toLowerCase();
+      if (matchedLang.includes('hi') || matchedLang.includes('hindi')) newLang = 'hi';
+      else if (matchedLang.includes('ur') || matchedLang.includes('urdu')) newLang = 'ur';
+      else if (matchedLang.includes('es') || matchedLang.includes('spanish')) newLang = 'es';
+      else if (matchedLang.includes('fr') || matchedLang.includes('french')) newLang = 'fr';
+      else if (matchedLang.includes('de') || matchedLang.includes('german')) newLang = 'de';
+      else if (matchedLang.includes('it') || matchedLang.includes('italian')) newLang = 'it';
+      else if (matchedLang.includes('ar') || matchedLang.includes('arabic')) newLang = 'ar';
+      else if (matchedLang.includes('zh') || matchedLang.includes('chinese')) newLang = 'zh-CN';
+      else if (matchedLang.includes('ja') || matchedLang.includes('japanese')) newLang = 'ja';
+      else if (matchedLang.includes('uk')) newLang = 'en-GB';
+      else newLang = 'en';
+
+      setSelectedVoiceUri(newLang); // update global state
+
+      if (voiceMatch[2]) {
+        const g = voiceMatch[2].trim().toLowerCase();
+        if (g.includes('male') && !g.includes('female')) newGender = 'male';
+        else if (g.includes('female')) newGender = 'female';
+        
+        setVoiceGender(newGender);
+      }
+    } else if (voiceUriOverride) {
+      newLang = voiceUriOverride;
+    }
+
     const cleanText = text
       .replace(/\[VOICE:[^\]]+\]/gi, '')
       .replace(/```[\s\S]*?```/g, ' Code block omitted. ')
@@ -86,18 +119,6 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       onEnd?.();
       return;
     }
-
-    const requestedLang = (voiceUriOverride || selectedVoiceUri || 'en').toLowerCase();
-    let langCode = 'en';
-    if (requestedLang.includes('es') || requestedLang.includes('spanish')) langCode = 'es';
-    else if (requestedLang.includes('fr') || requestedLang.includes('french')) langCode = 'fr';
-    else if (requestedLang.includes('de') || requestedLang.includes('german')) langCode = 'de';
-    else if (requestedLang.includes('it') || requestedLang.includes('italian')) langCode = 'it';
-    else if (requestedLang.includes('hi') || requestedLang.includes('hindi')) langCode = 'hi';
-    else if (requestedLang.includes('ar') || requestedLang.includes('arabic')) langCode = 'ar';
-    else if (requestedLang.includes('zh') || requestedLang.includes('chinese')) langCode = 'zh-CN';
-    else if (requestedLang.includes('ja') || requestedLang.includes('japanese')) langCode = 'ja';
-    else if (requestedLang.includes('uk')) langCode = 'en-GB';
 
     const chunks: string[] = [];
     let currentChunk = '';
@@ -142,7 +163,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
         for (let i = 0; i < chunks.length; i++) {
           if (!isPlayingQueueRef.current) break; // aborted
 
-          const url = `/api/voice/tts?lang=${langCode}&text=${encodeURIComponent(chunks[i])}`;
+          const url = `/api/voice/tts?lang=${newLang}&gender=${newGender}&text=${encodeURIComponent(chunks[i])}`;
           const res = await fetch(url);
           if (!res.ok) continue; // Skip broken chunks
           const arrayBuffer = await res.arrayBuffer();
