@@ -41,27 +41,25 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [liveVoiceMode, setLiveVoiceMode] = useState(false);
 
-  const audioQueueRef = useRef<HTMLAudioElement[]>([]);
-  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Single global audio element attached to the DOM to bypass iOS/Safari autoplay blocks
+  const globalAudioRef = useRef<HTMLAudioElement | null>(null);
+  const audioQueueRef = useRef<string[]>([]);
+  const isPlayingQueueRef = useRef(false);
 
   const stopSpeaking = useCallback(() => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-      currentAudioRef.current.currentTime = 0;
-      currentAudioRef.current = null;
+    if (globalAudioRef.current) {
+      globalAudioRef.current.pause();
+      globalAudioRef.current.currentTime = 0;
+      globalAudioRef.current.src = '';
     }
-    audioQueueRef.current.forEach(a => {
-      a.pause();
-      a.src = '';
-    });
     audioQueueRef.current = [];
+    isPlayingQueueRef.current = false;
     setIsSpeaking(false);
   }, []);
 
   const speak = useCallback((text: string, voiceUriOverride?: string, onEnd?: () => void) => {
     stopSpeaking();
     
-    // Clean text
     const cleanText = text
       .replace(/\[VOICE:[^\]]+\]/gi, '')
       .replace(/```[\s\S]*?```/g, ' Code block omitted. ')
@@ -74,7 +72,6 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Determine language mapping
     const requestedLang = (voiceUriOverride || selectedVoiceUri || 'en').toLowerCase();
     let langCode = 'en';
     if (requestedLang.includes('es') || requestedLang.includes('spanish')) langCode = 'es';
@@ -87,7 +84,6 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
     else if (requestedLang.includes('ja') || requestedLang.includes('japanese')) langCode = 'ja';
     else if (requestedLang.includes('uk')) langCode = 'en-GB';
 
-    // Chunk text by punctuation or 150 chars to respect Google TTS limit
     const chunks: string[] = [];
     let currentChunk = '';
     const words = cleanText.split(/\s+/);
@@ -113,36 +109,40 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    audioQueueRef.current = chunks.map(chunk => 
+      `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=${langCode}&q=${encodeURIComponent(chunk)}`
+    );
+
     setIsSpeaking(true);
+    isPlayingQueueRef.current = true;
 
     const playNext = () => {
+      if (!isPlayingQueueRef.current) return; // Stopped
       if (audioQueueRef.current.length === 0) {
         setIsSpeaking(false);
+        isPlayingQueueRef.current = false;
         onEnd?.();
         return;
       }
       
-      const nextAudio = audioQueueRef.current.shift()!;
-      currentAudioRef.current = nextAudio;
-      
-      nextAudio.onended = () => {
-        playNext();
-      };
-      
-      nextAudio.onerror = () => {
-        playNext(); // Skip broken chunks
-      };
-      
-      nextAudio.play().catch(e => {
-        console.error('Mobile Audio Autoplay blocked:', e);
-        playNext(); // Skip if autoplay is strictly blocked
-      });
+      const nextUrl = audioQueueRef.current.shift()!;
+      if (globalAudioRef.current) {
+        globalAudioRef.current.src = nextUrl;
+        
+        globalAudioRef.current.onended = () => {
+          playNext();
+        };
+        
+        globalAudioRef.current.onerror = () => {
+          playNext(); 
+        };
+        
+        globalAudioRef.current.play().catch(e => {
+          console.error('Mobile Audio Autoplay blocked:', e);
+          playNext();
+        });
+      }
     };
-
-    audioQueueRef.current = chunks.map(chunk => {
-      const url = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=${langCode}&q=${encodeURIComponent(chunk)}`;
-      return new Audio(url);
-    });
 
     playNext();
 
@@ -154,10 +154,10 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       if (!next && isSpeaking) {
         stopSpeaking();
       } else if (next) {
-        // Prime audio context on mobile devices
-        if (typeof window !== 'undefined') {
-          const dummy = new Audio('');
-          dummy.play().catch(() => {});
+        // Unlock the global audio element strictly on user tap!
+        if (globalAudioRef.current) {
+          globalAudioRef.current.src = 'data:audio/mp3;base64,//OExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq';
+          globalAudioRef.current.play().catch(() => {});
         }
       }
       return next;
@@ -177,6 +177,8 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       setLiveVoiceMode
     }}>
       {children}
+      {/* Physically rendered hidden audio element ensures iOS Safari allows programmatic `.play()` later */}
+      <audio ref={globalAudioRef} className="hidden" playsInline />
     </TTSContext.Provider>
   );
 }
