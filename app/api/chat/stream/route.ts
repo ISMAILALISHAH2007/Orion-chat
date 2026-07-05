@@ -71,47 +71,46 @@ async function generateImageInline(userId: string | undefined, prompt: string) {
   ].join('\n');
 }
 
-async function generateVideoInline(prompt: string, userId: string): Promise<string> {
-  console.log('Generating video via Fal.ai for prompt:', prompt);
-  
-  if (!process.env.FAL_KEY) {
-    return `⚠️ **Video Generation Failed**: FAL_KEY environment variable is not set. Please add it to your Vercel Dashboard.`;
-  }
-
+async function generateVideoInline(userId: string | undefined, prompt: string) {
   try {
-    const res = await fetch("https://fal.run/fal-ai/hunyuan-video", {
-      method: "POST",
+    const res = await fetch("https://api-inference.huggingface.co/models/cerspense/zeroscope_v2_576w", {
       headers: {
-        "Authorization": `Key ${process.env.FAL_KEY}`,
+        "Authorization": `Bearer ${process.env.HUGGINGFACE_API_KEY || ''}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ prompt: prompt })
+      method: "POST",
+      body: JSON.stringify({ inputs: prompt })
     });
     
     if (!res.ok) {
       const err = await res.text();
-      console.error("Fal Video API Error:", err);
-      return `⚠️ **Video Generation Failed**: Fal.ai API returned an error. Please try again later.`;
+      console.error("HF Video API Error:", err);
+      return `⚠️ **Video Generation Failed**: Hugging Face API returned an error or is blocked. Try again later or check your API key.`;
     }
     
-    const data = await res.json();
-    const videoUrl = data.video?.url;
+    const arrayBuffer = await res.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString('base64');
     
-    if (!videoUrl) {
-      return `⚠️ **Video Generation Failed**: Fal.ai did not return a valid video URL.`;
+    let record = null;
+    if (userId) {
+        record = await prisma.video.create({
+            data: { userId, prompt, videoUrl: base64 },
+            select: { id: true }
+        });
     }
-
-    const downloadName = `ultron-video-${Date.now()}.mp4`;
-
+    
+    // Fallback to huge data URI if no DB record was created
+    const videoUrl = record ? `/api/video?id=${record.id}` : `data:video/mp4;base64,${base64}`;
+    const downloadName = (record?.id ?? `ultron-video-${Date.now()}`);
+    
     return [
        `[VIDEO: ${videoUrl}]`,
        ``,
-       `[Download Video](/api/download?url=${encodeURIComponent(videoUrl)}&name=${encodeURIComponent(downloadName)} "${downloadName}")`
+       `[Download Video](${videoUrl}&download=1 "${downloadName}")`
     ].join('\n');
-    
   } catch (error) {
     console.error('Failed to generate video:', error);
-    return `⚠️ **Video Generation Failed**: Could not connect to the Fal.ai API.`;
+    return `⚠️ **Video Generation Failed**: Could not connect to the Video API. If you are running locally, your network might be blocking Hugging Face. Try deploying to Vercel.`;
   }
 }
 
@@ -238,7 +237,7 @@ export async function POST(req: Request) {
     
     if (slash?.command === 'video') {
       await sessionPromiseTask;
-      const text = await generateVideoInline(slash.prompt, userId || '');
+      const text = await generateVideoInline(userId, slash.prompt);
       await persistExchange(userId, activeSessionId, userContent, text);
       return NextResponse.json(
         { text, sessionId: activeSessionId, video: true },
@@ -260,7 +259,7 @@ export async function POST(req: Request) {
 
     if (videoIntent) {
       await sessionPromiseTask;
-      const text = await generateVideoInline(videoIntent, userId || '');
+      const text = await generateVideoInline(userId, videoIntent);
       await persistExchange(userId, activeSessionId, userContent, text);
       return NextResponse.json(
         { text, sessionId: activeSessionId, video: true },
