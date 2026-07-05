@@ -57,8 +57,15 @@ export default function ChatInterface() {
   const [isImageMode, setIsImageMode] = useState(false);
   const { messages, sendMessage, isStreaming, stop } = useChat();
   const { mode } = useMode();
-  const { isRecording, toggleRecording, transcript } = useVoice();
-  const { speak, liveVoiceMode } = useTTS();
+  const { speak, liveVoiceMode, setLiveVoiceMode, isSpeaking, stopSpeaking } = useTTS();
+  const { isRecording, startRecording, stopRecording, transcript } = useVoice({
+    onSpeechEnd: (finalText) => {
+      if (liveVoiceMode) {
+        sendMessage(finalText);
+        setInput('');
+      }
+    }
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const slashRef = useRef<HTMLDivElement>(null);
@@ -88,6 +95,9 @@ export default function ChatInterface() {
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   }, [input]);
+
+  const liveVoiceModeRef = useRef(liveVoiceMode);
+  useEffect(() => { liveVoiceModeRef.current = liveVoiceMode; }, [liveVoiceMode]);
 
   // Handle Live Voice Mode TTS, mic auto-resume, and Web Search Loop
   useEffect(() => {
@@ -124,15 +134,15 @@ export default function ChatInterface() {
 
           speak(lastMessage.text, voiceOverride, () => {
             // Restart recording when AI finishes speaking if we are still in live mode
-            if (liveVoiceMode && !isRecording) {
-              toggleRecording();
+            if (liveVoiceModeRef.current) {
+              startRecording();
             }
           });
         }
       }
     }
     prevStreamingRef.current = isStreaming;
-  }, [isStreaming, messages, liveVoiceMode, speak, toggleRecording, isRecording, sendMessage]);
+  }, [isStreaming, messages, liveVoiceMode, speak, startRecording, sendMessage]);
 
   // Slash-command popover — derived from input + manually controlled open state.
   const slashQuery = input.startsWith('/') ? input.split(/\s+/)[0].slice(1).toLowerCase() : '';
@@ -170,6 +180,19 @@ export default function ChatInterface() {
     setInput(`/${cmd} `);
     setSlashOpen(false);
     textareaRef.current?.focus();
+  };
+
+  const handleMicClick = () => {
+    setLiveVoiceMode(true);
+    if (!isRecording) {
+      startRecording();
+    }
+  };
+
+  const handleEndVoiceSession = () => {
+    setLiveVoiceMode(false);
+    if (isRecording) stopRecording();
+    if (isSpeaking) stopSpeaking();
   };
 
   const handleSend = () => {
@@ -282,33 +305,62 @@ export default function ChatInterface() {
   return (
     <section className="relative flex min-h-0 flex-1 flex-col bg-background/50">
       {/* Live Voice Overlay */}
-      {isRecording && (
+      {liveVoiceMode && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-3xl animate-fade-in">
           <div className="live-voice-blob live-voice-blob-1" />
           <div className="live-voice-blob live-voice-blob-2" />
           <div className="live-voice-blob live-voice-blob-3" />
           
           <h2 className="mb-12 font-display text-4xl font-semibold text-foreground md:text-6xl">
-            Listening...
+            {isRecording ? "Listening..." : isStreaming ? "Thinking..." : isSpeaking ? "Speaking..." : "Listening..."}
           </h2>
           
-          <div className="live-voice-wave mb-16">
-            <div className="live-voice-bar" />
-            <div className="live-voice-bar" />
-            <div className="live-voice-bar" />
-            <div className="live-voice-bar" />
-            <div className="live-voice-bar" />
-          </div>
+          {isRecording ? (
+            <div className="live-voice-wave mb-16">
+              <div className="live-voice-bar" />
+              <div className="live-voice-bar" />
+              <div className="live-voice-bar" />
+              <div className="live-voice-bar" />
+              <div className="live-voice-bar" />
+            </div>
+          ) : isStreaming ? (
+             <div className="mb-16 flex gap-3">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-surface">
+                  <Sparkles size={24} className="text-accent animate-pulse" />
+                </span>
+                <span className="thinking-dots scale-150" aria-label="Assistant is thinking">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </span>
+             </div>
+          ) : isSpeaking ? (
+            <div className="live-voice-wave mb-16">
+              <div className="live-voice-bar !animate-bounce" />
+              <div className="live-voice-bar !animate-pulse" />
+              <div className="live-voice-bar !animate-bounce" style={{ animationDelay: '0.2s' }} />
+              <div className="live-voice-bar !animate-pulse" />
+              <div className="live-voice-bar !animate-bounce" style={{ animationDelay: '0.4s' }} />
+            </div>
+          ) : (
+            <div className="live-voice-wave mb-16 opacity-50">
+              <div className="live-voice-bar" />
+              <div className="live-voice-bar" />
+              <div className="live-voice-bar" />
+            </div>
+          )}
           
-          <p className="max-w-xl text-center text-xl font-medium text-foreground/80">
-            {transcript || "Speak now..."}
-          </p>
+          {isRecording && (
+            <p className="max-w-xl text-center text-xl font-medium text-foreground/80">
+              {transcript || "Speak now..."}
+            </p>
+          )}
           
           <button
-            onClick={toggleRecording}
+            onClick={handleEndVoiceSession}
             className="absolute bottom-12 rounded-full bg-danger px-8 py-4 font-semibold text-white shadow-xl transition-transform hover:scale-105 active:scale-95"
           >
-            Stop Listening
+            End Voice Session
           </button>
         </div>
       )}
@@ -504,16 +556,16 @@ export default function ChatInterface() {
                   </button>
                   <button
                     type="button"
-                    onClick={toggleRecording}
-                    aria-label={isRecording ? 'Stop recording' : 'Start voice input'}
+                    onClick={handleMicClick}
+                    aria-label={liveVoiceMode ? 'Live voice active' : 'Start voice input'}
                     className={[
                       'relative rounded-lg p-2 transition-colors',
-                      isRecording
+                      liveVoiceMode
                         ? 'voice-active bg-[var(--danger)] text-white'
                         : 'text-muted hover:bg-surface-2 hover:text-foreground',
                     ].join(' ')}
                   >
-                    <span className="pulse-ring" aria-hidden="true" />
+                    {liveVoiceMode && <span className="pulse-ring" aria-hidden="true" />}
                     <Mic size={18} />
                   </button>
                 </div>

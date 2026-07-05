@@ -20,10 +20,15 @@ type SpeechRecognitionLike = {
   stop: () => void;
 };
 
-export function useVoice() {
+export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const optionsRef = useRef(options);
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -44,12 +49,18 @@ export function useVoice() {
     rec.interimResults = false;
     rec.lang = 'en-US';
 
+    let currentTranscript = '';
+
     rec.onstart = () => {
+      currentTranscript = '';
       setIsRecording(true);
     };
 
     rec.onend = () => {
       setIsRecording(false);
+      if (optionsRef.current?.onSpeechEnd && currentTranscript.trim()) {
+        optionsRef.current.onSpeechEnd(currentTranscript);
+      }
     };
 
     rec.onerror = (event) => {
@@ -60,6 +71,7 @@ export function useVoice() {
     rec.onresult = (event) => {
       const resultText = event.results[0]?.[0]?.transcript;
       if (resultText) {
+        currentTranscript = resultText;
         setTranscript(resultText);
       }
     };
@@ -67,23 +79,32 @@ export function useVoice() {
     recognitionRef.current = rec;
   }, []);
 
-  const toggleRecording = useCallback(() => {
-    if (!recognitionRef.current) {
-      console.warn('Voice recognition not available on this browser.');
-      return;
+  const startRecording = useCallback(() => {
+    if (!recognitionRef.current) return;
+    setTranscript('');
+    try {
+      recognitionRef.current.start();
+    } catch (err) {
+      console.error('Failed to start speech recognition:', err);
     }
+  }, []);
 
-    if (isRecording) {
+  const stopRecording = useCallback(() => {
+    if (!recognitionRef.current) return;
+    try {
       recognitionRef.current.stop();
-    } else {
-      setTranscript('');
-      try {
-        recognitionRef.current.start();
-      } catch (err) {
-        console.error('Failed to start speech recognition:', err);
-      }
+    } catch (err) {
+      console.error('Failed to stop speech recognition:', err);
     }
-  }, [isRecording]);
+  }, []);
 
-  return { isRecording, toggleRecording, transcript };
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [isRecording, startRecording, stopRecording]);
+
+  return { isRecording, toggleRecording, startRecording, stopRecording, transcript };
 }
