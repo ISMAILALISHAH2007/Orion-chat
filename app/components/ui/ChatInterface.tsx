@@ -149,19 +149,24 @@ export default function ChatInterface() {
             voiceOverride = voiceMatch[1];
           }
 
-          speak(lastMessage.text, voiceOverride, () => {
-            // Restart recording when AI finishes speaking if we are still in live mode
-            if (liveVoiceModeRef.current) {
-              setTimeout(() => {
-                startRecording();
-              }, 300);
-            }
-          });
+          speak(lastMessage.text, voiceOverride);
         }
       }
     }
     prevStreamingRef.current = isStreaming;
-  }, [isStreaming, messages, liveVoiceMode, speak, startRecording, sendMessage]);
+  }, [isStreaming, messages, liveVoiceMode, speak, sendMessage]);
+
+  // BULLETPROOF WATCHDOG: Guarantees the mic never gets permanently stuck off
+  useEffect(() => {
+    if (liveVoiceModeRef.current && !isRecording && !isStreaming && !isSpeaking) {
+      const timer = setTimeout(() => {
+        if (liveVoiceModeRef.current && !isRecording && !isStreaming && !isSpeaking) {
+          startRecording();
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [liveVoiceMode, isRecording, isStreaming, isSpeaking, startRecording]);
 
   // Slash-command popover — derived from input + manually controlled open state.
   const slashQuery = input.startsWith('/') ? input.split(/\s+/)[0].slice(1).toLowerCase() : '';
@@ -354,12 +359,23 @@ export default function ChatInterface() {
                 </span>
              </div>
           ) : isSpeaking ? (
-            <div className="live-voice-wave mb-16">
-              <div className="live-voice-bar !animate-bounce" />
-              <div className="live-voice-bar !animate-pulse" />
-              <div className="live-voice-bar !animate-bounce" style={{ animationDelay: '0.2s' }} />
-              <div className="live-voice-bar !animate-pulse" />
-              <div className="live-voice-bar !animate-bounce" style={{ animationDelay: '0.4s' }} />
+            <div className="flex flex-col items-center mb-16">
+              <div className="live-voice-wave mb-8">
+                <div className="live-voice-bar !animate-bounce" />
+                <div className="live-voice-bar !animate-pulse" />
+                <div className="live-voice-bar !animate-bounce" style={{ animationDelay: '0.2s' }} />
+                <div className="live-voice-bar !animate-pulse" />
+                <div className="live-voice-bar !animate-bounce" style={{ animationDelay: '0.4s' }} />
+              </div>
+              <button 
+                onClick={() => {
+                  stopSpeaking();
+                  stop();
+                }}
+                className="rounded-full border border-border bg-surface px-8 py-3 font-semibold text-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 animate-fade-in"
+              >
+                Interrupt & Listen
+              </button>
             </div>
           ) : (
             <div className="live-voice-wave mb-16 opacity-50">
