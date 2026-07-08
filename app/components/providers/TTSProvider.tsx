@@ -16,6 +16,7 @@ const CLOUD_VOICES: TTSVoice[] = [
   { uri: 'de', name: 'German', lang: 'de', voice: null },
   { uri: 'it', name: 'Italian', lang: 'it', voice: null },
   { uri: 'hi', name: 'Hindi', lang: 'hi', voice: null },
+  { uri: 'ur', name: 'Urdu', lang: 'ur', voice: null },
   { uri: 'ar', name: 'Arabic', lang: 'ar', voice: null },
   { uri: 'zh-CN', name: 'Chinese', lang: 'zh-CN', voice: null },
   { uri: 'ja', name: 'Japanese', lang: 'ja', voice: null },
