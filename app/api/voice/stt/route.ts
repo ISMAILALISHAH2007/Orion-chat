@@ -33,8 +33,11 @@ export async function POST(req: Request) {
 
     const transcription = result.response.text().trim();
     return NextResponse.json({ text: transcription });
-  } catch (error) {
-    console.error('STT Error:', error);
-    return NextResponse.json({ error: 'Failed to transcribe audio' }, { status: 500 });
+  } catch (error: any) {
+    console.error('STT Error details:', error);
+    return NextResponse.json({ 
+      error: 'Failed to transcribe audio', 
+      details: error?.message || String(error)
+    }, { status: 500 });
   }
 }

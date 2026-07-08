@@ -59,8 +59,9 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
         let silenceStart: number | null = null;
-        // Keep track of the highest volume seen so we can dynamically calculate silence
         let maxSeenVol = 0;
+        let hasSpoken = false; // Track if the user has actually started speaking
+        const startTime = Date.now();
 
         const checkSilence = () => {
           if (mediaRecorder.state !== 'recording') return;
@@ -70,19 +71,30 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
           
           if (maxVol > maxSeenVol) maxSeenVol = maxVol;
 
-          // If volume is low compared to max seen (or very low absolutely)
-          const isSilent = maxVol < 30 || (maxSeenVol > 100 && maxVol < maxSeenVol * 0.3);
+          // A higher threshold (e.g., 40) for absolute silence, 
+          // or a dynamic drop (less than 30% of max volume if they were loud).
+          const isSilent = maxVol < 40 || (maxSeenVol > 120 && maxVol < maxSeenVol * 0.3);
 
-          if (isSilent) {
+          if (!isSilent) {
+            hasSpoken = true;
+            silenceStart = null;
+          } else {
             if (silenceStart === null) {
               silenceStart = Date.now();
-            } else if (Date.now() - silenceStart > 1500) {
-              clearInterval(checkInterval);
-              mediaRecorder.stop();
-              setIsRecording(false);
+            } else {
+              const silenceDuration = Date.now() - silenceStart;
+              const totalDuration = Date.now() - startTime;
+              
+              // If they haven't spoken yet, wait up to 10 seconds before giving up.
+              // If they HAVE spoken, wait 2.5 seconds of silence before cutting them off.
+              const timeoutThreshold = hasSpoken ? 2500 : 10000;
+              
+              if (silenceDuration > timeoutThreshold) {
+                clearInterval(checkInterval);
+                mediaRecorder.stop();
+                setIsRecording(false);
+              }
             }
-          } else {
-            silenceStart = null;
           }
         };
 
@@ -100,6 +112,13 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
         
         // Clean up stream
         stream.getTracks().forEach((track) => track.stop());
+
+        if (audioBlob.size === 0) {
+          console.warn('Audio blob is empty. Skipping STT.');
+          setTranscript('No audio recorded.');
+          setIsRecording(false);
+          return;
+        }
 
         // Process audio via backend STT
         const formData = new FormData();
