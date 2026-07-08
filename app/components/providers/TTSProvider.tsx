@@ -31,6 +31,7 @@ interface TTSContextType {
   liveVoiceMode: boolean;
   toggleLiveVoice: () => void;
   setLiveVoiceMode: (mode: boolean) => void;
+  initAudioContext: () => void;
 }
 
 const TTSContext = createContext<TTSContextType | undefined>(undefined);
@@ -106,6 +107,9 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       }
     } else if (voiceUriOverride) {
       newLang = voiceUriOverride;
+    } else {
+      if (/[\u0600-\u06FF]/.test(text)) newLang = 'ur';
+      else if (/[\u0900-\u097F]/.test(text)) newLang = 'hi';
     }
 
     const cleanText = text
@@ -235,7 +239,8 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       isSpeaking,
       liveVoiceMode,
       toggleLiveVoice,
-      setLiveVoiceMode
+      setLiveVoiceMode,
+      initAudioContext
     }}>
       {children}
     </TTSContext.Provider>

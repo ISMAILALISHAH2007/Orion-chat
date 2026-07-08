@@ -57,7 +57,7 @@ export default function ChatInterface() {
   const [isImageMode, setIsImageMode] = useState(false);
   const { messages, sendMessage, isStreaming, stop } = useChat();
   const { mode } = useMode();
-  const { speak, liveVoiceMode, setLiveVoiceMode, isSpeaking, stopSpeaking, selectedVoiceUri } = useTTS();
+  const { speak, liveVoiceMode, setLiveVoiceMode, isSpeaking, stopSpeaking, selectedVoiceUri, initAudioContext } = useTTS();
   const { isRecording, startRecording, stopRecording, transcript } = useVoice({
     language: selectedVoiceUri,
     onSpeechEnd: (finalText) => {
@@ -209,6 +209,7 @@ export default function ChatInterface() {
   };
 
   const handleMicClick = () => {
+    initAudioContext();
     setLiveVoiceMode(true);
     if (!isRecording) {
       startRecording();
@@ -222,6 +223,7 @@ export default function ChatInterface() {
   };
 
   const handleSend = () => {
+    initAudioContext();
     if ((!input.trim() && attachments.length === 0) || isStreaming) return;
 
     let finalInput = input;
