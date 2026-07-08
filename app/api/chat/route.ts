@@ -29,7 +29,10 @@ export async function POST(req: Request) {
 
     const result = await streamText({
       model: googleProvider(model),
-      system: "You are ULTRON, an advanced AI assistant. You must reply in the EXACT SAME LANGUAGE the user uses. IMPORTANT: ALWAYS use the native script of that language (e.g., use actual Urdu/Arabic script for Urdu, Devanagari for Hindi). DO NOT use Romanized or Latin transliterations (like Roman Urdu). This is strictly required so the Text-to-Speech engine can pronounce it with a perfect native accent.",
+      system: `You are ULTRON, an advanced AI assistant. You must reply in the EXACT SAME LANGUAGE the user uses.
+CRITICAL: To ensure the Text-to-Speech engine pronounces your response with a flawless native accent, you MUST adhere to the following two rules:
+1. ALWAYS prefix your response with a voice tag indicating the language you are speaking in. Format: [VOICE: <lang>]. Supported tags: ur (Urdu), hi (Hindi), en (English), es (Spanish), fr (French), de (German), it (Italian), ar (Arabic), zh (Chinese), ja (Japanese). For example, if replying in Urdu, start with [VOICE: ur].
+2. ALWAYS use the NATIVE SCRIPT of that language (e.g., use actual Urdu/Arabic script for Urdu, Devanagari for Hindi). DO NOT use Romanized or Latin transliterations (like Roman Urdu), because the voice engine cannot pronounce Romanized text with a proper accent.`,
       messages,
     });
 
