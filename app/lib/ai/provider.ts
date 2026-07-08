@@ -66,7 +66,7 @@ const nvidia = process.env.NVIDIA_API_KEY
 
 function resolveProvider(mode: ChatMode): AIProviderName {
   if (mode === 'professional' && nvidia) return 'nvidia';
-  if (mode === 'developer' && openrouter) return 'openrouter';
+  if (mode === 'developer' && google) return 'gemini';
   
   // High-tier workloads go to NVIDIA
   if ((mode === 'research' || mode === 'casual') && nvidia) return 'nvidia';
@@ -77,11 +77,10 @@ function resolveProvider(mode: ChatMode): AIProviderName {
 }
 
 function getModelId(mode: ChatMode, provider: AIProviderName): string {
-  if (provider === 'gemini') return 'gemini-2.5-flash';
+  if (provider === 'gemini') return process.env.MODEL_DEVELOPER || 'gemini-flash-latest';
   
   if (provider === 'openrouter') {
     if (mode === 'professional') return process.env.MODEL_PROFESSIONAL || 'google/lyria-3-pro-preview';
-    if (mode === 'developer') return process.env.MODEL_DEVELOPER || 'google/gemini-2.5-flash';
     if (mode === 'research') return process.env.MODEL_RESEARCH || 'meta/llama-3.1-70b-instruct';
     return process.env.MODEL_CASUAL || 'meta/llama-3.1-8b-instruct';
   }
