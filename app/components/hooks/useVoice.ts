@@ -28,12 +28,12 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       let recognition: any = null;
       let checkInterval: any = null;
+      let nativeVadActive = false;
 
       if (SpeechRecognition) {
         recognition = new SpeechRecognition();
         recognition.continuous = false;
         recognition.interimResults = false;
-        // As soon as the browser detects the user has stopped speaking, we stop the recording
         recognition.onend = () => {
           if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
             mediaRecorderRef.current.stop();
@@ -42,11 +42,14 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
         };
         try {
           recognition.start();
+          nativeVadActive = true;
         } catch (e) {
-          console.warn('Native VAD start failed:', e);
+          console.warn('Native VAD start failed (likely no user gesture). Using AudioContext fallback.');
         }
-      } else {
-        // Fallback: Web Audio API VAD for browsers without SpeechRecognition
+      } 
+      
+      // If SpeechRecognition isn't supported or failed to start, use AudioContext VAD
+      if (!nativeVadActive) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         const source = audioContext.createMediaStreamSource(stream);
         const analyser = audioContext.createAnalyser();
@@ -56,16 +59,21 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
         let silenceStart: number | null = null;
+        // Keep track of the highest volume seen so we can dynamically calculate silence
+        let maxSeenVol = 0;
 
         const checkSilence = () => {
           if (mediaRecorder.state !== 'recording') return;
           
           analyser.getByteFrequencyData(dataArray);
-          // Check the maximum volume in the frequency bins
           const maxVol = Math.max(...Array.from(dataArray));
+          
+          if (maxVol > maxSeenVol) maxSeenVol = maxVol;
 
-          // If maximum volume is very low, it's silence
-          if (maxVol < 25) {
+          // If volume is low compared to max seen (or very low absolutely)
+          const isSilent = maxVol < 30 || (maxSeenVol > 100 && maxVol < maxSeenVol * 0.3);
+
+          if (isSilent) {
             if (silenceStart === null) {
               silenceStart = Date.now();
             } else if (Date.now() - silenceStart > 1500) {
