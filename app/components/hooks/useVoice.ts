@@ -19,7 +19,49 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
         }
       };
 
+      // Voice Activity Detection (VAD) setup
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.minDecibels = -60;
+      source.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      let silenceStart: number | null = null;
+      let checkInterval: any;
+
+      const checkSilence = () => {
+        if (mediaRecorder.state !== 'recording') return;
+        
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / bufferLength;
+
+        // If very quiet
+        if (average < 10) {
+          if (silenceStart === null) {
+            silenceStart = Date.now();
+          } else if (Date.now() - silenceStart > 1500) {
+            // 1.5 seconds of silence detected, auto-stop
+            clearInterval(checkInterval);
+            mediaRecorder.stop();
+          }
+        } else {
+          // Reset silence timer if noise is detected
+          silenceStart = null;
+        }
+      };
+
+      checkInterval = setInterval(checkSilence, 100);
+
       mediaRecorder.onstop = async () => {
+        clearInterval(checkInterval);
+        audioContext.close();
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         
         // Clean up stream
