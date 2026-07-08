@@ -19,49 +19,70 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
         }
       };
 
-      // Voice Activity Detection (VAD) setup
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const source = audioContext.createMediaStreamSource(stream);
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 512;
-      analyser.minDecibels = -60;
-      source.connect(analyser);
+      // Set up VAD using native SpeechRecognition for flawless silence detection
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      let recognition: any = null;
+      let checkInterval: any = null;
 
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      let silenceStart: number | null = null;
-      let checkInterval: any;
-
-      const checkSilence = () => {
-        if (mediaRecorder.state !== 'recording') return;
-        
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          sum += dataArray[i];
-        }
-        const average = sum / bufferLength;
-
-        // If very quiet
-        if (average < 10) {
-          if (silenceStart === null) {
-            silenceStart = Date.now();
-          } else if (Date.now() - silenceStart > 1500) {
-            // 1.5 seconds of silence detected, auto-stop
-            clearInterval(checkInterval);
-            mediaRecorder.stop();
+      if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        // As soon as the browser detects the user has stopped speaking, we stop the recording
+        recognition.onend = () => {
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
           }
-        } else {
-          // Reset silence timer if noise is detected
-          silenceStart = null;
+        };
+        try {
+          recognition.start();
+        } catch (e) {
+          console.warn('Native VAD start failed:', e);
         }
-      };
+      } else {
+        // Fallback: Web Audio API VAD for browsers without SpeechRecognition
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
 
-      checkInterval = setInterval(checkSilence, 100);
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        let silenceStart: number | null = null;
+
+        const checkSilence = () => {
+          if (mediaRecorder.state !== 'recording') return;
+          
+          analyser.getByteFrequencyData(dataArray);
+          // Check the maximum volume in the frequency bins
+          const maxVol = Math.max(...Array.from(dataArray));
+
+          // If maximum volume is very low, it's silence
+          if (maxVol < 25) {
+            if (silenceStart === null) {
+              silenceStart = Date.now();
+            } else if (Date.now() - silenceStart > 1500) {
+              clearInterval(checkInterval);
+              mediaRecorder.stop();
+              setIsRecording(false);
+            }
+          } else {
+            silenceStart = null;
+          }
+        };
+
+        checkInterval = setInterval(checkSilence, 100);
+      }
 
       mediaRecorder.onstop = async () => {
-        clearInterval(checkInterval);
-        audioContext.close();
+        if (checkInterval) clearInterval(checkInterval);
+        if (recognition) {
+          recognition.onend = null;
+          recognition.stop();
+        }
+        setIsRecording(false);
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         
         // Clean up stream
@@ -102,8 +123,8 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
     }
+    setIsRecording(false);
   }, []);
 
   const toggleRecording = useCallback(() => {
