@@ -36,15 +36,15 @@ export async function POST(req: Request) {
     lang = 'hi'; // Devanagari block
   }
 
-  const voiceSet = VOICE_MAP[lang] || VOICE_MAP['en'];
+  const baseLang = lang.split('-')[0];
+  const voiceSet = VOICE_MAP[lang] || VOICE_MAP[baseLang] || VOICE_MAP['en'];
   const voice = gender === 'male' ? voiceSet.male : voiceSet.female;
 
   try {
     // Inject slight pauses for punctuation to mimic human breathing
     const naturalText = text.replace(/([.!?])\s/g, '$1, ');
     
-    // Use slightly slower rate and lower pitch for a more relaxed, realistic human cadence
-    const tts = new EdgeTTS({ voice, volume: '+50%', rate: '-5%', pitch: '-2Hz' });
+    const tts = new EdgeTTS({ voice });
     const tmpPath = path.join(os.tmpdir(), `edge-tts-${Date.now()}-${Math.random().toString(36).substring(7)}.mp3`);
     
     await tts.ttsPromise(text, tmpPath);
