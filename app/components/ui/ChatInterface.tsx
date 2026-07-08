@@ -57,12 +57,15 @@ export default function ChatInterface() {
   const [isImageMode, setIsImageMode] = useState(false);
   const { messages, sendMessage, isStreaming, stop } = useChat();
   const { mode } = useMode();
-  const { speak, liveVoiceMode, setLiveVoiceMode, isSpeaking, stopSpeaking } = useTTS();
+  const { speak, liveVoiceMode, setLiveVoiceMode, isSpeaking, stopSpeaking, selectedVoiceUri } = useTTS();
   const { isRecording, startRecording, stopRecording, transcript } = useVoice({
+    language: selectedVoiceUri,
     onSpeechEnd: (finalText) => {
       if (liveVoiceMode) {
         sendMessage(finalText);
         setInput('');
+      } else {
+        setInput((prev) => (prev ? prev + ' ' + finalText : finalText));
       }
     }
   });
@@ -83,10 +86,6 @@ export default function ChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing external speech-recognition state into the controlled input
-    if (transcript) setInput((prev) => (prev ? prev + ' ' + transcript : transcript));
-  }, [transcript]);
 
   // Auto-grow the textarea.
   useEffect(() => {

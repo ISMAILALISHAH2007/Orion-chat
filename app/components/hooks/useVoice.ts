@@ -1,168 +1,108 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
-export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
+export function useVoice(options?: { 
+  language?: string; 
+  onSpeechEnd?: (text: string) => void;
+}) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  
+  const recognitionRef = useRef<any>(null);
   const optionsRef = useRef(options);
+  const finalTranscriptRef = useRef('');
 
   useEffect(() => {
     optionsRef.current = options;
   }, [options]);
 
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(() => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      // Set up VAD using native SpeechRecognition for flawless silence detection
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      let recognition: any = null;
-      let checkInterval: any = null;
-      let nativeVadActive = false;
-
-      if (SpeechRecognition) {
-        recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.onend = () => {
-          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-            mediaRecorderRef.current.stop();
-            setIsRecording(false);
-          }
-        };
-        try {
-          recognition.start();
-          nativeVadActive = true;
-        } catch (e) {
-          console.warn('Native VAD start failed (likely no user gesture). Using AudioContext fallback.');
-        }
-      } 
       
-      // If SpeechRecognition isn't supported or failed to start, use AudioContext VAD
-      if (!nativeVadActive) {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(stream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 512;
-        source.connect(analyser);
-
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-        let silenceStart: number | null = null;
-        let maxSeenVol = 0;
-        let hasSpoken = false; // Track if the user has actually started speaking
-        const startTime = Date.now();
-
-        const checkSilence = () => {
-          if (mediaRecorder.state !== 'recording') return;
-          
-          analyser.getByteFrequencyData(dataArray);
-          const maxVol = Math.max(...Array.from(dataArray));
-          
-          if (maxVol > maxSeenVol) maxSeenVol = maxVol;
-
-          // A higher threshold (e.g., 40) for absolute silence, 
-          // or a dynamic drop (less than 30% of max volume if they were loud).
-          const isSilent = maxVol < 40 || (maxSeenVol > 120 && maxVol < maxSeenVol * 0.3);
-
-          if (!isSilent) {
-            hasSpoken = true;
-            silenceStart = null;
-          } else {
-            if (silenceStart === null) {
-              silenceStart = Date.now();
-            } else {
-              const silenceDuration = Date.now() - silenceStart;
-              const totalDuration = Date.now() - startTime;
-              
-              // If they haven't spoken yet, wait up to 10 seconds before giving up.
-              // If they HAVE spoken, wait 2.5 seconds of silence before cutting them off.
-              const timeoutThreshold = hasSpoken ? 2500 : 10000;
-              
-              if (silenceDuration > timeoutThreshold) {
-                clearInterval(checkInterval);
-                mediaRecorder.stop();
-                setIsRecording(false);
-              }
-            }
-          }
-        };
-
-        checkInterval = setInterval(checkSilence, 100);
+      if (!SpeechRecognition) {
+        setTranscript('Error: Your browser does not support native speech recognition. Please use Google Chrome or Safari.');
+        return;
       }
 
-      mediaRecorder.onstop = async () => {
-        if (checkInterval) clearInterval(checkInterval);
-        if (recognition) {
-          recognition.onend = null;
-          recognition.stop();
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch(e) {}
+      }
+
+      const recognition = new SpeechRecognition();
+      
+      // Map TTS voice URIs (e.g. ur, hi, en) to proper SpeechRecognition BCP-47 language codes
+      let langCode = 'en-US';
+      const userLang = optionsRef.current?.language?.toLowerCase() || '';
+      
+      if (userLang.includes('ur')) langCode = 'ur-PK';
+      else if (userLang.includes('hi')) langCode = 'hi-IN';
+      else if (userLang.includes('es')) langCode = 'es-ES';
+      else if (userLang.includes('fr')) langCode = 'fr-FR';
+      else if (userLang.includes('de')) langCode = 'de-DE';
+      else if (userLang.includes('ar')) langCode = 'ar-SA';
+      else if (userLang.includes('zh')) langCode = 'zh-CN';
+      else if (userLang.includes('uk')) langCode = 'en-GB';
+
+      recognition.lang = langCode;
+      recognition.continuous = false; // Auto-stop when the user finishes their sentence
+      recognition.interimResults = true; // Show text as they speak
+      recognition.maxAlternatives = 1;
+
+      finalTranscriptRef.current = '';
+      setTranscript('');
+      setIsRecording(true);
+
+      recognition.onresult = (event: any) => {
+        let interimTranscript = '';
+        let finalSegment = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalSegment += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
         }
-        setIsRecording(false);
-        const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+
+        if (finalSegment) {
+          finalTranscriptRef.current += finalSegment + ' ';
+        }
         
-        // Clean up stream
-        stream.getTracks().forEach((track) => track.stop());
+        setTranscript((finalTranscriptRef.current + interimTranscript).trim());
+      };
 
-        if (audioBlob.size === 0) {
-          console.warn('Audio blob is empty. Skipping STT.');
-          setTranscript('No audio recorded.');
-          setIsRecording(false);
-          return;
-        }
-
-        // Process audio via backend STT
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'recording.webm');
-
-        try {
-          const response = await fetch('/api/voice/stt', {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const errData = await response.json().catch(() => null);
-            throw new Error(errData?.details || errData?.error || response.statusText);
-          }
-
-          const data = await response.json();
-          if (data.text) {
-            setTranscript(data.text);
-            optionsRef.current?.onSpeechEnd?.(data.text);
-          }
-        } catch (error: any) {
-          console.error('Error sending audio to STT:', error);
-          setTranscript(`Error: ${error?.message || 'understanding audio'}`);
-        } finally {
-          // Add a safety catch to ensure state isn't stuck
-          if (mediaRecorderRef.current?.state !== 'recording') {
-            setIsRecording(false);
-          }
+      recognition.onerror = (event: any) => {
+        console.error('Speech Recognition Error:', event.error);
+        if (event.error !== 'no-speech') {
+          setTranscript(`Error: ${event.error}`);
         }
       };
 
-      mediaRecorder.start();
-      setIsRecording(true);
-      setTranscript('');
+      recognition.onend = () => {
+        setIsRecording(false);
+        const finalText = finalTranscriptRef.current.trim();
+        if (finalText) {
+          // Defer the callback to ensure state updates smoothly
+          setTimeout(() => {
+            optionsRef.current?.onSpeechEnd?.(finalText);
+          }, 100);
+        } else {
+          setTranscript(''); // Clear UI if nothing was heard
+        }
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+
     } catch (err) {
-      console.error('Failed to start recording:', err);
+      console.error('Failed to start native recording:', err);
+      setIsRecording(false);
     }
   }, []);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch(e) {}
     }
     setIsRecording(false);
   }, []);
