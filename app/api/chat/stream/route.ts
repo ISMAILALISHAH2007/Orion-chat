@@ -200,16 +200,6 @@ export async function POST(req: Request) {
       const provider: AIProviderName = getActiveProvider(mode);
       const result = await streamText({
         model: getDefaultModelForMode(mode),
-        providerOptions: {
-          google: {
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            ],
-          },
-        },
         prompt: `The user asked who created you. Reply EXACTLY with this sentence and nothing else: "${CREATOR_CREDIT}"`,
         async onFinish({ text }) {
           await persistExchange(userId, activeSessionId, userContent, text);
@@ -331,16 +321,6 @@ You have a native Text-to-Speech engine.
     try {
       result = await streamText({
         model: modelToUse,
-        providerOptions: {
-          google: {
-            safetySettings: [
-              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            ],
-          },
-        },
         system: systemPrompt,
         messages,
         async onFinish({ text }) {
@@ -350,16 +330,6 @@ You have a native Text-to-Speech engine.
             try {
               const { text: title } = await generateText({
                 model: getDefaultModelForMode('casual'),
-                providerOptions: {
-                  google: {
-                    safetySettings: [
-                      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                    ],
-                  },
-                },
                 system: 'You are a summarizer. Return a 3-5 word title summarizing the user prompt. DO NOT use quotes. DO NOT use punctuation.',
                 prompt: userContent,
               });
@@ -383,16 +353,6 @@ You have a native Text-to-Speech engine.
         
         result = await streamText({
           model: fallbackModel,
-          providerOptions: {
-            google: {
-              safetySettings: [
-                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-              ],
-            },
-          },
           system: systemPrompt,
           messages,
           async onFinish({ text }) {
@@ -402,16 +362,6 @@ You have a native Text-to-Speech engine.
               try {
                 const { text: title } = await generateText({
                   model: getHiddenFallbackModel('casual'),
-                  providerOptions: {
-                    google: {
-                      safetySettings: [
-                        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-                        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                      ],
-                    },
-                  },
                   system: 'You are a summarizer. Return a 3-5 word title summarizing the user prompt. DO NOT use quotes. DO NOT use punctuation.',
                   prompt: userContent,
                 });
