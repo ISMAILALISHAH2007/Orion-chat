@@ -22,11 +22,18 @@ const VOICE_MAP: Record<string, { male: string, female: string }> = {
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const text = searchParams.get('text');
-  const lang = (searchParams.get('lang') || 'en').toLowerCase();
+  let lang = (searchParams.get('lang') || 'en').toLowerCase();
   const gender = (searchParams.get('gender') || 'female').toLowerCase();
 
   if (!text) {
     return new NextResponse('Missing text', { status: 400 });
+  }
+
+  // Auto-detect language based on Unicode blocks for perfect native accents
+  if (/[\u0600-\u06FF]/.test(text)) {
+    lang = 'ur'; // Arabic/Urdu block
+  } else if (/[\u0900-\u097F]/.test(text)) {
+    lang = 'hi'; // Devanagari block
   }
 
   const voiceSet = VOICE_MAP[lang] || VOICE_MAP['en'];

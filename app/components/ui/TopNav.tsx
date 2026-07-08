@@ -113,39 +113,9 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
         )}
       </div>
 
-      {/* Right: TTS and theme toggle */}
-      <div className="flex items-center gap-1">
-        {voices.length > 0 && (
-          <select
-            value={selectedVoiceUri}
-            onChange={(e) => setSelectedVoiceUri(e.target.value)}
-            className="bg-transparent text-xs text-muted outline-none w-[80px] sm:w-[120px] truncate appearance-none cursor-pointer"
-            title="Change AI Voice"
-          >
-            {voices.map(v => (
-              <option key={v.uri} value={v.uri} className="bg-surface text-foreground">
-                {v.name}
-              </option>
-            ))}
-          </select>
-        )}
-        
-        <button
-          onClick={toggleLiveVoice}
-          aria-label={liveVoiceMode ? 'Disable Live Voice' : 'Enable Live Voice'}
-          className={['rounded-lg p-2 transition-colors', liveVoiceMode ? 'bg-accent/10 text-accent' : 'text-muted hover:bg-surface-2 hover:text-foreground'].join(' ')}
-          title="Live Voice Mode"
-        >
-          {liveVoiceMode ? <Volume2 size={18} /> : <VolumeX size={18} />}
-        </button>
-
-        <button
-          onClick={toggleTheme}
-          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-        >
-          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
+      {/* Right: Empty spacer to balance flex layout */}
+      <div className="flex w-10 items-center justify-end">
+        {/* Icons moved to Account Settings Modal */}
       </div>
     </header>
   );
