@@ -122,6 +122,12 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
           }
         } catch (error) {
           console.error('Error sending audio to STT:', error);
+          setTranscript('Error understanding audio.');
+        } finally {
+          // Add a safety catch to ensure state isn't stuck
+          if (mediaRecorderRef.current?.state !== 'recording') {
+            setIsRecording(false);
+          }
         }
       };
 

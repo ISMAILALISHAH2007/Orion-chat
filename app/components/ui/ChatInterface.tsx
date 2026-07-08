@@ -159,14 +159,17 @@ export default function ChatInterface() {
   // BULLETPROOF WATCHDOG: Guarantees the mic never gets permanently stuck off
   useEffect(() => {
     if (liveVoiceModeRef.current && !isRecording && !isStreaming && !isSpeaking) {
+      // Don't auto-start if there's pending input that hasn't been sent yet
+      if (input.trim().length > 0) return;
+      
       const timer = setTimeout(() => {
         if (liveVoiceModeRef.current && !isRecording && !isStreaming && !isSpeaking) {
           startRecording();
         }
-      }, 500);
+      }, 800); // slightly longer delay to ensure states settle
       return () => clearTimeout(timer);
     }
-  }, [liveVoiceMode, isRecording, isStreaming, isSpeaking, startRecording]);
+  }, [liveVoiceMode, isRecording, isStreaming, isSpeaking, startRecording, input]);
 
   // Slash-command popover — derived from input + manually controlled open state.
   const slashQuery = input.startsWith('/') ? input.split(/\s+/)[0].slice(1).toLowerCase() : '';
