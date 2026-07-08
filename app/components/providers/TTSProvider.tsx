@@ -160,13 +160,20 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
     // Fetch and decode concurrently
     const playQueue = async () => {
       try {
+        // PRE-FETCH ALL CHUNKS IN BACKGROUND TO ELIMINATE PAUSES
+        const fetchPromises = chunks.map(chunk => 
+          fetch('/api/voice/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lang: newLang, gender: newGender, text: chunk })
+          }).then(res => res.ok ? res.arrayBuffer() : null)
+        );
+
         for (let i = 0; i < chunks.length; i++) {
           if (!isPlayingQueueRef.current) break; // aborted
 
-          const url = `/api/voice/tts?lang=${newLang}&gender=${newGender}&text=${encodeURIComponent(chunks[i])}`;
-          const res = await fetch(url);
-          if (!res.ok) continue; // Skip broken chunks
-          const arrayBuffer = await res.arrayBuffer();
+          const arrayBuffer = await fetchPromises[i];
+          if (!arrayBuffer) continue; // Skip broken chunks
           
           if (!isPlayingQueueRef.current) break;
           

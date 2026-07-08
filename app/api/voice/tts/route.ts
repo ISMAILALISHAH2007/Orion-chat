@@ -19,11 +19,11 @@ const VOICE_MAP: Record<string, { male: string, female: string }> = {
   'ja': { female: 'ja-JP-NanamiNeural', male: 'ja-JP-KeitaNeural' },
 };
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const text = searchParams.get('text');
-  let lang = (searchParams.get('lang') || 'en').toLowerCase();
-  const gender = (searchParams.get('gender') || 'female').toLowerCase();
+export async function POST(req: Request) {
+  const body = await req.json();
+  const text = body.text;
+  let lang = (body.lang || 'en').toLowerCase();
+  const gender = (body.gender || 'female').toLowerCase();
 
   if (!text) {
     return new NextResponse('Missing text', { status: 400 });
