@@ -6,7 +6,7 @@ import os from 'os';
 
 // Map generic languages and genders to Edge TTS voices
 const VOICE_MAP: Record<string, { male: string, female: string }> = {
-  'en': { female: 'en-US-AriaNeural', male: 'en-US-GuyNeural' },
+  'en': { female: 'en-US-JennyNeural', male: 'en-US-AndrewNeural' },
   'en-gb': { female: 'en-GB-SoniaNeural', male: 'en-GB-RyanNeural' },
   'es': { female: 'es-ES-ElviraNeural', male: 'es-ES-AlvaroNeural' },
   'fr': { female: 'fr-FR-DeniseNeural', male: 'fr-FR-HenriNeural' },
@@ -33,7 +33,11 @@ export async function GET(req: Request) {
   const voice = gender === 'male' ? voiceSet.male : voiceSet.female;
 
   try {
-    const tts = new EdgeTTS({ voice, volume: '+50%' });
+    // Inject slight pauses for punctuation to mimic human breathing
+    const naturalText = text.replace(/([.!?])\s/g, '$1, ');
+    
+    // Use slightly slower rate and lower pitch for a more relaxed, realistic human cadence
+    const tts = new EdgeTTS({ voice, volume: '+50%', rate: '-5%', pitch: '-2Hz' });
     const tmpPath = path.join(os.tmpdir(), `edge-tts-${Date.now()}-${Math.random().toString(36).substring(7)}.mp3`);
     
     await tts.ttsPromise(text, tmpPath);

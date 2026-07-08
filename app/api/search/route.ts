@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import google from 'googlethis';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -9,41 +10,22 @@ export async function GET(req: Request) {
   }
 
   try {
-    const response = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    const options = {
+      page: 0, 
+      safe: false, 
+      parse_ads: false, 
+      additional_params: { 
+        hl: 'en' 
       }
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch from DuckDuckGo');
-    }
-
-    const html = await response.text();
+    };
     
-    // Extract search result snippets
-    const snippets: string[] = [];
-    const regex = /<a class="result__snippet[^>]*>([\s\S]*?)<\/a>/g;
-    let match;
+    const response = await google.search(query, options);
     
-    while ((match = regex.exec(html)) !== null && snippets.length < 5) {
-      // Clean HTML tags from the snippet
-      const cleanText = match[1]
-        .replace(/<[^>]+>/g, '')
-        .replace(/&quot;/g, '"')
-        .replace(/&amp;/g, '&')
-        .replace(/&#39;/g, "'")
-        .trim();
-      
-      if (cleanText) {
-        snippets.push(cleanText);
-      }
+    if (!response.results || response.results.length === 0) {
+      return NextResponse.json({ results: 'No results found.' });
     }
 
-    // Fallback if no snippets found
-    if (snippets.length === 0) {
-      return NextResponse.json({ results: 'No results found or search blocked.' });
-    }
+    const snippets = response.results.slice(0, 5).map((r: any) => `${r.title}\n${r.description}`);
 
     return NextResponse.json({
       results: snippets.join('\n\n')

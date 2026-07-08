@@ -2,7 +2,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import AccountSettingsModal from './AccountSettingsModal';
 import {
   SquarePen,
   Trash2,
@@ -66,6 +67,7 @@ export default function Sidebar({
   const { data: session } = useSession();
   const pathname = usePathname();
   const router = useRouter();
+  const [showAccountModal, setShowAccountModal] = useState(false);
 
   const unifiedList = useMemo(() => {
     const combined: UnifiedItem[] = [
@@ -85,6 +87,8 @@ export default function Sidebar({
 
   return (
     <>
+      {showAccountModal && <AccountSettingsModal onClose={() => setShowAccountModal(false)} />}
+      
       {/* Mobile backdrop */}
       {mobileOpen && (
         <button
@@ -230,12 +234,14 @@ export default function Sidebar({
 
         {/* Profile + settings */}
         <div className="border-t border-border p-3">
-          <Link
-            href="/settings"
-            onClick={onCloseMobile}
-            title={collapsed ? 'Settings' : undefined}
+          <button
+            onClick={() => {
+              onCloseMobile();
+              setShowAccountModal(true);
+            }}
+            title={collapsed ? 'Account & Settings' : undefined}
             className={[
-              'flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-surface-2',
+              'flex w-full items-center gap-3 rounded-lg p-2 transition-colors hover:bg-surface-2',
               collapsed ? 'md:justify-center' : '',
             ].join(' ')}
           >
@@ -243,7 +249,7 @@ export default function Sidebar({
               {initial}
             </span>
             {!collapsed && (
-              <span className="min-w-0 flex-1">
+              <span className="min-w-0 flex-1 text-left">
                 <span className="block truncate text-sm font-medium text-foreground">
                   {userName}
                 </span>
@@ -251,16 +257,7 @@ export default function Sidebar({
               </span>
             )}
             {!collapsed && <Settings size={16} className="shrink-0 text-muted" />}
-          </Link>
-          {!collapsed && (
-            <button
-              onClick={() => signOut()}
-              className="mt-1 flex w-full items-center gap-3 rounded-lg p-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-            >
-              <LogOut size={16} className="shrink-0" />
-              <span>Sign out</span>
-            </button>
-          )}
+          </button>
         </div>
       </aside>
     </>

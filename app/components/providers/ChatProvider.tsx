@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useMode } from '@/app/components/providers/ThemeProvider';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 
 export type ChatSessionItem = {
   id: string;
@@ -47,14 +48,29 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const { mode } = useMode();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [input, setInput] = useState('');
-  const [sessionId, setSessionId] = useState<string>('current');
+  const [sessionId, setSessionIdState] = useState<string>('current');
   const [sessionsList, setSessionsList] = useState<ChatSessionItem[]>([]);
   const [hasFetchedSessions, setHasFetchedSessions] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const hasInitializedFromUrl = useRef(false);
+
+  const setSessionId = useCallback((id: string) => {
+    setSessionIdState(id);
+    if (pathname === '/') {
+      if (id === 'current') {
+        window.history.replaceState(null, '', '/');
+      } else {
+        window.history.replaceState(null, '', `/?c=${id}`);
+      }
+    }
+  }, [pathname]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setInput(e.target.value);
@@ -89,6 +105,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   }, [session?.user, hasFetchedSessions, fetchSessionsList]);
 
+
+
   const startNewSession = useCallback(() => {
     stop();
     setSessionId('current');
@@ -111,7 +129,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error('Failed to load session:', err);
     }
-  }, []);
+  }, [setSessionId]);
+
+  // Sync from URL on mount
+  useEffect(() => {
+    const urlSessionId = searchParams.get('c');
+    if (urlSessionId && !hasInitializedFromUrl.current && session?.user) {
+      hasInitializedFromUrl.current = true;
+      loadSession(urlSessionId);
+    }
+  }, [searchParams, session?.user, loadSession]);
 
   const deleteSession = useCallback(
     async (id: string) => {
@@ -254,7 +281,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         abortControllerRef.current = null;
       }
     },
-    [messages, isStreaming, input, mode, sessionId, fetchSessionsList]
+    [messages, isStreaming, input, mode, sessionId, fetchSessionsList, setSessionId]
   );
 
   return (

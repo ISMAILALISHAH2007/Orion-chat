@@ -43,15 +43,15 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
 
   if (sender === 'user') {
     return (
-      <div className="flex animate-fade-in-up justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-tr-md bg-surface-2 px-4 py-3">
-          <div className="whitespace-pre-wrap text-[0.975rem] leading-relaxed text-foreground">
+      <div className="flex animate-fade-in-up justify-end mb-6">
+        <div className="max-w-[80%] rounded-[24px] rounded-br-sm bg-surface-2 px-5 py-3.5 shadow-sm border border-border/50">
+          <div className="whitespace-pre-wrap text-[1rem] leading-relaxed text-foreground">
             {text}
           </div>
           {attachments && attachments.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {attachments.map((att, idx) => (
-                <div key={idx} className="relative h-20 w-20 overflow-hidden rounded-lg border border-border">
+                <div key={idx} className="relative h-32 w-32 overflow-hidden rounded-xl border border-border shadow-sm transition-transform hover:scale-105 cursor-pointer">
                   <Image src={att.url} alt={att.name} fill className="object-cover" unoptimized />
                 </div>
               ))}
@@ -63,14 +63,14 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
   }
 
   return (
-    <div className="flex animate-fade-in-up gap-3">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-accent">
-        <Sparkles size={16} />
+    <div className="flex animate-fade-in-up gap-4 mb-8">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent/20 to-transparent border border-accent/20 text-accent shadow-sm mt-1">
+        <Sparkles size={18} className="drop-shadow-sm" />
       </span>
       <div
         ref={contentRef}
-        className="msg-content min-w-0 flex-1 pt-1"
-        dangerouslySetInnerHTML={{ __html: parseMarkdown(text) + (isStreaming ? '<span class="ml-1 inline-block h-4 w-2 animate-pulse bg-accent align-middle shadow-[0_0_8px_var(--accent)] rounded-full"></span>' : '') }}
+        className="msg-content min-w-0 flex-1 pt-1.5 text-[1.05rem] leading-[1.75]"
+        dangerouslySetInnerHTML={{ __html: parseMarkdown(text) + (isStreaming ? '<span class="ml-1.5 inline-block h-4 w-2 animate-pulse bg-accent align-middle shadow-[0_0_8px_var(--accent)] rounded-full"></span>' : '') }}
       />
     </div>
   );
