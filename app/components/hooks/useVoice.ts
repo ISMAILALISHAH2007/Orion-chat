@@ -108,7 +108,8 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
           recognition.stop();
         }
         setIsRecording(false);
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const mimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         
         // Clean up stream
         stream.getTracks().forEach((track) => track.stop());
@@ -131,7 +132,8 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
           });
 
           if (!response.ok) {
-            throw new Error(`Failed to transcribe: ${response.statusText}`);
+            const errData = await response.json().catch(() => null);
+            throw new Error(errData?.details || errData?.error || response.statusText);
           }
 
           const data = await response.json();
@@ -139,9 +141,9 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
             setTranscript(data.text);
             optionsRef.current?.onSpeechEnd?.(data.text);
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error sending audio to STT:', error);
-          setTranscript('Error understanding audio.');
+          setTranscript(`Error: ${error?.message || 'understanding audio'}`);
         } finally {
           // Add a safety catch to ensure state isn't stuck
           if (mediaRecorderRef.current?.state !== 'recording') {

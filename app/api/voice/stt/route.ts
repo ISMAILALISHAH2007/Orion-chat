@@ -18,13 +18,18 @@ export async function POST(req: Request) {
     const arrayBuffer = await audioFile.arrayBuffer();
     const base64Audio = Buffer.from(arrayBuffer).toString('base64');
 
+    let mimeType = audioFile.type.split(';')[0];
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      mimeType = 'audio/webm';
+    }
+
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     
     const result = await model.generateContent([
       {
         inlineData: {
-          mimeType: audioFile.type,
+          mimeType: mimeType,
           data: base64Audio
         }
       },
