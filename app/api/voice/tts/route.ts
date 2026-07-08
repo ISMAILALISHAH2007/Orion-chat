@@ -13,7 +13,7 @@ const VOICE_MAP: Record<string, { male: string, female: string }> = {
   'de': { female: 'de-DE-KatjaNeural', male: 'de-DE-ConradNeural' },
   'it': { female: 'it-IT-ElsaNeural', male: 'it-IT-DiegoNeural' },
   'hi': { female: 'hi-IN-SwaraNeural', male: 'hi-IN-MadhurNeural' },
-  'ur': { female: 'ur-PK-UzmaNeural', male: 'ur-PK-AsadNeural' },
+  'ur': { female: 'ur-PK-UzmaNeural', male: 'ur-IN-SalmanNeural' },
   'ar': { female: 'ar-SA-ZariyahNeural', male: 'ar-SA-HamedNeural' },
   'zh-cn': { female: 'zh-CN-XiaoxiaoNeural', male: 'zh-CN-YunxiNeural' },
   'ja': { female: 'ja-JP-NanamiNeural', male: 'ja-JP-KeitaNeural' },
