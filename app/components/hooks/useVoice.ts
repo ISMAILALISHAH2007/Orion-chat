@@ -1,10 +1,15 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const optionsRef = useRef(options);
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -105,7 +110,7 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
           const data = await response.json();
           if (data.text) {
             setTranscript(data.text);
-            options?.onSpeechEnd?.(data.text);
+            optionsRef.current?.onSpeechEnd?.(data.text);
           }
         } catch (error) {
           console.error('Error sending audio to STT:', error);
@@ -118,7 +123,7 @@ export function useVoice(options?: { onSpeechEnd?: (text: string) => void }) {
     } catch (err) {
       console.error('Failed to start recording:', err);
     }
-  }, [options]);
+  }, []);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
