@@ -135,7 +135,8 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
         currentChunk = word + ' ';
       } else {
         currentChunk += word + ' ';
-        if (word.match(/[.!?:]$/)) {
+        // Support both English and Urdu/Arabic punctuation for natural chunking
+        if (word.match(/[.!?:]$/) || word.match(/[۔؟]$/)) {
           chunks.push(currentChunk.trim());
           currentChunk = '';
         }
