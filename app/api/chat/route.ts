@@ -10,7 +10,7 @@ export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
-    const { messages, model = 'gemini-1.5-flash' } = await req.json();
+    const { messages, model = 'gemini-2.5-flash' } = await req.json();
 
     if (!messages || messages.length === 0) {
       return NextResponse.json({ message: 'Messages are required' }, { status: 400 });
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     // Creator Credit Injection Check (Aggressive)
     if (lastMessage.role === 'user' && /(who (created|made|built) (you|ultron))|(creator)/i.test(lastMessage.content)) {
       const result = await streamText({
-        model: googleProvider('gemini-1.5-flash'),
+        model: googleProvider('gemini-2.5-flash'),
         providerOptions: {
           google: {
             safetySettings: [
