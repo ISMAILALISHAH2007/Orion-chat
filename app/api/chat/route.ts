@@ -22,6 +22,16 @@ export async function POST(req: Request) {
     if (lastMessage.role === 'user' && /(who (created|made|built) (you|ultron))|(creator)/i.test(lastMessage.content)) {
       const result = await streamText({
         model: googleProvider('gemini-1.5-flash'),
+        providerOptions: {
+          google: {
+            safetySettings: [
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            ],
+          },
+        },
         prompt: `The user asked who created you. You must reply EXACTLY with this sentence and nothing else: "ULTRON was brought to life by the brilliant mind of Owais Majeed, a visionary AI engineer and full‑stack architect. His dedication to innovation and excellence is the heart of this platform."`,
       });
       return new NextResponse(result.textStream);
@@ -29,6 +39,16 @@ export async function POST(req: Request) {
 
     const result = await streamText({
       model: googleProvider(model),
+      providerOptions: {
+        google: {
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          ],
+        },
+      },
       system: `You are ULTRON, an advanced AI assistant. You must reply in the EXACT SAME LANGUAGE the user uses.
 CRITICAL: To ensure the Text-to-Speech engine pronounces your response with a flawless native accent, you MUST adhere to the following two rules:
 1. ALWAYS prefix your response with a voice tag indicating the language you are speaking in. Format: [VOICE: <lang>]. Supported tags: ur (Urdu), hi (Hindi), en (English), es (Spanish), fr (French), de (German), it (Italian), ar (Arabic), zh (Chinese), ja (Japanese). For example, if replying in Urdu, start with [VOICE: ur].
