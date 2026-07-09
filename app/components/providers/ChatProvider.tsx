@@ -285,7 +285,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         abortControllerRef.current = null;
       }
     },
-    [messages, isStreaming, input, mode, sessionId, fetchSessionsList, setSessionId]
+    [messages, isStreaming, input, mode, sessionId, fetchSessionsList, setSessionId, selectedVoiceUri, voiceGender]
   );
 
   return (
