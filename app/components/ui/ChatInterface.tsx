@@ -17,6 +17,7 @@ import {
   Camera,
   X,
   Wand2,
+  Video,
 } from 'lucide-react';
 import { useChat, type ChatAttachment } from '@/app/components/providers/ChatProvider';
 import CameraModal from './CameraModal';
@@ -55,6 +56,7 @@ export default function ChatInterface() {
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [showCamera, setShowCamera] = useState(false);
   const [isImageMode, setIsImageMode] = useState(false);
+  const [isVideoMode, setIsVideoMode] = useState(false);
   const { messages, sendMessage, isStreaming, stop } = useChat();
   const { mode } = useMode();
   const { speak, liveVoiceMode, setLiveVoiceMode, isSpeaking, stopSpeaking, selectedVoiceUri, initAudioContext } = useTTS();
@@ -81,6 +83,7 @@ export default function ChatInterface() {
   
   let placeholder = MODE_PLACEHOLDERS[mode] ?? MODE_PLACEHOLDERS.casual;
   if (isImageMode) placeholder = "Describe the image you want to create...";
+  if (isVideoMode) placeholder = "Describe the AI video you want to generate...";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -229,12 +232,15 @@ export default function ChatInterface() {
     let finalInput = input;
     if (isImageMode && !finalInput.startsWith('/img')) {
       finalInput = `/img ${finalInput.trim()}`;
+    } else if (isVideoMode && !finalInput.startsWith('/video')) {
+      finalInput = `/video ${finalInput.trim()}`;
     }
 
     sendMessage(finalInput, attachments);
     setInput('');
     setAttachments([]);
     setIsImageMode(false);
+    setIsVideoMode(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -515,7 +521,27 @@ export default function ChatInterface() {
               </div>
             )}
 
-            <div className={['flex flex-col gap-2 rounded-[28px] border p-2 shadow-sm transition-all glass-pill', isImageMode ? 'border-[#a855f7] focus-within:border-[#a855f7]' : 'border-border focus-within:border-accent focus-within:shadow-md'].join(' ')}>
+            <div className={[
+              'flex flex-col gap-2 rounded-[28px] border p-2 shadow-sm transition-all glass-pill',
+              isImageMode 
+                ? 'border-[#a855f7] focus-within:border-[#a855f7]' 
+                : isVideoMode
+                ? 'border-[#3b82f6] focus-within:border-[#3b82f6]'
+                : 'border-border focus-within:border-accent focus-within:shadow-md'
+            ].join(' ')}>
+              {isVideoMode && (
+                <div className="flex items-center justify-between px-4 py-1.5 text-[11px] text-muted-foreground border-b border-border bg-surface-2/10 rounded-t-xl select-none">
+                  <span className="flex items-center gap-1">🎥 Unlimited T4 GPU Video Mode</span>
+                  <a
+                    href="https://colab.research.google.com/github/awaisofficial558-ship-it/ultron/blob/main/scripts/Colab_Video_Generator.ipynb"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#3b82f6] hover:underline font-semibold flex items-center gap-0.5"
+                  >
+                    Launch Colab GPU Server ↗
+                  </a>
+                </div>
+              )}
               {/* Attachments Preview */}
               {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-2 pt-2">
@@ -566,7 +592,10 @@ export default function ChatInterface() {
                   />
                   <button
                     type="button"
-                    onClick={() => setIsImageMode(!isImageMode)}
+                    onClick={() => {
+                      setIsImageMode(!isImageMode);
+                      setIsVideoMode(false);
+                    }}
                     aria-label="Toggle image generation mode"
                     className={[
                       'rounded-lg p-2 transition-colors',
@@ -576,6 +605,22 @@ export default function ChatInterface() {
                     ].join(' ')}
                   >
                     <Wand2 size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsVideoMode(!isVideoMode);
+                      setIsImageMode(false);
+                    }}
+                    aria-label="Toggle video generation mode"
+                    className={[
+                      'rounded-lg p-2 transition-colors',
+                      isVideoMode
+                        ? 'bg-[#3b82f6]/10 text-[#3b82f6]'
+                        : 'text-muted hover:bg-surface-2 hover:text-foreground',
+                    ].join(' ')}
+                  >
+                    <Video size={18} />
                   </button>
                   <button
                     type="button"
