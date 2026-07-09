@@ -7,7 +7,7 @@ export type AIProviderName = 'openrouter' | 'gemini' | 'nvidia';
 
 const DEFAULT_MODELS: Record<ChatMode, string> = {
   casual: 'meta/llama-3.1-70b-instruct',
-  developer: 'gemini-2.5-flash',
+  developer: 'gemini-3.1-flash-lite',
   research: 'meta/llama-3.1-8b-instruct',
   professional: 'google/lyria-3-pro-preview',
 };
@@ -77,7 +77,7 @@ function resolveProvider(mode: ChatMode): AIProviderName {
 }
 
 function getModelId(mode: ChatMode, provider: AIProviderName): string {
-  if (provider === 'gemini') return process.env.MODEL_DEVELOPER || 'gemini-flash-latest';
+  if (provider === 'gemini') return process.env.MODEL_DEVELOPER || 'gemini-3.1-flash-lite';
   
   if (provider === 'openrouter') {
     if (mode === 'professional') return process.env.MODEL_PROFESSIONAL || 'google/lyria-3-pro-preview';
@@ -103,19 +103,19 @@ export function getDefaultModelForMode(mode: string) {
   if (provider === 'nvidia' && nvidia) return nvidia.chat(modelId);
   if (provider === 'openrouter' && openrouter) return openrouter.chat(modelId);
 
-  if (google) return google('gemini-2.5-flash');
+  if (google) return google('gemini-3.1-flash-lite');
   throw new Error('No AI provider configured.');
 }
 
 export function getHiddenFallbackModel(_mode: string) {
-  if (google) return google('gemini-2.5-flash');
+  if (google) return google('gemini-3.1-flash-lite');
   if (nvidia) return nvidia.chat('meta/llama-3.1-8b-instruct');
   if (openrouter) return openrouter.chat('openrouter/auto');
   throw new Error('No fallback AI provider configured.');
 }
 
 export function getVisionModel() {
-  if (google) return google('gemini-2.5-flash');
+  if (google) return google('gemini-3.1-flash-lite');
   if (openrouter) return openrouter.chat('meta-llama/llama-3.2-90b-vision-instruct:free');
   throw new Error('No AI provider configured for vision.');
 }
