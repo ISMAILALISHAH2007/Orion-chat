@@ -318,87 +318,32 @@ CRITICAL: To ensure the Text-to-Speech engine pronounces your response with a fl
     // ----- 6. Stream the chat response -----
     const modelToUse = hasImages ? getVisionModel() : getDefaultModelForMode(mode);
 
-    let result;
-    try {
-      result = await streamText({
-        model: modelToUse,
-        system: systemPrompt,
-        messages,
-        async onFinish({ text }) {
-          await persistExchange(userId, activeSessionId, userContent, text);
+    const result = await streamText({
+      model: modelToUse,
+      system: systemPrompt,
+      messages,
+      async onFinish({ text }) {
+        await persistExchange(userId, activeSessionId, userContent, text);
 
-          if (isNewSession && userId && activeSessionId) {
-            try {
-              const { text: title } = await generateText({
-                model: getDefaultModelForMode('casual'),
-                system: 'You are a summarizer. Return a 3-5 word title summarizing the user prompt. DO NOT use quotes. DO NOT use punctuation.',
-                prompt: userContent,
+        if (isNewSession && userId && activeSessionId) {
+          try {
+            const { text: title } = await generateText({
+              model: getDefaultModelForMode('casual'),
+              system: 'You are a summarizer. Return a 3-5 word title summarizing the user prompt. DO NOT use quotes. DO NOT use punctuation.',
+              prompt: userContent,
+            });
+            if (title) {
+              await prisma.chatSession.update({
+                where: { id: activeSessionId },
+                data: { title: title.trim().substring(0, 50) }
               });
-              if (title) {
-                await prisma.chatSession.update({
-                  where: { id: activeSessionId },
-                  data: { title: title.trim().substring(0, 50) }
-                });
-              }
-            } catch (e) {
-              console.error('Failed to generate title', e);
             }
+          } catch (e) {
+            console.error('Failed to generate title', e);
           }
-        },
-      });
-    } catch (primaryError) {
-      console.warn('Primary AI provider failed, falling back to hidden NVIDIA API:', primaryError);
-      
-      try {
-        const fallbackModel = hasImages ? getVisionModel() : getHiddenFallbackModel(mode);
-        
-        result = await streamText({
-          model: fallbackModel,
-          system: systemPrompt,
-          messages,
-          async onFinish({ text }) {
-            await persistExchange(userId, activeSessionId, userContent, text);
-
-            if (isNewSession && userId && activeSessionId) {
-              try {
-                const { text: title } = await generateText({
-                  model: getHiddenFallbackModel('casual'),
-                  system: 'You are a summarizer. Return a 3-5 word title summarizing the user prompt. DO NOT use quotes. DO NOT use punctuation.',
-                  prompt: userContent,
-                });
-                if (title) {
-                  await prisma.chatSession.update({
-                    where: { id: activeSessionId },
-                    data: { title: title.trim().substring(0, 50) }
-                  });
-                }
-              } catch (e) {
-                console.error('Failed to generate fallback title', e);
-              }
-            }
-          },
-        });
-      } catch (fallbackError) {
-        console.error('NVIDIA fallback also failed:', fallbackError);
-        
-        const responseText = "⚠️ All AI endpoints are currently experiencing high traffic. Please wait a moment and try again.";
-        const encoder = new TextEncoder();
-        const customStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue(encoder.encode(responseText));
-            controller.close();
-          }
-        });
-        
-        return new Response(customStream, {
-          headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
-            'x-session-id': activeSessionId || 'current',
-            'x-provider': 'none',
-          }
-        });
-      }
-    }
+        }
+      },
+    });
 
     return result.toTextStreamResponse({
       headers: {
