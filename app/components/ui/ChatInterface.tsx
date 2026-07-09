@@ -58,7 +58,7 @@ export default function ChatInterface() {
   const { messages, sendMessage, isStreaming, stop } = useChat();
   const { mode } = useMode();
   const { speak, liveVoiceMode, setLiveVoiceMode, isSpeaking, stopSpeaking, selectedVoiceUri, initAudioContext } = useTTS();
-  const { isRecording, startRecording, stopRecording, transcript } = useVoice({
+  const { isRecording, startRecording, stopRecording, transcript, voiceError, setVoiceError } = useVoice({
     language: selectedVoiceUri,
     onSpeechEnd: (finalText) => {
       if (liveVoiceMode) {
@@ -637,6 +637,55 @@ export default function ChatInterface() {
           </p>
         </div>
       </div>
+      {voiceError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-fade-in">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl p-6 space-y-6 animate-scale-in">
+            <div className="flex items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-danger/10 text-danger">
+                <Mic size={24} />
+              </span>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-foreground">Microphone Access Required</h3>
+                <p className="text-sm text-muted">We need microphone permissions to use live voice mode.</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-surface-2 p-4 border border-border text-sm space-y-4">
+              {voiceError.includes('Settings') ? (
+                <div className="space-y-2 text-left">
+                  <p className="font-semibold text-danger">How to enable Speech Recognition (iPhone/Safari):</p>
+                  <ol className="list-decimal list-inside space-y-2 text-muted">
+                    <li>Open your iPhone <strong>Settings</strong> app.</li>
+                    <li>Go to <strong>Privacy & Security</strong> &gt; <strong>Speech Recognition</strong>.</li>
+                    <li>Toggle the switch for <strong>Safari</strong> (or your browser) to <strong>ON</strong>.</li>
+                    <li>Make sure <strong>Siri & Dictation</strong> is enabled under Settings &gt; Siri.</li>
+                    <li>Reload this page and tap the Mic again.</li>
+                  </ol>
+                </div>
+              ) : (
+                <div className="space-y-2 text-left">
+                  <p className="font-semibold text-danger">How to allow Microphone Access:</p>
+                  <ol className="list-decimal list-inside space-y-2 text-muted">
+                    <li>Tap the <strong>settings, lock, or "AA" icon</strong> in your browser's address bar.</li>
+                    <li>Locate <strong>Microphone</strong> or <strong>Website Settings</strong>.</li>
+                    <li>Change permission setting from Blocked to <strong>Allow</strong>.</li>
+                    <li>Reload the page and tap the Mic again.</li>
+                  </ol>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setVoiceError(null)}
+                className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-accent-foreground shadow hover:bg-accent-hover active:scale-95 transition-all"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

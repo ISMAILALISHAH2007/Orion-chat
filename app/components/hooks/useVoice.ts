@@ -6,6 +6,7 @@ export function useVoice(options?: {
 }) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   
   const recognitionRef = useRef<any>(null);
   const optionsRef = useRef(options);
@@ -50,6 +51,7 @@ export function useVoice(options?: {
 
       finalTranscriptRef.current = '';
       setTranscript('');
+      setVoiceError(null);
       setIsRecording(true);
 
       recognition.onresult = (event: any) => {
@@ -79,16 +81,17 @@ export function useVoice(options?: {
 
         let userMessage = `Error: ${event.error}`;
         if (event.error === 'service-not-allowed') {
-          userMessage = 'Error: Speech recognition service not allowed on Safari/iOS. Please go to your iPhone Settings > Privacy & Security > Speech Recognition, toggle Safari ON, and ensure Siri and Dictation are enabled in settings.';
+          userMessage = 'Speech recognition service not allowed on Safari/iOS. Please go to your iPhone Settings > Privacy & Security > Speech Recognition, toggle Safari ON, and ensure Siri and Dictation are enabled in settings.';
         } else if (event.error === 'not-allowed') {
-          userMessage = 'Error: Microphone access denied. Please tap the settings icon in your browser address bar and change Microphone permission to "Allow".';
+          userMessage = 'Microphone access denied. Please tap the settings icon in your browser address bar and change Microphone permission to "Allow".';
         } else if (event.error === 'network') {
-          userMessage = 'Error: Speech recognition failed due to a network issue. Please check your internet connection.';
+          userMessage = 'Speech recognition failed due to a network issue. Please check your internet connection.';
         } else if (event.error === 'language-not-supported') {
-          userMessage = 'Error: The selected language is not supported by your device for native voice recognition.';
+          userMessage = 'The selected language is not supported by your device for native voice recognition.';
         }
         
         setTranscript(userMessage);
+        setVoiceError(userMessage);
       };
 
       recognition.onend = () => {
@@ -128,5 +131,5 @@ export function useVoice(options?: {
     }
   }, [isRecording, startRecording, stopRecording]);
 
-  return { isRecording, toggleRecording, startRecording, stopRecording, transcript };
+  return { isRecording, toggleRecording, startRecording, stopRecording, transcript, voiceError, setVoiceError };
 }
