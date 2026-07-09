@@ -157,7 +157,9 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       .replace(/```[\s\S]*?```/g, ' Code block omitted. ')
       .replace(/!\[.*?\]\(.*?\)/g, '')
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Strip markdown link URLs, keeping link text
+      .replace(/[^\p{L}\p{N}\p{Z}\p{P}]/gu, '') // Keep letters, numbers, spaces, punctuation (removes emojis/symbols)
       .replace(/[*_#`]/g, '')
+      .replace(/\s+/g, ' ')
       .trim();
 
     if (!cleanText) {
@@ -170,13 +172,13 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
     const words = cleanText.split(/\s+/);
     
     for (const word of words) {
-      if (currentChunk.length + word.length > 150) {
+      if (currentChunk.length + word.length > 400) {
         chunks.push(currentChunk.trim());
         currentChunk = word + ' ';
       } else {
         currentChunk += word + ' ';
-        // Support both English and Urdu/Arabic punctuation for natural chunking
-        if (word.match(/[.!?:]$/) || word.match(/[۔؟]$/)) {
+        // Support both English and Urdu/Arabic terminal punctuation for natural chunking
+        if (word.match(/[.!?]$/) || word.match(/[۔؟]$/)) {
           chunks.push(currentChunk.trim());
           currentChunk = '';
         }

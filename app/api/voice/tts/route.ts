@@ -43,8 +43,8 @@ export async function POST(req: Request) {
   try {
     // Inject slight pauses for punctuation to mimic human breathing
     const naturalText = text
-      .replace(/([.!?])\s/g, '$1, ')
-      .replace(/([۔؟])\s/g, '$1، ');
+      .replace(/([.!?])\s*/g, '$1, ')
+      .replace(/([۔؟])\s*/g, '$1، ');
     
     const tts = new EdgeTTS({ voice });
     const tmpPath = path.join(os.tmpdir(), `edge-tts-${Date.now()}-${Math.random().toString(36).substring(7)}.mp3`);
