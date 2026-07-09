@@ -50,6 +50,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const isPlayingQueueRef = useRef(false);
+  const currentPlaySessionIdRef = useRef(0);
 
   // Automatically unlock AudioContext on the first user interaction (safeguard for Safari & mobile browsers)
   useEffect(() => {
@@ -104,6 +105,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   };
 
   const stopSpeaking = useCallback(() => {
+    currentPlaySessionIdRef.current++; // Invalidate any running speak queue loops
     if (sourceNodeRef.current) {
       try {
         sourceNodeRef.current.stop();
@@ -119,6 +121,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
 
   const speak = useCallback(async (text: string, voiceUriOverride?: string, onEnd?: () => void) => {
     stopSpeaking();
+    const mySessionId = ++currentPlaySessionIdRef.current;
     
     let newLang = selectedVoiceUri;
     let newGender = voiceGender;
@@ -220,7 +223,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
         );
 
         for (let i = 0; i < chunks.length; i++) {
-          if (!isPlayingQueueRef.current) break; // aborted
+          if (mySessionId !== currentPlaySessionIdRef.current) break; // aborted
 
           try {
             const arrayBuffer = await fetchPromises[i];
@@ -229,7 +232,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
               continue; // Skip broken chunks and keep playing
             }
             
-            if (!isPlayingQueueRef.current) break;
+            if (mySessionId !== currentPlaySessionIdRef.current) break;
             
             // Safari compatibility for older/mobile WebKit engines where decodeAudioData does not return a Promise
             const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
@@ -247,7 +250,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
               }
             });
             
-            if (!isPlayingQueueRef.current) break;
+            if (mySessionId !== currentPlaySessionIdRef.current) break;
             
             await new Promise<void>((resolve) => {
               const source = ctx.createBufferSource();
@@ -272,7 +275,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       } catch (err) {
         console.error('Web Audio API playback failed', err);
       } finally {
-        if (isPlayingQueueRef.current) {
+        if (mySessionId === currentPlaySessionIdRef.current) {
           setIsSpeaking(false);
           isPlayingQueueRef.current = false;
           onEnd?.();
@@ -282,7 +285,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
 
     playQueue();
 
-  }, [selectedVoiceUri, stopSpeaking]);
+  }, [selectedVoiceUri, voiceGender, stopSpeaking]);
 
   const toggleLiveVoice = useCallback(() => {
     setLiveVoiceMode(prev => {
