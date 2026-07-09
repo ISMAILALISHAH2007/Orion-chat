@@ -73,19 +73,33 @@ async function generateImageInline(userId: string | undefined, prompt: string) {
 
 async function generateVideoInline(userId: string | undefined, prompt: string) {
   try {
-    const res = await fetch("https://api-inference.huggingface.co/models/cerspense/zeroscope_v2_576w", {
-      headers: {
-        "Authorization": `Bearer ${process.env.HUGGINGFACE_API_KEY || ''}`,
-        "Content-Type": "application/json"
-      },
-      method: "POST",
-      body: JSON.stringify({ inputs: prompt })
-    });
+    const colabUrl = process.env.COLAB_VIDEO_URL;
+    let res;
+
+    if (colabUrl) {
+      console.log(`Using Google Colab Video Generator endpoint: ${colabUrl}`);
+      const endpoint = colabUrl.endsWith('/') ? `${colabUrl}generate` : `${colabUrl}/generate`;
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt })
+      });
+    } else {
+      console.log("Using Hugging Face fallback model for video generation.");
+      res = await fetch("https://api-inference.huggingface.co/models/cerspense/zeroscope_v2_576w", {
+        headers: {
+          "Authorization": `Bearer ${process.env.HUGGINGFACE_API_KEY || ''}`,
+          "Content-Type": "application/json"
+        },
+        method: "POST",
+        body: JSON.stringify({ inputs: prompt })
+      });
+    }
     
     if (!res.ok) {
       const err = await res.text();
-      console.error("HF Video API Error:", err);
-      return `⚠️ **Video Generation Failed**: Hugging Face API returned an error or is blocked. Try again later or check your API key.`;
+      console.error("Video Generation Error:", err);
+      return `⚠️ **Video Generation Failed**: ${colabUrl ? 'Google Colab server returned an error.' : 'Hugging Face API returned an error or is blocked.'} Try again later.`;
     }
     
     const arrayBuffer = await res.arrayBuffer();
