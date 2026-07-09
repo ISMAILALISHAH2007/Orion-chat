@@ -73,9 +73,22 @@ export function useVoice(options?: {
 
       recognition.onerror = (event: any) => {
         console.error('Speech Recognition Error:', event.error);
-        if (event.error !== 'no-speech') {
-          setTranscript(`Error: ${event.error}`);
+        if (event.error === 'no-speech') {
+          return;
         }
+
+        let userMessage = `Error: ${event.error}`;
+        if (event.error === 'service-not-allowed') {
+          userMessage = 'Error: Speech recognition service not allowed on Safari/iOS. Please go to your iPhone Settings > Privacy & Security > Speech Recognition, toggle Safari ON, and ensure Siri and Dictation are enabled in settings.';
+        } else if (event.error === 'not-allowed') {
+          userMessage = 'Error: Microphone access denied. Please tap the settings icon in your browser address bar and change Microphone permission to "Allow".';
+        } else if (event.error === 'network') {
+          userMessage = 'Error: Speech recognition failed due to a network issue. Please check your internet connection.';
+        } else if (event.error === 'language-not-supported') {
+          userMessage = 'Error: The selected language is not supported by your device for native voice recognition.';
+        }
+        
+        setTranscript(userMessage);
       };
 
       recognition.onend = () => {

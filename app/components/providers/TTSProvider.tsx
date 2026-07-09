@@ -81,8 +81,23 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
         audioCtxRef.current = new AudioContextClass();
       }
     }
-    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
-      audioCtxRef.current.resume();
+    
+    const ctx = audioCtxRef.current;
+    if (ctx) {
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      
+      // Play a short silent buffer to permanently unlock the audio context for Safari / iOS
+      try {
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+      } catch (e) {
+        console.warn('Failed to play silent unlock buffer:', e);
+      }
     }
   };
 
