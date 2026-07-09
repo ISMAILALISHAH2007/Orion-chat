@@ -13,7 +13,7 @@ const VOICE_MAP: Record<string, { male: string, female: string }> = {
   'de': { female: 'de-DE-KatjaNeural', male: 'de-DE-ConradNeural' },
   'it': { female: 'it-IT-ElsaNeural', male: 'it-IT-DiegoNeural' },
   'hi': { female: 'hi-IN-SwaraNeural', male: 'hi-IN-MadhurNeural' },
-  'ur': { female: 'ur-PK-UzmaNeural', male: 'ur-IN-SalmanNeural' },
+  'ur': { female: 'ur-PK-UzmaNeural', male: 'ur-PK-AsadNeural' },
   'ar': { female: 'ar-SA-ZariyahNeural', male: 'ar-SA-HamedNeural' },
   'zh-cn': { female: 'zh-CN-XiaoxiaoNeural', male: 'zh-CN-YunxiNeural' },
   'ja': { female: 'ja-JP-NanamiNeural', male: 'ja-JP-KeitaNeural' },
@@ -42,12 +42,14 @@ export async function POST(req: Request) {
 
   try {
     // Inject slight pauses for punctuation to mimic human breathing
-    const naturalText = text.replace(/([.!?])\s/g, '$1, ');
+    const naturalText = text
+      .replace(/([.!?])\s/g, '$1, ')
+      .replace(/([۔؟])\s/g, '$1، ');
     
     const tts = new EdgeTTS({ voice });
     const tmpPath = path.join(os.tmpdir(), `edge-tts-${Date.now()}-${Math.random().toString(36).substring(7)}.mp3`);
     
-    await tts.ttsPromise(text, tmpPath);
+    await tts.ttsPromise(naturalText, tmpPath);
     
     const audioBuffer = fs.readFileSync(tmpPath);
     fs.unlinkSync(tmpPath); // Clean up immediately

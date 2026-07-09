@@ -1,5 +1,5 @@
 'use client';
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 
 export interface TTSVoice {
   uri: string;
@@ -48,6 +48,30 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const isPlayingQueueRef = useRef(false);
+
+  // Automatically unlock AudioContext on the first user interaction (safeguard for Safari & mobile browsers)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const unlock = () => {
+      initAudioContext();
+      if (audioCtxRef.current && audioCtxRef.current.state === 'running') {
+        window.removeEventListener('click', unlock);
+        window.removeEventListener('touchstart', unlock);
+        window.removeEventListener('keydown', unlock);
+      }
+    };
+
+    window.addEventListener('click', unlock);
+    window.addEventListener('touchstart', unlock);
+    window.addEventListener('keydown', unlock);
+
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
 
   // Initialize AudioContext exactly once on user interaction
   const initAudioContext = () => {
@@ -117,6 +141,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       .replace(/\[VOICE:[^\]]+\]/gi, '')
       .replace(/```[\s\S]*?```/g, ' Code block omitted. ')
       .replace(/!\[.*?\]\(.*?\)/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Strip markdown link URLs, keeping link text
       .replace(/[*_#`]/g, '')
       .trim();
 
@@ -178,30 +203,52 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
         for (let i = 0; i < chunks.length; i++) {
           if (!isPlayingQueueRef.current) break; // aborted
 
-          const arrayBuffer = await fetchPromises[i];
-          if (!arrayBuffer) continue; // Skip broken chunks
-          
-          if (!isPlayingQueueRef.current) break;
-          
-          const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-          
-          if (!isPlayingQueueRef.current) break;
-          
-          await new Promise<void>((resolve) => {
-            const source = ctx.createBufferSource();
-            source.buffer = audioBuffer;
+          try {
+            const arrayBuffer = await fetchPromises[i];
+            if (!arrayBuffer) {
+              console.warn(`Fetch failed for chunk ${i}: "${chunks[i]}"`);
+              continue; // Skip broken chunks and keep playing
+            }
             
-            // Add a GainNode to double the volume
-            const gainNode = ctx.createGain();
-            gainNode.gain.value = 2.0;
+            if (!isPlayingQueueRef.current) break;
             
-            source.connect(gainNode);
-            gainNode.connect(ctx.destination);
+            // Safari compatibility for older/mobile WebKit engines where decodeAudioData does not return a Promise
+            const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
+              try {
+                const promise = ctx.decodeAudioData(
+                  arrayBuffer,
+                  (buffer) => resolve(buffer),
+                  (err) => reject(err || new Error('decodeAudioData failed'))
+                );
+                if (promise && typeof promise.catch === 'function') {
+                  promise.catch(reject);
+                }
+              } catch (err) {
+                reject(err);
+              }
+            });
             
-            source.onended = () => resolve();
-            sourceNodeRef.current = source;
-            source.start(0);
-          });
+            if (!isPlayingQueueRef.current) break;
+            
+            await new Promise<void>((resolve) => {
+              const source = ctx.createBufferSource();
+              source.buffer = audioBuffer;
+              
+              // Add a GainNode to double the volume
+              const gainNode = ctx.createGain();
+              gainNode.gain.value = 2.0;
+              
+              source.connect(gainNode);
+              gainNode.connect(ctx.destination);
+              
+              source.onended = () => resolve();
+              sourceNodeRef.current = source;
+              source.start(0);
+            });
+          } catch (chunkError) {
+            console.error(`Error playing chunk ${i}:`, chunkError);
+            // Allow remaining chunks to play even if one fails
+          }
         }
       } catch (err) {
         console.error('Web Audio API playback failed', err);
