@@ -26,6 +26,8 @@ interface TTSContextType {
   voices: TTSVoice[];
   selectedVoiceUri: string;
   setSelectedVoiceUri: (uri: string) => void;
+  voiceGender: 'female' | 'male';
+  setVoiceGender: (gender: 'female' | 'male') => void;
   speak: (text: string, voiceUriOverride?: string, onEnd?: () => void) => void;
   stopSpeaking: () => void;
   isSpeaking: boolean;
@@ -300,6 +302,8 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       voices,
       selectedVoiceUri,
       setSelectedVoiceUri,
+      voiceGender,
+      setVoiceGender,
       speak,
       stopSpeaking,
       isSpeaking,

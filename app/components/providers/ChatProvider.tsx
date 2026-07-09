@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { useSession } from 'next-auth/react';
 import { useMode } from '@/app/components/providers/ThemeProvider';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { useTTS } from '@/app/components/providers/TTSProvider';
 
 export type ChatSessionItem = {
   id: string;
@@ -48,6 +49,7 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const { mode } = useMode();
+  const { selectedVoiceUri, voiceGender } = useTTS();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -211,6 +213,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             sessionId,
             mode,
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            voiceLang: selectedVoiceUri,
+            voiceGender: voiceGender,
           }),
           signal: abortControllerRef.current.signal,
         });
