@@ -71,6 +71,7 @@ async function generateImageInline(userId: string | undefined, prompt: string) {
   ].join('\n');
 }
 
+// Google Colab GPU-powered video generation router
 async function generateVideoInline(userId: string | undefined, prompt: string) {
   try {
     const colabUrl = process.env.COLAB_VIDEO_URL;
