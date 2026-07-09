@@ -93,7 +93,12 @@ export function useVoice(options?: {
       mediaRecorder.start(250); // slice chunks every 250ms
     } catch (err: any) {
       console.error('Failed to start MediaRecorder fallback:', err);
-      setVoiceError('Could not start microphone: ' + (err.message || String(err)));
+      const errMsg = err?.name || err?.message || String(err);
+      if (errMsg.includes('NotAllowed') || errMsg.includes('Permission') || errMsg.includes('denied')) {
+        setVoiceError('Microphone access denied. Please tap the settings icon in your browser address bar and change Microphone permission to "Allow".');
+      } else {
+        console.warn('Microphone error logged:', errMsg);
+      }
       setIsRecording(false);
       isFallbackActiveRef.current = false;
     }
@@ -163,21 +168,10 @@ export function useVoice(options?: {
           return;
         }
 
-        // Silent transition to Gemini STT fallback on permission errors or service failures
-        if (
-          event.error === 'service-not-allowed' || 
-          event.error === 'not-allowed' || 
-          event.error === 'language-not-supported'
-        ) {
-          console.log(`Native SpeechRecognition failed with "${event.error}". Falling back to MediaRecorder.`);
-          try { recognition.stop(); } catch(e) {}
-          startFallbackRecording();
-          return;
-        }
-
-        let userMessage = `Error: ${event.error}`;
-        setTranscript(userMessage);
-        setVoiceError(userMessage);
+        // Silently fall back to MediaRecorder on ANY native speech recognition error
+        console.log(`Native SpeechRecognition error "${event.error}". Falling back to MediaRecorder.`);
+        try { recognition.stop(); } catch(e) {}
+        startFallbackRecording();
       };
 
       recognition.onend = () => {

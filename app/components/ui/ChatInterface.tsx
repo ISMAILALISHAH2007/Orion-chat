@@ -651,28 +651,15 @@ export default function ChatInterface() {
             </div>
 
             <div className="rounded-xl bg-surface-2 p-4 border border-border text-sm space-y-4">
-              {voiceError.includes('Settings') ? (
-                <div className="space-y-2 text-left">
-                  <p className="font-semibold text-danger">How to enable Speech Recognition (iPhone/Safari):</p>
-                  <ol className="list-decimal list-inside space-y-2 text-muted">
-                    <li>Open your iPhone <strong>Settings</strong> app.</li>
-                    <li>Go to <strong>Privacy & Security</strong> &gt; <strong>Speech Recognition</strong>.</li>
-                    <li>Toggle the switch for <strong>Safari</strong> (or your browser) to <strong>ON</strong>.</li>
-                    <li>Make sure <strong>Siri & Dictation</strong> is enabled under Settings &gt; Siri.</li>
-                    <li>Reload this page and tap the Mic again.</li>
-                  </ol>
-                </div>
-              ) : (
-                <div className="space-y-2 text-left">
-                  <p className="font-semibold text-danger">How to allow Microphone Access:</p>
-                  <ol className="list-decimal list-inside space-y-2 text-muted">
-                    <li>Tap the <strong>settings, lock, or "AA" icon</strong> in your browser's address bar.</li>
-                    <li>Locate <strong>Microphone</strong> or <strong>Website Settings</strong>.</li>
-                    <li>Change permission setting from Blocked to <strong>Allow</strong>.</li>
-                    <li>Reload the page and tap the Mic again.</li>
-                  </ol>
-                </div>
-              )}
+              <div className="space-y-2 text-left">
+                <p className="font-semibold text-danger">How to allow Microphone Access:</p>
+                <ol className="list-decimal list-inside space-y-2 text-muted">
+                  <li>Tap the <strong>settings, lock, or "AA" icon</strong> in your browser's address bar.</li>
+                  <li>Locate <strong>Microphone</strong> or <strong>Website Settings</strong>.</li>
+                  <li>Change permission setting to <strong>Allow</strong>.</li>
+                  <li>Reload the page and tap the Mic again.</li>
+                </ol>
+              </div>
             </div>
 
             <div className="flex justify-end">
