@@ -12,105 +12,16 @@ export function useVoice(options?: {
   const optionsRef = useRef(options);
   const finalTranscriptRef = useRef('');
 
-  // Fallback MediaRecorder refs
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
-  const isFallbackActiveRef = useRef(false);
-
   useEffect(() => {
     optionsRef.current = options;
   }, [options]);
-
-  const startFallbackRecording = useCallback(async () => {
-    try {
-      isFallbackActiveRef.current = true;
-      setVoiceError(null);
-      setTranscript('Listening (STT Fallback)...');
-      setIsRecording(true);
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      let mimeType = 'audio/webm';
-      if (typeof MediaRecorder !== 'undefined') {
-        if (MediaRecorder.isTypeSupported('audio/webm')) {
-          mimeType = 'audio/webm';
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4';
-        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
-          mimeType = 'audio/ogg';
-        } else if (MediaRecorder.isTypeSupported('audio/wav')) {
-          mimeType = 'audio/wav';
-        }
-      }
-
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        try {
-          setTranscript('Processing translation...');
-          const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-          const fileExtension = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : mimeType.includes('wav') ? 'wav' : 'webm';
-          const audioFile = new File([audioBlob], `audio.${fileExtension}`, { type: mimeType });
-
-          const formData = new FormData();
-          formData.append('audio', audioFile);
-
-          const response = await fetch('/api/voice/stt', {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (!response.ok) {
-            throw new Error('STT request failed');
-          }
-
-          const data = await response.json();
-          if (data.text) {
-            optionsRef.current?.onSpeechEnd?.(data.text);
-          } else {
-            console.warn('STT returned empty text');
-          }
-        } catch (e: any) {
-          console.error('STT fallback failed:', e);
-          setVoiceError('Failed to transcribe audio: ' + (e.message || String(e)));
-        } finally {
-          setIsRecording(false);
-          setTranscript('');
-          isFallbackActiveRef.current = false;
-        }
-      };
-
-      mediaRecorder.start(250); // slice chunks every 250ms
-    } catch (err: any) {
-      console.error('Failed to start MediaRecorder fallback:', err);
-      const errMsg = err?.name || err?.message || String(err);
-      if (errMsg.includes('NotAllowed') || errMsg.includes('Permission') || errMsg.includes('denied')) {
-        setVoiceError('Microphone access denied. Please tap the settings icon in your browser address bar and change Microphone permission to "Allow".');
-      } else {
-        console.warn('Microphone error logged:', errMsg);
-      }
-      setIsRecording(false);
-      isFallbackActiveRef.current = false;
-    }
-  }, []);
 
   const startRecording = useCallback(() => {
     try {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       
       if (!SpeechRecognition) {
-        console.log('Native SpeechRecognition not supported. Using Gemini STT fallback.');
-        startFallbackRecording();
+        setTranscript('Error: Your browser does not support native speech recognition. Please use Google Chrome or Safari.');
         return;
       }
 
@@ -168,16 +79,22 @@ export function useVoice(options?: {
           return;
         }
 
-        // Silently fall back to MediaRecorder on ANY native speech recognition error
-        console.log(`Native SpeechRecognition error "${event.error}". Falling back to MediaRecorder.`);
-        try { recognition.stop(); } catch(e) {}
-        startFallbackRecording();
+        let userMessage = `Error: ${event.error}`;
+        if (event.error === 'service-not-allowed') {
+          userMessage = 'Speech recognition service not allowed on Safari/iOS. Please go to your iPhone Settings > Privacy & Security > Speech Recognition, toggle Safari ON, and ensure Siri and Dictation are enabled in settings.';
+        } else if (event.error === 'not-allowed') {
+          userMessage = 'Microphone access denied. Please tap the settings icon in your browser address bar and change Microphone permission to "Allow".';
+        } else if (event.error === 'network') {
+          userMessage = 'Speech recognition failed due to a network issue. Please check your internet connection.';
+        } else if (event.error === 'language-not-supported') {
+          userMessage = 'The selected language is not supported by your device for native voice recognition.';
+        }
+        
+        setTranscript(userMessage);
+        setVoiceError(userMessage);
       };
 
       recognition.onend = () => {
-        if (isFallbackActiveRef.current) {
-          return;
-        }
         setIsRecording(false);
         const finalText = finalTranscriptRef.current.trim();
         if (finalText) {
@@ -194,24 +111,15 @@ export function useVoice(options?: {
 
     } catch (err) {
       console.error('Failed to start native recording:', err);
-      startFallbackRecording();
-    }
-  }, [startFallbackRecording]);
-
-  const stopRecording = useCallback(() => {
-    if (isFallbackActiveRef.current) {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        try { mediaRecorderRef.current.stop(); } catch(e) {}
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-    } else {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch(e) {}
-      }
       setIsRecording(false);
     }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch(e) {}
+    }
+    setIsRecording(false);
   }, []);
 
   const toggleRecording = useCallback(() => {
