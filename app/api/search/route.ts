@@ -144,11 +144,13 @@ async function searchYahoo(query: string): Promise<SearchResult[]> {
     const $ = cheerio.load(html);
     const results: SearchResult[] = [];
 
-    $('.compTitle').each((i, el) => {
-      const title = $(el).find('h3.title a').text().trim();
-      const url = $(el).find('h3.title a').attr('href')?.trim();
-      let snippet = $(el).next().find('.compText').text().trim();
-      if (!snippet) snippet = $(el).parent().find('.compText').text().trim();
+    $('div.algo').each((i, el) => {
+      const title = $(el).find('h3 a').text().trim() || $(el).find('a').first().text().trim();
+      const url = $(el).find('h3 a').attr('href')?.trim() || $(el).find('a').first().attr('href')?.trim();
+      
+      let snippet = $(el).find('.compText').text().trim();
+      if (!snippet) snippet = $(el).find('p').text().trim();
+      if (!snippet) snippet = $(el).text().replace(title, '').trim().substring(0, 300);
       
       if (title && url && results.length < 8) {
         results.push({ title, url, snippet });
