@@ -114,29 +114,34 @@ async function searchDuckDuckGoInstant(query: string): Promise<SearchResult[]> {
 
 // === SOURCE 3: DuckDuckGo Lite API (lightweight fallback) ===
 async function searchDuckDuckGoLite(query: string): Promise<SearchResult[]> {
-  const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+  const url = `https://lite.duckduckgo.com/lite/`;
   try {
-    const res = await fetchWithTimeout(url, 6000);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+      },
+      body: new URLSearchParams({ q: query }),
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeout));
+    
     if (!res.ok) return [];
     const html = await res.text();
     const results: SearchResult[] = [];
 
-    // Parse DDG Lite results — simpler HTML structure
-    const rows = html.split('<tr class="result">');
-    for (let i = 1; i < rows.length && i <= 8; i++) {
-      const row = rows[i];
-      if (!row) continue;
+    // Parse DDG Lite results using order-independent regex
+    const linkMatches = [...html.matchAll(/<a[^>]*href=['"]([^'"]+)['"][^>]*class=['"]result-link['"][^>]*>([\s\S]*?)<\/a>|<a[^>]*class=['"]result-link['"][^>]*href=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/a>/gi)];
+    const snippetMatches = [...html.matchAll(/<td class=['"]result-snippet['"]>([\s\S]*?)<\/td>/gi)];
 
-      const linkMatch = row.match(/<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
-      const snippetMatch = row.match(/<td class="result-snippet">([\s\S]*?)<\/td>/);
-
-      if (linkMatch) {
-        const url = linkMatch[1];
-        const title = linkMatch[2].replace(/<[^>]*>/g, '').trim();
-        const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]*>/g, '').trim() : '';
-        if (title && url) {
-          results.push({ title, url, snippet });
-        }
+    for (let i = 0; i < Math.min(linkMatches.length, 8); i++) {
+      const url = linkMatches[i][1] || linkMatches[i][3];
+      const title = (linkMatches[i][2] || linkMatches[i][4]).replace(/<[^>]*>/g, '').trim();
+      const snippet = snippetMatches[i] ? snippetMatches[i][1].replace(/<[^>]*>/g, '').trim() : '';
+      if (title && url) {
+        results.push({ title, url, snippet });
       }
     }
     return results;
