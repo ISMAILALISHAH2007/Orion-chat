@@ -144,7 +144,6 @@ export default function VoiceConversationModal({
   }, [recognitionLanguage, sendMessage]);
 
   const stopListening = useCallback(() => {
-    shouldListenRef.current = false;
     if (restartTimeoutRef.current) {
       clearTimeout(restartTimeoutRef.current);
       restartTimeoutRef.current = null;
@@ -206,18 +205,20 @@ export default function VoiceConversationModal({
   // ====== INTERRUPT ======
   const handleInterrupt = useCallback(() => {
     stopSpeaking();
+    stopListening();
+    shouldListenRef.current = true; // Ensure loop stays active
     setConvState('listening');
     convStateRef.current = 'listening';
     setTimeout(() => {
       if (shouldListenRef.current) {
         startListening();
       }
-    }, 200);
-  }, [stopSpeaking, startListening]);
+    }, 100); // Quick reset time
+  }, [stopSpeaking, stopListening, startListening]);
 
   // ====== END SESSION ======
   const handleEndSession = useCallback(() => {
-    shouldListenRef.current = false;
+    shouldListenRef.current = false; // End session permanently
     stopListening();
     stopSpeaking();
     setConvState('listening');
@@ -316,7 +317,11 @@ export default function VoiceConversationModal({
           {convState === 'listening' && (
             <div className="flex flex-col items-center gap-4">
               {/* Large animated listening orb */}
-              <div className="voice-conv-orb listening">
+              <div 
+                className="voice-conv-orb listening cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+                onClick={handleInterrupt}
+                title="Tap to reset/restart listening"
+              >
                 <div className="voice-conv-orb-inner">
                   <Mic size={32} className="text-white" />
                 </div>
@@ -336,7 +341,11 @@ export default function VoiceConversationModal({
           {convState === 'processing' && (
             <div className="flex flex-col items-center gap-4">
               {/* Spinning gradient orb */}
-              <div className="voice-conv-orb processing">
+              <div 
+                className="voice-conv-orb processing cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+                onClick={handleInterrupt}
+                title="Tap to cancel and speak"
+              >
                 <div className="voice-conv-orb-inner">
                   <Loader2 size={28} className="text-white animate-spin" />
                 </div>
@@ -348,7 +357,11 @@ export default function VoiceConversationModal({
           {convState === 'speaking' && (
             <div className="flex flex-col items-center gap-4">
               {/* Speaking orb with sound bars */}
-              <div className="voice-conv-orb speaking">
+              <div 
+                className="voice-conv-orb speaking cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+                onClick={handleInterrupt}
+                title="Tap to interrupt"
+              >
                 <div className="voice-conv-orb-inner">
                   <Volume2 size={28} className="text-white" />
                 </div>

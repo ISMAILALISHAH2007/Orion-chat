@@ -49,7 +49,7 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
   const { mode } = useMode();
-  const { selectedVoiceUri, voiceGender } = useTTS();
+  const { selectedVoiceUri, voiceGender, voiceConversationOpen } = useTTS();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -215,6 +215,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             voiceLang: selectedVoiceUri,
             voiceGender: voiceGender,
+            isVoiceMode: voiceConversationOpen,
           }),
           signal: abortControllerRef.current.signal,
         });

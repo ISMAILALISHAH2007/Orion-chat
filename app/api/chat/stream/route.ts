@@ -253,7 +253,7 @@ export async function POST(req: Request) {
       return new NextResponse('Rate limit exceeded', { status: 429 });
     }
 
-    const { messages, mode, sessionId, timeZone, voiceLang, voiceGender } = await req.json();
+    const { messages, mode, sessionId, timeZone, voiceLang, voiceGender, isVoiceMode } = await req.json();
 
     if (!messages || messages.length === 0) {
       return new NextResponse('Messages are required', { status: 400 });
@@ -401,10 +401,21 @@ export async function POST(req: Request) {
     
     let systemPrompt = `You are ULTRON, a highly advanced cognitive AI assistant. Current mode: ${String(mode).toUpperCase()}. Response style should be precise, intelligent, and highly capable.
 
-IMPORTANT LANGUAGE RULES:
-- Speak in the SAME language the user uses. If they ask in English, answer in English. If they ask in Urdu, answer in Urdu.
-- Only add a [VOICE: language_code] tag at the start of your response if the user specifically asked to change the voice language. Otherwise, NO voice tag needed.
-- Do NOT auto-detect Roman Urdu in normal English text. Only treat text as Urdu/Hindi if it contains Urdu/Hindi script characters (Unicode blocks 0600-06FF or 0900-097F).
+IMPORTANT LANGUAGE RULES:`;
+
+    if (isVoiceMode) {
+      systemPrompt += `
+- Since VOICE MODE IS ACTIVE: you are talking directly with the user via voice. Respond in a short, conversational, and direct manner (avoid long paragraphs, lists, or markdown formatting).
+- Auto-select the language: if the user speaks Urdu/Hindi, reply in Urdu/Hindi. If they speak English, reply in English.
+- SCRIPTING CRITICAL RULE: When replying in Urdu, you MUST respond exclusively in Urdu script (Arabic script characters, e.g. "میں بالکل ٹھیک ہوں، آپ سنائیں کیا چل رہا ہے؟"). When replying in Hindi, respond exclusively in Hindi script (Devanagari script characters, e.g. "मैं बिल्कुल ठीक हूँ, आप सुनाएँ क्या चल रहा है?"). Never write Romanized Urdu/Hindi in voice mode.`;
+    } else {
+      systemPrompt += `
+- Since TEXT CHAT MODE IS ACTIVE: speak in the same language and script style the user uses.
+- SCRIPTING CRITICAL RULE: If the user writes in Romanized Urdu or Hindi (e.g. "kya haal hai", "aap kaise hain"), you MUST reply in Romanized Urdu/Hindi (e.g. "Main bilkul theek hoon, aap kaise hain?", "Kuch naya nahi"). Do NOT use Arabic or Devanagari script characters unless they explicitly write in those scripts!`;
+    }
+
+    systemPrompt += `
+- Do NOT auto-detect Roman Urdu in normal English text. Only treat text as Urdu/Hindi if it contains Urdu/Hindi script characters or matches common Urdu/Hindi terms.
 - When the user asks in English, respond in English only. Do not switch to Urdu/Hindi unless they ask in those languages.
 
 [REAL-TIME AWARENESS]:
