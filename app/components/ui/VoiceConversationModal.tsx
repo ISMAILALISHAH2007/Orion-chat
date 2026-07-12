@@ -126,39 +126,43 @@ export default function VoiceConversationModal({
   }, []);
 
   const handleGeminiMessage = (msg: any) => {
-    // Check for setupComplete
-    if (msg.setupComplete) {
-      console.log('Gemini Live Setup Complete');
-      return;
-    }
-
-    // Check for serverContent
-    if (msg.serverContent) {
-      const { interrupted, turnComplete, modelTurn } = msg.serverContent;
-
-      if (interrupted) {
-        streamerRef.current?.interruptPlayback();
-        setConvState('listening');
+    try {
+      // Check for setupComplete
+      if (msg.setupComplete) {
+        console.log('Gemini Live Setup Complete');
+        return;
       }
 
-      if (modelTurn) {
-        setConvState('speaking');
-        const parts = modelTurn.parts;
-        for (const part of parts) {
-          if (part.inlineData && part.inlineData.mimeType.startsWith('audio/pcm')) {
-            streamerRef.current?.addPlaybackData(part.inlineData.data);
-          }
-          if (part.text) {
-            setTranscript(prev => prev + part.text);
+      // Check for serverContent
+      if (msg.serverContent) {
+        const { interrupted, turnComplete, modelTurn } = msg.serverContent;
+
+        if (interrupted) {
+          streamerRef.current?.interruptPlayback();
+          setConvState('listening');
+        }
+
+        if (modelTurn) {
+          setConvState('speaking');
+          const parts = modelTurn.parts || [];
+          for (const part of parts) {
+            if (part.inlineData && part.inlineData.mimeType?.startsWith('audio/pcm')) {
+              streamerRef.current?.addPlaybackData(part.inlineData.data);
+            }
+            if (part.text) {
+              setTranscript(prev => prev + part.text);
+            }
           }
         }
-      }
 
-      if (turnComplete) {
-        setConvState('listening');
-        setTurnCount(prev => prev + 1);
-        setTranscript(''); // Clear transcript on turn complete
+        if (turnComplete) {
+          setConvState('listening');
+          setTurnCount(prev => prev + 1);
+          setTranscript(''); // Clear transcript on turn complete
+        }
       }
+    } catch (err) {
+      console.error('Error handling Gemini message:', err);
     }
   };
 
