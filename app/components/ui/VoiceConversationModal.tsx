@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Square, Volume2, Mic, Circle, Loader2, AlertCircle } from 'lucide-react';
 import { AudioStreamer } from '@/app/lib/audio-streamer';
 
-type ConvState = 'listening' | 'processing' | 'speaking';
+type ConvState = 'listening' | 'processing' | 'speaking' | 'idle';
 
 interface VoiceConversationModalProps {
   isOpen: boolean;
