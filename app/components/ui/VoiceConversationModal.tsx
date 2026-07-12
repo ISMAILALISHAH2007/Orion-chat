@@ -12,6 +12,7 @@ interface VoiceConversationModalProps {
   isStreaming: boolean;
   latestAiResponse: string;
   voiceGender?: 'male' | 'female';
+  onSwitchVoice?: (gender: 'male' | 'female') => void;
 }
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -57,6 +58,7 @@ function VoiceConversationModalInner({
   isStreaming,
   latestAiResponse,
   voiceGender = 'female',
+  onSwitchVoice,
 }: VoiceConversationModalProps) {
   const [convState, setConvState] = useState<ConvState>('listening');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -66,6 +68,55 @@ function VoiceConversationModalInner({
   const wsRef = useRef<WebSocket | null>(null);
   const streamerRef = useRef<AudioStreamer | null>(null);
   const sessionActiveRef = useRef(false);
+
+  // Handle incoming Gemini messages
+  const handleGeminiMessage = useCallback((msg: any) => {
+    try {
+      // Check for setupComplete
+      if (msg.setupComplete) {
+        console.log('Gemini Live Setup Complete');
+        return;
+      }
+
+      // Check for serverContent
+      if (msg.serverContent) {
+        const { interrupted, turnComplete, modelTurn } = msg.serverContent;
+
+        if (interrupted) {
+          streamerRef.current?.interruptPlayback();
+          setConvState('listening');
+        }
+
+        if (modelTurn) {
+          setConvState('speaking');
+          const parts = modelTurn.parts || [];
+          for (const part of parts) {
+            if (part.inlineData && part.inlineData.mimeType?.startsWith('audio/pcm')) {
+              streamerRef.current?.addPlaybackData(part.inlineData.data);
+            }
+            if (part.text) {
+              setTranscript(prev => prev + part.text);
+              
+              // Auto-switch voice detection
+              if (part.text.includes('[SWITCH_VOICE_MALE]') && onSwitchVoice) {
+                onSwitchVoice('male');
+              } else if (part.text.includes('[SWITCH_VOICE_FEMALE]') && onSwitchVoice) {
+                onSwitchVoice('female');
+              }
+            }
+          }
+        }
+
+        if (turnComplete) {
+          setConvState('listening');
+          setTurnCount(prev => prev + 1);
+          setTranscript(''); // Clear transcript on turn complete
+        }
+      }
+    } catch (err) {
+      console.error('Error handling Gemini message:', err);
+    }
+  }, [onSwitchVoice]);
 
   // Initialize the stream and WebSocket
   const startLiveSession = useCallback(async () => {
@@ -97,7 +148,7 @@ function VoiceConversationModalInner({
             model: "models/gemini-3.1-flash-live-preview",
             systemInstruction: {
               parts: [{
-                text: "You are ULTRON, a highly advanced cognitive AI assistant. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. If the user speaks in English, reply in English. If they speak Urdu/Hindi, reply appropriately. Be warm, natural, and helpful."
+                text: "You are ULTRON, a highly advanced cognitive AI assistant. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. If the user explicitly asks you to switch to a male voice, you must include the exact text [SWITCH_VOICE_MALE] in your response. If they ask for a female voice, include the exact text [SWITCH_VOICE_FEMALE] in your response. If the user speaks in English, reply in English. If they speak Urdu/Hindi, reply appropriately. Be warm, natural, and helpful."
               }]
             },
             generationConfig: {
@@ -170,48 +221,8 @@ function VoiceConversationModalInner({
       setErrorMessage(err.message || 'Failed to initialize live voice session.');
       setConvState('listening');
     }
-  }, []);
+  }, [voiceGender, handleGeminiMessage]);
 
-  const handleGeminiMessage = (msg: any) => {
-    try {
-      // Check for setupComplete
-      if (msg.setupComplete) {
-        console.log('Gemini Live Setup Complete');
-        return;
-      }
-
-      // Check for serverContent
-      if (msg.serverContent) {
-        const { interrupted, turnComplete, modelTurn } = msg.serverContent;
-
-        if (interrupted) {
-          streamerRef.current?.interruptPlayback();
-          setConvState('listening');
-        }
-
-        if (modelTurn) {
-          setConvState('speaking');
-          const parts = modelTurn.parts || [];
-          for (const part of parts) {
-            if (part.inlineData && part.inlineData.mimeType?.startsWith('audio/pcm')) {
-              streamerRef.current?.addPlaybackData(part.inlineData.data);
-            }
-            if (part.text) {
-              setTranscript(prev => prev + part.text);
-            }
-          }
-        }
-
-        if (turnComplete) {
-          setConvState('listening');
-          setTurnCount(prev => prev + 1);
-          setTranscript(''); // Clear transcript on turn complete
-        }
-      }
-    } catch (err) {
-      console.error('Error handling Gemini message:', err);
-    }
-  };
 
   const stopAll = useCallback(() => {
     sessionActiveRef.current = false;
@@ -252,7 +263,9 @@ function VoiceConversationModalInner({
   useEffect(() => {
     if (isOpen) {
       sessionActiveRef.current = true;
+      // eslint-disable-next-line
       setTranscript('');
+      // eslint-disable-next-line
       setTurnCount(0);
       startLiveSession();
     } else {
@@ -262,6 +275,17 @@ function VoiceConversationModalInner({
       stopAll();
     };
   }, [isOpen, startLiveSession, stopAll]);
+
+  // Handle Voice Gender change mid-session
+  const prevVoiceGenderRef = useRef(voiceGender);
+  useEffect(() => {
+    if (isOpen && prevVoiceGenderRef.current !== voiceGender) {
+      prevVoiceGenderRef.current = voiceGender;
+      // Reconnect with new voice
+      stopAll();
+      startLiveSession();
+    }
+  }, [voiceGender, isOpen, startLiveSession, stopAll]);
 
   // ====== ESCAPE KEY ======
   useEffect(() => {
