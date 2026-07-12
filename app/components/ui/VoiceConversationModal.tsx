@@ -273,16 +273,7 @@ function VoiceConversationModalInner({
     };
   }, [isOpen, startLiveSession, stopAll]);
 
-  // Handle Voice Gender change mid-session
-  const prevVoiceGenderRef = useRef(voiceGender);
-  useEffect(() => {
-    if (isOpen && prevVoiceGenderRef.current !== voiceGender) {
-      prevVoiceGenderRef.current = voiceGender;
-      // Reconnect with new voice
-      stopAll();
-      startLiveSession();
-    }
-  }, [voiceGender, isOpen, startLiveSession, stopAll]);
+
 
   // ====== ESCAPE KEY ======
   useEffect(() => {

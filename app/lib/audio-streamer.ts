@@ -66,6 +66,7 @@ export class AudioStreamer {
   // Playback queue
   private nextPlayTime = 0;
   private isPlaying = false;
+  private scheduledSources: AudioBufferSourceNode[] = [];
 
   constructor() {}
 
@@ -166,9 +167,11 @@ export class AudioStreamer {
     }
 
     source.start(this.nextPlayTime);
+    this.scheduledSources.push(source);
     this.nextPlayTime += audioBuffer.duration;
 
     source.onended = () => {
+      this.scheduledSources = this.scheduledSources.filter(s => s !== source);
       if (this.audioContext && this.audioContext.currentTime >= this.nextPlayTime - 0.1) {
         this.isPlaying = false;
       }
@@ -177,10 +180,11 @@ export class AudioStreamer {
 
   public interruptPlayback() {
     if (!this.audioContext) return;
+    this.scheduledSources.forEach(source => {
+      try { source.stop(); } catch(e) {}
+    });
+    this.scheduledSources = [];
     this.nextPlayTime = this.audioContext.currentTime;
     this.isPlaying = false;
-    // To hard-interrupt, we would need to store all scheduled BufferSourceNodes and call stop() on them.
-    // For simplicity, we can close the context and restart it, but that breaks the mic stream.
-    // Let's implement a clean stop by suspending & resuming, or we can just ignore for now as Gemini Live usually interrupts on server side.
   }
 }
