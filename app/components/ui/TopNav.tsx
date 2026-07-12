@@ -7,25 +7,25 @@ import { Menu, ChevronDown, Check, Sun, Moon, Sparkles, Volume2, VolumeX } from 
 const MODELS: { id: string; name: string; description: string; placeholder: string }[] = [
   {
     id: 'casual',
-    name: 'Casual 2.5',
-    description: "Friendly, everyday conversations — chat naturally, I'm here for you.",
+    name: 'Flash 2.5',
+    description: "Fast, everyday conversations — chat naturally, I'm here for you.",
     placeholder: "Chat naturally, I'm here for you.",
   },
   {
     id: 'developer',
-    name: 'Developer 4.8',
+    name: 'Pro 4.8',
     description: 'Technical, code-oriented — write code, debug, or architect systems.',
     placeholder: 'Write code, debug, or architect systems.',
   },
   {
     id: 'research',
-    name: 'Research Deeping Mode',
+    name: 'Deep Think',
     description: 'Deep analysis, long-form answers — dive deep into research, analyse data.',
     placeholder: 'Dive deep into research, analyse data.',
   },
   {
     id: 'professional',
-    name: 'Professional',
+    name: 'Ultra',
     description: 'Executive, concise, formal — data-driven insights.',
     placeholder: 'Executive insights, concise and data-driven.',
   },
@@ -38,7 +38,15 @@ interface TopNavProps {
 export default function TopNav({ onOpenSidebar }: TopNavProps) {
   const { mode, setMode } = useMode();
   const { theme, toggleTheme } = useTheme();
-  const { voices, selectedVoiceUri, setSelectedVoiceUri, liveVoiceMode, setLiveVoiceMode } = useTTS();
+  const {
+    liveVoiceMode,
+    setLiveVoiceMode,
+    aiVoiceEnabled,
+    setAiVoiceEnabled,
+    isSpeaking,
+    initAudioContext,
+    stopSpeaking,
+  } = useTTS();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -54,40 +62,50 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
 
   const current = MODELS.find((m) => m.id === mode) ?? MODELS[0];
 
+  const handleAiVoiceToggle = () => {
+    initAudioContext();
+    if (aiVoiceEnabled) {
+      stopSpeaking();
+      setAiVoiceEnabled(false);
+    } else {
+      setAiVoiceEnabled(true);
+    }
+  };
+
+  const handleLiveVoiceToggle = () => {
+    setLiveVoiceMode(!liveVoiceMode);
+  };
+
   return (
-    <header className="sticky top-0 z-30 flex h-12 sm:h-14 items-center justify-between border-b border-white/10 bg-transparent px-2 sm:px-3 glass-panel">
+    <header className="gemini-topnav">
       {/* Left: mobile menu */}
-      <div className="flex items-center gap-1 sm:gap-2">
-        <button
-          onClick={onOpenSidebar}
-          aria-label="Open sidebar"
-          className="rounded-lg p-1.5 sm:p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground md:hidden"
-        >
-          <Menu size={18} />
-        </button>
-      </div>
+      <button
+        onClick={onOpenSidebar}
+        aria-label="Open sidebar"
+        className="md:hidden gemini-icon-btn"
+      >
+        <Menu size={18} />
+      </button>
+
+      {/* Spacer for mobile */}
+      <div className="md:hidden w-9" />
 
       {/* Center: model selector */}
-      <div className="relative flex-1 flex justify-center max-w-[60%] sm:max-w-none mx-auto" ref={menuRef}>
+      <div className="relative flex items-center justify-center" ref={menuRef}>
         <button
           onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-foreground transition-colors hover:bg-surface-2 max-w-full"
+          className="gemini-model-btn"
           aria-haspopup="menu"
           aria-expanded={open}
         >
-          <Sparkles size={14} className="shrink-0 text-accent" />
-          <span className="truncate max-w-[35vw] sm:max-w-none">{current.name}</span>
-          <ChevronDown
-            size={14}
-            className={`shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
-          />
+          <Sparkles size={15} className="shrink-0 text-accent" />
+          <span>{current.name}</span>
+          <ChevronDown size={14} className={`text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
 
+        {/* Model Dropdown */}
         {open && (
-          <div
-            role="menu"
-            className="fixed left-1/2 top-14 sm:top-16 -translate-x-1/2 z-40 mt-1 w-[calc(100vw-32px)] max-w-sm sm:w-72 sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:top-full sm:mt-2 overflow-hidden rounded-xl border border-border bg-surface p-1.5 shadow-lg animate-fade-in"
-          >
+          <div className="gemini-model-dropdown animate-scale-in">
             {MODELS.map((m) => {
               const active = m.id === mode;
               return (
@@ -99,12 +117,15 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
                     setMode(m.id);
                     setOpen(false);
                   }}
-                  className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 sm:py-2 text-left transition-colors hover:bg-surface-2"
+                  className={[
+                    'gemini-model-option',
+                    active ? 'active' : '',
+                  ].join(' ')}
                 >
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium text-foreground">{m.name}</span>
-                    <span className="block text-xs text-muted leading-tight mt-0.5">{m.description}</span>
-                  </span>
+                  <div className="flex-1">
+                    <div className="gemini-model-option-name">{m.name}</div>
+                    <div className="gemini-model-option-desc">{m.description}</div>
+                  </div>
                   {active && <Check size={16} className="mt-0.5 shrink-0 text-accent" />}
                 </button>
               );
@@ -113,22 +134,51 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
         )}
       </div>
 
-      {/* Right: Live Voice button */}
-      <div className="flex items-center gap-1">
+      {/* Right: AI Voice + Theme + Live Voice */}
+      <div className="flex items-center gap-0.5">
+        {/* AI Voice Toggle */}
         <button
-          onClick={() => setLiveVoiceMode(!liveVoiceMode)}
-          title={liveVoiceMode ? 'Live Voice ON — tap to stop' : 'Live Voice — tap to start conversation'}
+          onClick={handleAiVoiceToggle}
+          title={aiVoiceEnabled ? 'AI Voice is ON' : 'AI Voice is OFF'}
           className={[
-            'flex items-center gap-1.5 rounded-full px-2.5 sm:px-3 py-1.5 text-[11px] font-semibold transition-all duration-200 border',
-            liveVoiceMode
-              ? 'bg-[#22c55e] text-white border-[#22c55e] shadow-sm shadow-[#22c55e]/30 animate-pulse'
-              : 'bg-surface text-muted border-border hover:text-foreground hover:border-[#22c55e]/50',
+            'gemini-icon-btn relative',
+            aiVoiceEnabled ? 'text-accent' : '',
           ].join(' ')}
         >
-          <span className={liveVoiceMode ? 'animate-pulse' : ''}>
-            {liveVoiceMode ? '○' : '○'}
+          {aiVoiceEnabled && isSpeaking ? (
+            <div className="flex items-center gap-[1.5px]">
+              <span className="sound-bar h-2.5 w-[2px] rounded-full bg-accent" />
+              <span className="sound-bar h-3.5 w-[2px] rounded-full bg-accent" style={{ animationDelay: '0.15s' }} />
+              <span className="sound-bar h-2 w-[2px] rounded-full bg-accent" style={{ animationDelay: '0.3s' }} />
+              <span className="sound-bar h-3 w-[2px] rounded-full bg-accent" style={{ animationDelay: '0.1s' }} />
+            </div>
+          ) : (
+            aiVoiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />
+          )}
+        </button>
+
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          className="gemini-icon-btn"
+        >
+          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+
+        {/* Live Voice */}
+        <button
+          onClick={handleLiveVoiceToggle}
+          title={liveVoiceMode ? 'Stop Live Voice' : 'Start Live Voice'}
+          className={[
+            'gemini-live-voice-btn',
+            liveVoiceMode ? 'active' : '',
+          ].join(' ')}
+        >
+          <span className={`${liveVoiceMode ? 'text-white' : 'text-muted'}`}>
+            {liveVoiceMode ? '●' : '○'}
           </span>
-          <span className="hidden sm:inline">{liveVoiceMode ? 'LIVE' : 'Voice'}</span>
+          <span className="hidden sm:inline">{liveVoiceMode ? 'LIVE' : 'Live'}</span>
         </button>
       </div>
     </header>

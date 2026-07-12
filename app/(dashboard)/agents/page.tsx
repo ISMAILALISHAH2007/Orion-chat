@@ -1,13 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { Bot, Sparkles } from 'lucide-react';
 
 interface Agent {
-  id: string;
-  name: string;
-  description: string;
-  systemPrompt: string;
-  model: string;
-  createdAt: string;
+  id: string; name: string; description: string; systemPrompt: string;
+  model: string; createdAt: string;
 }
 
 export default function AgentsPage() {
@@ -16,165 +13,113 @@ export default function AgentsPage() {
   const [description, setDescription] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [model, setModel] = useState('meta/llama-3.3-70b-instruct');
-
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
 
-  const fetchAgents = async () => {
-    try {
-      const res = await fetch('/api/agents');
-      if (res.ok) {
-        const data = await res.json();
-        setAgents(data.agents || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch agents:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot data fetch on mount
-    fetchAgents();
+    (async () => {
+      try {
+        const res = await fetch('/api/agents');
+        if (res.ok) {
+          const data = await res.json();
+          setAgents(data.agents || []);
+        }
+      } catch {} finally { setLoading(false); }
+    })();
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !systemPrompt.trim()) return;
-
-    setSubmitting(true);
-    setMessage('');
-
+    setSubmitting(true); setMessage('');
     try {
       const res = await fetch('/api/agents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, description, systemPrompt, model }),
       });
-
       if (res.ok) {
-        setName('');
-        setDescription('');
-        setSystemPrompt('');
-        setMessage('Agent compiled successfully!');
-        fetchAgents();
-      } else {
-        setMessage('Failed to compile agent.');
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage('Error occurred.');
-    } finally {
-      setSubmitting(false);
-    }
+        setName(''); setDescription(''); setSystemPrompt('');
+        setMessage('Agent created!');
+        const data = await res.json();
+        if (data.agent) setAgents(prev => [...prev, data.agent]);
+      } else setMessage('Failed to create agent.');
+    } catch {} finally { setSubmitting(false); }
   };
 
   return (
     <div className="dashboard-subpage">
       <div className="subpage-header">
-        <h1 className="subpage-title">COGNITIVE AGENTS</h1>
-        <p className="subpage-description">Design and compile customized neural matrices</p>
+        <h1 className="subpage-title">Gems</h1>
+        <p className="subpage-description">Create and manage custom AI agents</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2.5rem', alignItems: 'start' }}>
-        {/* Spawn Card Form */}
-        <div className="custom-card glass">
-          <h2 style={{ fontFamily: 'var(--font-display)', letterSpacing: '1px', fontSize: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-            SPAWN NEURAL AGENT
-          </h2>
-          {message && (
-            <div style={{ color: message.includes('success') ? '#39ff14' : '#ff4a4a', fontSize: '0.85rem', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              {message}
-            </div>
-          )}
-          <form onSubmit={handleCreate} className="auth-form" style={{ gap: '1rem' }}>
+      <div className="gemini-grid" style={{ gridTemplateColumns: '400px 1fr', maxWidth: '1000px' }}>
+        {/* Create form */}
+        <div className="gemini-card">
+          <h2 className="gemini-card-title">New Gem</h2>
+          {message && <div className={message.includes('failed') ? 'auth-error mb-3' : 'auth-success mb-3'}>{message}</div>}
+          <form onSubmit={handleCreate} className="space-y-4">
             <div className="form-group">
-              <label className="form-label">Agent Codename</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="JARVIS"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                disabled={submitting}
-              />
+              <label className="form-label">Name</label>
+              <input type="text" className="form-input" placeholder="My Agent" value={name}
+                onChange={(e) => setName(e.target.value)} required disabled={submitting} />
             </div>
             <div className="form-group">
-              <label className="form-label">Matrix Description</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Developer intelligence unit"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                disabled={submitting}
-              />
+              <label className="form-label">Description</label>
+              <input type="text" className="form-input" placeholder="What this agent does" value={description}
+                onChange={(e) => setDescription(e.target.value)} disabled={submitting} />
             </div>
             <div className="form-group">
-              <label className="form-label">Core Prompt (System Directive)</label>
-              <textarea
-                className="form-input"
-                placeholder="You are an expert coder. Focus on clean solutions..."
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
-                rows={4}
-                style={{ resize: 'none', borderRadius: 'var(--radius-sm)' }}
-                required
-                disabled={submitting}
-              />
+              <label className="form-label">System prompt</label>
+              <textarea className="form-input" placeholder="You are an expert at..." value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)} rows={4} required disabled={submitting} />
             </div>
             <div className="form-group">
-              <label className="form-label">Base Cognitive Model</label>
-              <select
-                className="form-input"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                disabled={submitting}
-                style={{ background: 'var(--input-bg)' }}
-              >
-                <option value="meta/llama-3.3-70b-instruct">Llama 3.3 70B (High Intelligence)</option>
-                <option value="nvidia/llama-3.1-nemotron-70b-instruct">Llama 3.1 Nemotron 70B</option>
-                <option value="meta/llama-3.1-8b-instruct">Llama 3.1 8B (Sub-nanosecond Latency)</option>
+              <label className="form-label">Model</label>
+              <select className="form-select" value={model} onChange={(e) => setModel(e.target.value)} disabled={submitting}>
+                <option value="meta/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+                <option value="nvidia/llama-3.1-nemotron-70b-instruct">Nemotron 70B</option>
+                <option value="meta/llama-3.1-8b-instruct">Llama 3.1 8B</option>
               </select>
             </div>
             <button type="submit" className="auth-button" disabled={submitting}>
-              {submitting ? 'COMPILING AGENT...' : 'COMPILE MATRIX'}
+              {submitting ? 'Creating...' : 'Create Gem'}
             </button>
           </form>
         </div>
 
-        {/* Existing Matrix Card List */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', letterSpacing: '1px', fontSize: '1.25rem' }}>
-            ACTIVE COGNITIVE CORES
-          </h2>
+        {/* Agents list */}
+        <div className="space-y-3">
+          <h2 className="text-base font-semibold text-foreground">Your Gems</h2>
           {loading ? (
-            <div className="orb-text-state" style={{ marginTop: '2rem' }}>SCANNING CORES...</div>
+            <div className="flex items-center gap-3 text-muted py-12 justify-center">
+              <Sparkles size={18} className="animate-spin-slow text-accent" />
+              <span className="text-sm">Loading...</span>
+            </div>
           ) : agents.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', textAlign: 'center', padding: '3rem', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>
-              No custom neural matrices initialized.
+            <div className="text-center py-12 text-sm text-muted border border-dashed border-border rounded-lg">
+              No gems yet. Create your first one.
             </div>
           ) : (
-            agents.map((agent) => (
-              <div key={agent.id} className="custom-card glass" style={{ borderLeft: '4px solid var(--accent-color)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 700 }}>{agent.name}</h3>
-                  <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '10px', color: 'var(--accent-color)' }}>
-                    {agent.model.split('/').pop()}
-                  </span>
+            <div className="space-y-3">
+              {agents.map((agent) => (
+                <div key={agent.id} className="gemini-card" style={{ borderLeft: '3px solid var(--accent)' }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold text-foreground">{agent.name}</h3>
+                      {agent.description && <p className="text-xs text-muted mt-0.5">{agent.description}</p>}
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent shrink-0">
+                      {agent.model.split('/').pop()}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-muted bg-surface-2 rounded-lg p-2 max-h-16 overflow-y-auto font-mono">
+                    {agent.systemPrompt}
+                  </div>
                 </div>
-                {agent.description && <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{agent.description}</p>}
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '6px', fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)', whiteSpace: 'pre-wrap', maxHeight: '100px', overflowY: 'auto' }}>
-                  {agent.systemPrompt}
-                </div>
-                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', alignSelf: 'flex-end' }}>
-                  INITIALIZED: {new Date(agent.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
       </div>

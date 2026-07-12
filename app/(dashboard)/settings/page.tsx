@@ -1,162 +1,94 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { Settings, Sparkles } from 'lucide-react';
 
-interface KeyConfig {
-  id?: string;
-  provider: string;
-  key: string;
-}
-
-interface Profile {
-  name: string;
-  email: string;
-  createdAt: string;
-}
-
-interface Subscription {
-  tier: string;
-  status: string;
-}
+interface Profile { name: string; email: string; createdAt: string; }
+interface Subscription { tier: string; status: string; }
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [keys, setKeys] = useState<KeyConfig[]>([]);
-
-  const [selectedProvider, setSelectedProvider] = useState('openai');
-  const [inputKey, setInputKey] = useState('');
-
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState('');
-
-  const fetchSettings = async () => {
-    try {
-      const res = await fetch('/api/settings');
-      if (res.ok) {
-        const data = await res.json();
-        setProfile(data.profile);
-        setSubscription(data.subscription);
-        setKeys(data.apiKeys || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch settings:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot data fetch on mount
-    fetchSettings();
+    (async () => {
+      try {
+        const res = await fetch('/api/settings');
+        if (res.ok) {
+          const data = await res.json();
+          setProfile(data.profile);
+          setSubscription(data.subscription);
+        }
+      } catch {} finally { setLoading(false); }
+    })();
   }, []);
-
-  const handleSaveKey = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputKey.trim()) return;
-
-    setSubmitting(true);
-    setMessage('');
-
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'save_key',
-          provider: selectedProvider,
-          key: inputKey,
-        }),
-      });
-
-      if (res.ok) {
-        setInputKey('');
-        setMessage(`API Key saved for ${selectedProvider.toUpperCase()}`);
-        fetchSettings();
-      } else {
-        setMessage('Failed to save API Key.');
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage('Error occurred.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleUpdateSubscription = async (tier: string) => {
     try {
       const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'update_subscription',
-          tier,
-        }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_subscription', tier }),
       });
-
       if (res.ok) {
         const data = await res.json();
         setSubscription(data.subscription);
-        alert(`System initialized to ${tier.toUpperCase()} tier!`);
       }
-    } catch (err) {
-      console.error(err);
-    }
+    } catch {}
   };
 
   return (
     <div className="dashboard-subpage">
       <div className="subpage-header">
-        <h1 className="subpage-title">SYSTEM CONFIGURATION</h1>
-        <p className="subpage-description">Configure cognitive keys, matrix credentials, and active subscription nodes</p>
+        <h1 className="subpage-title">Settings</h1>
+        <p className="subpage-description">Manage your account and subscription</p>
       </div>
 
       {loading ? (
-        <div className="orb-text-state" style={{ marginTop: '4rem' }}>SCANNING CONFIG...</div>
+        <div className="flex items-center gap-3 text-muted py-12 justify-center">
+          <Sparkles size={18} className="animate-spin-slow text-accent" />
+          <span className="text-sm">Loading...</span>
+        </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2.5rem', alignItems: 'start' }}>
-          
-          {/* Left Column: API Keys & Sub */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {/* API Keys Configuration Card REMOVED - using global Gemini API Key */}
-
-            {/* Subscription Node Card */}
-            <div className="custom-card glass">
-              <h2 style={{ fontFamily: 'var(--font-display)', letterSpacing: '1px', fontSize: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-                SUBSCRIPTION NODES
-              </h2>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
-                <div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--accent-color)' }}>
-                    {subscription?.tier || 'free'} Matrix
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Node status: {subscription?.status || 'active'}
-                  </div>
-                </div>
-                <div style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.05)', padding: '4px 10px', borderRadius: '12px' }}>
-                  LEVEL: UP-TO-DATE
-                </div>
+        <div className="gemini-grid" style={{ gridTemplateColumns: '1fr 1fr', maxWidth: '800px' }}>
+          {/* Profile */}
+          <div className="gemini-card">
+            <h2 className="gemini-card-title">Profile</h2>
+            <div className="space-y-4">
+              <div>
+                <span className="text-xs text-muted block mb-1">Name</span>
+                <span className="text-sm font-medium">{profile?.name}</span>
               </div>
+              <div>
+                <span className="text-xs text-muted block mb-1">Email</span>
+                <span className="text-sm">{profile?.email}</span>
+              </div>
+              {profile?.createdAt && (
+                <div>
+                  <span className="text-xs text-muted block mb-1">Member since</span>
+                  <span className="text-sm text-muted">{new Date(profile.createdAt).toLocaleDateString()}</span>
+                </div>
+              )}
+            </div>
+          </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', marginTop: '1rem' }}>
+          {/* Subscription */}
+          <div className="gemini-card">
+            <h2 className="gemini-card-title">Subscription</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium capitalize">{subscription?.tier || 'Free'} plan</span>
+                <span className="text-xs px-2 py-1 rounded-full bg-accent/10 text-accent capitalize">{subscription?.status || 'active'}</span>
+              </div>
+              <div className="flex gap-2">
                 {['free', 'pro', 'ultra'].map((t) => (
-                  <button
-                    key={t}
+                  <button key={t}
                     onClick={() => handleUpdateSubscription(t)}
-                    style={{
-                      padding: '10px',
-                      background: subscription?.tier === t ? 'var(--accent-color)' : 'rgba(0,0,0,0.2)',
-                      color: subscription?.tier === t ? '#000' : 'var(--text-muted)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: 'var(--radius-sm)',
-                      fontWeight: 'bold',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                      textTransform: 'uppercase',
-                      transition: 'var(--transition-fast)'
-                    }}
+                    className={[
+                      'flex-1 px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-all border',
+                      subscription?.tier === t
+                        ? 'bg-accent text-accent-foreground border-accent'
+                        : 'bg-transparent text-muted border-border hover:bg-surface-2 hover:text-foreground',
+                    ].join(' ')}
                   >
                     {t}
                   </button>
@@ -164,48 +96,6 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-
-          {/* Right Column: User Profile & Diagnostics */}
-          <div className="custom-card glass">
-            <h2 style={{ fontFamily: 'var(--font-display)', letterSpacing: '1px', fontSize: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-              OPERATOR COMMAND DIAGNOSTICS
-            </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                <span className="form-label">Operator Codename</span>
-                <div style={{ fontSize: '1rem', color: 'var(--text-main)' }}>{profile?.name}</div>
-              </div>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                <span className="form-label">Signal Address (Email)</span>
-                <div style={{ fontSize: '1rem', color: 'var(--text-main)' }}>{profile?.email}</div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                <span className="form-label">Establishment Time</span>
-                <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                  {profile ? new Date(profile.createdAt).toLocaleString() : ''}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
-                <span className="form-label">OPERATIONAL STATUS</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                  <div className="status-dot"></div>
-                  <span>NVIDIA INTEGRATION SYSTEM ONLINE</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                  <div className="status-dot"></div>
-                  <span>NEON POSTGRESQL STABLE</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                  <div className="status-dot"></div>
-                  <span>VECTOR EMBEDDING INDEX STABLE (1536d)</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
         </div>
       )}
     </div>

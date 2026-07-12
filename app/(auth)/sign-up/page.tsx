@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Sparkles } from 'lucide-react';
 
 export default function SignUpPage() {
   const [email, setEmail] = useState('');
@@ -16,132 +17,64 @@ export default function SignUpPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
-
-    setError(null);
-    setLoading(true);
-
+    setError(null); setLoading(true);
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch('/api/auth/register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, name }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || 'Registration failed.');
-      } else {
-        setSuccess(true);
-        setTimeout(() => {
-          router.push('/sign-in');
-        }, 1500);
-      }
-    } catch (err) {
-      console.error(err);
-      setError('An unexpected error occurred.');
-    } finally {
-      setLoading(false);
-    }
+      const data = await res.json();
+      if (!res.ok) setError(data.error || 'Registration failed.');
+      else { setSuccess(true); setTimeout(() => router.push('/sign-in'), 1500); }
+    } catch { setError('An unexpected error occurred.'); }
+    finally { setLoading(false); }
   };
 
   return (
     <div className="auth-container">
-      {/* Background Glows */}
-      <div className="bg-glow bg-glow-1"></div>
-      <div className="bg-glow bg-glow-2"></div>
-
-      <div className="auth-card glass">
+      <div className="auth-card">
         <div className="auth-header">
-          <h1 className="logo">ULTRON</h1>
-          <h2 className="auth-title">Register Profile</h2>
-          <p className="auth-subtitle">Establish cognitive command</p>
+          <div className="auth-logo flex items-center justify-center gap-2">
+            <Sparkles size={22} className="text-accent" /> ULTRON
+          </div>
+          <h2 className="auth-title">Create account</h2>
+          <p className="auth-subtitle">Get started with ULTRON</p>
         </div>
 
-        {error && (
-          <div style={{ color: '#ff4a4a', fontSize: '0.85rem', textAlign: 'center', background: 'rgba(255, 74, 74, 0.1)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255, 74, 74, 0.2)' }}>
-            {error}
-          </div>
-        )}
-
-        {success && (
-          <div style={{ color: '#39ff14', fontSize: '0.85rem', textAlign: 'center', background: 'rgba(57, 255, 20, 0.1)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(57, 255, 20, 0.2)' }}>
-            Profile Registered! Transferring to terminal...
-          </div>
-        )}
+        {error && <div className="auth-error">{error}</div>}
+        {success && <div className="auth-success">Account created! Redirecting to sign in...</div>}
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label" htmlFor="name">Operator Name</label>
-            <input
-              className="form-input"
-              id="name"
-              type="text"
-              placeholder="your-username"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={loading || success}
-            />
+            <label className="form-label" htmlFor="name">Name</label>
+            <input className="form-input" id="name" type="text" placeholder="Your name" value={name}
+              onChange={(e) => setName(e.target.value)} disabled={loading || success} />
           </div>
-
           <div className="form-group">
-            <label className="form-label" htmlFor="email">Email Address</label>
-            <input
-              className="form-input"
-              id="email"
-              type="email"
-              placeholder="operator@ultron.ai"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={loading || success}
-            />
+            <label className="form-label" htmlFor="email">Email</label>
+            <input className="form-input" id="email" type="email" placeholder="you@example.com" value={email}
+              onChange={(e) => setEmail(e.target.value)} required disabled={loading || success} />
           </div>
-
           <div className="form-group">
-            <label className="form-label" htmlFor="password">Passphrase</label>
+            <label className="form-label" htmlFor="password">Password</label>
             <div style={{ position: 'relative' }}>
-              <input
-                className="form-input"
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={loading || success}
-                style={{ width: '100%', paddingRight: '60px' }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  fontSize: '0.85rem'
-                }}
-              >
+              <input className="form-input" id="password" type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
+                required disabled={loading || success} style={{ paddingRight: '60px' }} />
+              <button type="button" onClick={() => setShowPassword(!showPassword)}
+                style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '13px' }}>
                 {showPassword ? 'Hide' : 'Show'}
               </button>
             </div>
           </div>
-
           <button className="auth-button" type="submit" disabled={loading || success}>
-            {loading ? 'ESTABLISHING...' : 'ESTABLISH'}
+            {loading ? 'Creating account...' : 'Create account'}
           </button>
         </form>
 
         <div className="auth-footer">
-          Already registered?{' '}
-          <Link className="auth-link" href="/sign-in">
-            Sign In
-          </Link>
+          Already have an account? <Link className="auth-link" href="/sign-in">Sign in</Link>
         </div>
       </div>
     </div>
