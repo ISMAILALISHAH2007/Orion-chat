@@ -24,9 +24,13 @@ async function startVideoJob(prompt: string): Promise<string> {
   });
 
   if (!createRes.ok) {
-    const errText = await createRes.text();
-    console.error('[Media API] Magic Hour creation failed:', errText);
-    throw new Error(`Could not start video job. (${createRes.status})`);
+    let errMsg = `Could not start video job. (${createRes.status})`;
+    try {
+      const errData = await createRes.json();
+      if (errData.message) errMsg = errData.message;
+    } catch (e) {}
+    console.error('[Media API] Magic Hour creation failed:', errMsg);
+    throw new Error(errMsg);
   }
 
   const createData = await createRes.json();
