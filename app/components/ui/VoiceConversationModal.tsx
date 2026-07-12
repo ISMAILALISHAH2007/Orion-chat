@@ -255,19 +255,7 @@ function VoiceConversationModalInner({
   }, [stopAll, onEndSession]);
 
   const handleInterrupt = useCallback(() => {
-    // Send a client content to interrupt natively if possible, or just flush local queue
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-       // A client message forces the server to process new input and interrupt its playback
-       wsRef.current.send(JSON.stringify({
-         clientContent: {
-           turns: [{
-             role: "user",
-             parts: [] // empty part can trigger an interrupt on some implementations
-           }],
-           turnComplete: true
-         }
-       }));
-    }
+    // Rely on Google's native VAD (Voice Activity Detection) and just clear local playback immediately
     streamerRef.current?.interruptPlayback();
     setConvState('listening');
   }, []);
