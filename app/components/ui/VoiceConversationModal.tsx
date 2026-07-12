@@ -99,7 +99,7 @@ function VoiceConversationModalInner({
               }]
             },
             generationConfig: {
-              responseModalities: ["AUDIO", "TEXT"]
+              responseModalities: ["AUDIO"]
             }
           }
         };
@@ -110,7 +110,6 @@ function VoiceConversationModalInner({
         if (!sessionActiveRef.current) return;
         
         try {
-          // The data can be Blob or string, but Bidi usually sends strings (JSON) or we can read text
           if (event.data instanceof Blob) {
             const reader = new FileReader();
             reader.onload = () => {
@@ -125,16 +124,19 @@ function VoiceConversationModalInner({
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        console.log("WebSocket closed", event.code, event.reason);
         if (sessionActiveRef.current) {
-          setErrorMessage('Connection to Gemini Live lost. Closing session.');
-          handleEndSession();
+          setErrorMessage(`Connection to Gemini Live lost. Code: ${event.code} Reason: ${event.reason || 'Unknown'}`);
+          setConvState('listening');
+          // DO NOT call handleEndSession() here, so the modal stays open and the user can see the error!
         }
       };
 
       ws.onerror = (e) => {
         console.error("WebSocket Error", e);
         setErrorMessage('WebSocket connection error. See console for details.');
+        setConvState('listening');
       };
 
       // 4. Start Microphone and Stream to WebSocket
