@@ -60,7 +60,7 @@ export default function VoiceConversationModal({
     try {
       // Clear any existing recognition sessions
       if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch (_) {}
+        try { recognitionRef.current.abort(); } catch (_) { }
         recognitionRef.current = null;
       }
       if (restartTimeoutRef.current) {
@@ -70,7 +70,7 @@ export default function VoiceConversationModal({
 
       const SpeechRecognition =
         (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      
+
       if (!SpeechRecognition) {
         setErrorMessage('Speech recognition is not supported in this browser. Please try using Chrome, Safari, or Edge.');
         return;
@@ -120,7 +120,7 @@ export default function VoiceConversationModal({
           setHistory((prev) => [...prev, { role: 'user', text: finalText }]);
           setConvState('processing');
           convStateRef.current = 'processing';
-          
+
           setTimeout(() => {
             if (shouldListenRef.current) {
               sendMessage(finalText);
@@ -150,7 +150,7 @@ export default function VoiceConversationModal({
       restartTimeoutRef.current = null;
     }
     if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch (_) {}
+      try { recognitionRef.current.abort(); } catch (_) { }
       recognitionRef.current = null;
     }
   }, []);
@@ -163,12 +163,12 @@ export default function VoiceConversationModal({
     if (isSpeaking) {
       setConvState('speaking');
       convStateRef.current = 'speaking';
-      
+
       // Clean and set spoken response text to display in real-time
       if (latestAiResponse) {
         const cleanText = latestAiResponse.replace(/\[REASONING\][\s\S]*?\[\/REASONING\]/gi, '').trim();
         const isSystem = cleanText.startsWith('[SYSTEM') || cleanText.startsWith('[SEARCH') || cleanText.startsWith('[MAPS');
-        
+
         if (!isSystem && cleanText !== spokenResponseRef.current) {
           setSpokenResponse(cleanText);
           spokenResponseRef.current = cleanText;
@@ -189,7 +189,7 @@ export default function VoiceConversationModal({
       if (wasActive && convStateRef.current !== 'listening') {
         setConvState('listening');
         convStateRef.current = 'listening';
-        
+
         const restartTimer = setTimeout(() => {
           if (shouldListenRef.current && convStateRef.current === 'listening') {
             startListening();
@@ -259,7 +259,7 @@ export default function VoiceConversationModal({
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop()); // close the stream tracks immediately
-        
+
         if (shouldListenRef.current) {
           startListening();
         }

@@ -91,6 +91,29 @@ function detectLanguage(text: string): string {
   return 'en';
 }
 
+// Detect if text is written in Romanized Urdu or Hindi to avoid English accent playback
+function isRomanUrduHindi(text: string): boolean {
+  const words = text.toLowerCase().split(/\s+/);
+  const commonUrduHindiWords = new Set([
+    'main', 'aap', 'tum', 'ho', 'hai', 'hain', 'kya', 'kaise', 'theek', 'haan', 'na', 
+    'bhai', 'yaar', 'mujhe', 'mera', 'meri', 'apna', 'apni', 'kar', 'raha', 'rahi', 
+    'gaya', 'gayi', 'acha', 'shukriya', 'aur', 'toh', 'se', 'ko', 'ki', 'ka', 'ke',
+    'kuch', 'hote', 'hota', 'hoti', 'gaye', 'nahin', 'nahi', 'karo', 'karne', 'kiya',
+    'diya', 'liya', 'rahe', 'sath', 'paas', 'baat', 'ab', 'tak', 'jab', 'kab', 'par',
+    'hi', 'bhi', 'ek', 'do', 'teen', 'chaar', 'paanch', 'chah', 'saat', 'aath', 'nau', 'das'
+  ]);
+  
+  let matches = 0;
+  for (const word of words) {
+    const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
+    if (commonUrduHindiWords.has(cleanWord)) {
+      matches++;
+    }
+  }
+  
+  return matches >= 2 || (words.length > 0 && matches / words.length >= 0.25);
+}
+
 function getVoiceCode(lang: string): string {
   if (lang === 'ur') return 'ur-PK';
   if (lang === 'hi') return 'hi-IN';
@@ -292,8 +315,12 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
 
     let targetLang = selectedVoiceUri;
     const detectedLang = detectLanguage(cleanText);
+    
     if (detectedLang !== 'en') {
       targetLang = detectedLang;
+    } else if (isRomanUrduHindi(cleanText)) {
+      // If Romanized Urdu/Hindi is detected, speak using the corresponding native accent
+      targetLang = selectedVoiceUri === 'hi' ? 'hi' : 'ur';
     }
 
     // Try high-quality server-side Edge Neural TTS first!
