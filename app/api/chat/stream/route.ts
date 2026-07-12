@@ -12,7 +12,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/lib/auth';
 import { prisma } from '@/app/lib/db';
 import { NextResponse } from 'next/server';
-import { buildPollinationsImageUrl } from '@/app/lib/images/pollinations';
+import { buildPollinationsImageUrl, generateImageWithFallback } from '@/app/lib/images/pollinations';
 import {
   SLASH_COMMANDS,
   IMAGE_INTENT_REGEX,
@@ -51,24 +51,52 @@ function parseSlashCommand(text: string): { command: SlashCommand; prompt: strin
 }
 
 async function generateImageInline(userId: string | undefined, prompt: string) {
-  const imageUrl = buildPollinationsImageUrl(prompt);
-  let record = null;
-  if (userId) {
-    try {
-      record = await prisma.image.create({
-        data: { userId, prompt, imageUrl },
-        select: { id: true, imageUrl: true },
-      });
-    } catch (e) {
-      console.error('Failed to persist generated image:', e);
+  try {
+    // Use the new retry-with-fallback logic
+    const result = await generateImageWithFallback(prompt, {
+      retryCount: 1,       // 2 attempts per model (fits within 60s maxDuration)
+      verifyTimeout: 3000, // 3s per HEAD request (lightweight, 3s is plenty)
+    });
+
+    const imageUrl = result.url;
+    const modelUsed = result.model;
+    const verified = result.verified;
+
+    console.log(`[Image] Generated with ${modelUsed} (verified: ${verified})`);
+
+    let record = null;
+    if (userId) {
+      try {
+        record = await prisma.image.create({
+          data: { userId, prompt, imageUrl },
+          select: { id: true, imageUrl: true },
+        });
+      } catch (e) {
+        console.error('Failed to persist generated image:', e);
+      }
     }
+
+    const downloadName = (record?.id ?? `ultron-${Date.now()}`) + '.png';
+    
+    // Always provide a clickable download link, even if verification timed out
+    const downloadLink = `[⬇️ Download image](/api/download?url=${encodeURIComponent(imageUrl)}&name=${encodeURIComponent(downloadName)} "${downloadName}")`;
+    
+    return [
+      `![${prompt}](${imageUrl})`,
+      ``,
+      downloadLink,
+    ].join('\n');
+  } catch (error) {
+    console.error('[Image] Generation failed:', error);
+    // Ultimate fallback: return a simple URL without verification
+    const fallbackUrl = buildPollinationsImageUrl(prompt);
+    return [
+      `![${prompt}](${fallbackUrl})`,
+      ``,
+      `> The image is being generated — it may take a few seconds to appear. ` +
+      `[⬇️ Download](${fallbackUrl})`,
+    ].join('\n');
   }
-  const downloadName = (record?.id ?? `ultron-${Date.now()}`) + '.png';
-  return [
-    `![${prompt}](${imageUrl})`,
-    ``,
-    `[Download image](/api/download?url=${encodeURIComponent(imageUrl)}&name=${encodeURIComponent(downloadName)} "${downloadName}")`,
-  ].join('\n');
 }
 
 // Free AI video generation using Hugging Face Inference API

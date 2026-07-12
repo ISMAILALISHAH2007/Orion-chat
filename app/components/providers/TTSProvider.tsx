@@ -5,7 +5,25 @@ export interface TTSVoice {
   uri: string;
   name: string;
   lang: string;
-  voice: any;
+  voice: SpeechSynthesisVoice | null;
+}
+
+// Find a matching voice for a given language code
+function findVoiceForLang(lang: string): SpeechSynthesisVoice | null {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  
+  // Try exact match first
+  const exact = voices.find(v => v.lang.toLowerCase().startsWith(lang.toLowerCase()));
+  if (exact) return exact;
+  
+  // Try base language match
+  const baseLang = lang.split('-')[0].toLowerCase();
+  const base = voices.find(v => v.lang.toLowerCase().startsWith(baseLang));
+  if (base) return base;
+  
+  // Return any English voice as fallback
+  return voices.find(v => v.lang.startsWith('en')) || voices[0] || null;
 }
 
 const CLOUD_VOICES: TTSVoice[] = [
@@ -28,7 +46,7 @@ interface TTSContextType {
   setSelectedVoiceUri: (uri: string) => void;
   voiceGender: 'female' | 'male';
   setVoiceGender: (gender: 'female' | 'male') => void;
-  speak: (text: string, voiceUriOverride?: string, onEnd?: () => void) => void;
+  speak: (text: string) => void;
   stopSpeaking: () => void;
   isSpeaking: boolean;
   liveVoiceMode: boolean;
@@ -47,261 +65,184 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [liveVoiceMode, setLiveVoiceMode] = useState(false);
   const [aiVoiceEnabled, setAiVoiceEnabled] = useState(false);
-
   const [voiceGender, setVoiceGender] = useState<'female' | 'male'>('female');
 
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
-  const isPlayingQueueRef = useRef(false);
-  const currentPlaySessionIdRef = useRef(0);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  // Automatically unlock AudioContext on the first user interaction (safeguard for Safari & mobile browsers)
+  // Initialize speech synthesis and load voices
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
     
-    const unlock = () => {
-      initAudioContext();
-      if (audioCtxRef.current && audioCtxRef.current.state === 'running') {
-        window.removeEventListener('click', unlock);
-        window.removeEventListener('touchstart', unlock);
-        window.removeEventListener('keydown', unlock);
-      }
-    };
-
-    window.addEventListener('click', unlock);
-    window.addEventListener('touchstart', unlock);
-    window.addEventListener('keydown', unlock);
-
-    return () => {
-      window.removeEventListener('click', unlock);
-      window.removeEventListener('touchstart', unlock);
-      window.removeEventListener('keydown', unlock);
-    };
+    // Chrome loads voices asynchronously
+    if (window.speechSynthesis.getVoices().length === 0) {
+      window.speechSynthesis.addEventListener('voiceschanged', () => {
+        // Force re-render by no-op state update
+      }, { once: true });
+    }
   }, []);
 
-  // Initialize AudioContext exactly once on user interaction
-  const initAudioContext = () => {
-    if (!audioCtxRef.current && typeof window !== 'undefined') {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        audioCtxRef.current = new AudioContextClass();
-      }
+  const initAudioContext = useCallback(() => {
+    // Just a no-op for SpeechSynthesis - no AudioContext needed
+    // But kept for backwards compatibility
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      // Cancel any stale utterances
+      window.speechSynthesis.cancel();
     }
-    
-    const ctx = audioCtxRef.current;
-    if (ctx) {
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-      
-      // Play a short silent buffer to permanently unlock the audio context for Safari / iOS
-      try {
-        const buffer = ctx.createBuffer(1, 1, 22050);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.start(0);
-      } catch (e) {
-        console.warn('Failed to play silent unlock buffer:', e);
-      }
-    }
-  };
+  }, []);
 
   const stopSpeaking = useCallback(() => {
-    currentPlaySessionIdRef.current++; // Invalidate any running speak queue loops
-    if (sourceNodeRef.current) {
-      try {
-        sourceNodeRef.current.stop();
-        sourceNodeRef.current.disconnect();
-      } catch (e) {
-        // ignore
-      }
-      sourceNodeRef.current = null;
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
-    isPlayingQueueRef.current = false;
+    utteranceRef.current = null;
     setIsSpeaking(false);
   }, []);
 
-  const speak = useCallback(async (text: string, voiceUriOverride?: string, onEnd?: () => void) => {
-    stopSpeaking();
-    const mySessionId = ++currentPlaySessionIdRef.current;
-    
-    let newLang = selectedVoiceUri;
-    let newGender = voiceGender;
-
-    const voiceMatch = text.match(/\[VOICE:\s*([^,\]]+)(?:,\s*([^\]]+))?\]/i);
-    if (voiceMatch) {
-      const matchedLang = voiceMatch[1].trim().toLowerCase();
-      if (matchedLang.includes('hi') || matchedLang.includes('hindi')) newLang = 'hi';
-      else if (matchedLang.includes('ur') || matchedLang.includes('urdu')) newLang = 'ur';
-      else if (matchedLang.includes('es') || matchedLang.includes('spanish')) newLang = 'es';
-      else if (matchedLang.includes('fr') || matchedLang.includes('french')) newLang = 'fr';
-      else if (matchedLang.includes('de') || matchedLang.includes('german')) newLang = 'de';
-      else if (matchedLang.includes('it') || matchedLang.includes('italian')) newLang = 'it';
-      else if (matchedLang.includes('ar') || matchedLang.includes('arabic')) newLang = 'ar';
-      else if (matchedLang.includes('zh') || matchedLang.includes('chinese')) newLang = 'zh-CN';
-      else if (matchedLang.includes('ja') || matchedLang.includes('japanese')) newLang = 'ja';
-      else if (matchedLang.includes('uk')) newLang = 'en-GB';
-      else newLang = 'en';
-
-      setSelectedVoiceUri(newLang); // update global state
-
-      if (voiceMatch[2]) {
-        const g = voiceMatch[2].trim().toLowerCase();
-        if (g.includes('male') && !g.includes('female')) newGender = 'male';
-        else if (g.includes('female')) newGender = 'female';
-        
-        setVoiceGender(newGender);
-      }
-    } else if (voiceUriOverride) {
-      newLang = voiceUriOverride;
-    } else {
-      if (/[\u0600-\u06FF]/.test(text)) newLang = 'ur';
-      else if (/[\u0900-\u097F]/.test(text)) newLang = 'hi';
-    }
-
-    const cleanText = text
+  // Clean text for natural speech
+  const cleanTextForSpeech = (text: string): string => {
+    return text
       .replace(/\[VOICE:[^\]]+\]/gi, '')
-      .replace(/```[\s\S]*?```/g, ' Code block omitted. ')
-      .replace(/!\[.*?\]\(.*?\)/g, '')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Strip markdown link URLs, keeping link text
-      .replace(/[^\p{L}\p{N}\p{Z}\p{P}]/gu, '') // Keep letters, numbers, spaces, punctuation (removes emojis/symbols)
-      .replace(/[*_#`]/g, '')
+      .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+      .replace(/!\[.*?\]\(.*?\)/g, '') // Remove images
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert links to text
+      .replace(/[*_#`>|~]/g, '') // Remove markdown formatting
       .replace(/\s+/g, ' ')
       .trim();
+  };
 
-    if (!cleanText) {
-      onEnd?.();
+  // Auto-detect language code from text content
+  const detectLanguage = (text: string): string => {
+    if (/[\u0600-\u06FF]/.test(text)) return 'ur'; // Arabic/Urdu
+    if (/[\u0900-\u097F]/.test(text)) return 'hi'; // Hindi
+    if (/[\u4e00-\u9fff]/.test(text)) return 'zh-CN'; // Chinese
+    if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'ja'; // Japanese
+    if (/[\u0400-\u04FF]/.test(text)) return 'ru'; // Russian
+    return selectedVoiceUri; // Default to selected voice
+  };
+
+  const speak = useCallback((text: string) => {
+    // Stop any current speech
+    stopSpeaking();
+
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      console.warn('SpeechSynthesis not available in this browser');
       return;
     }
 
-    const chunks: string[] = [];
-    let currentChunk = '';
-    const words = cleanText.split(/\s+/);
+    const cleanText = cleanTextForSpeech(text);
+    if (!cleanText) return;
+
+    // Detect language from text content
+    const detectedLang = detectLanguage(cleanText);
+
+    // Create utterance
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     
-    for (const word of words) {
-      if (currentChunk.length + word.length > 400) {
-        chunks.push(currentChunk.trim());
-        currentChunk = word + ' ';
-      } else {
-        currentChunk += word + ' ';
-        // Support both English and Urdu/Arabic terminal punctuation for natural chunking
-        if (word.match(/[.!?]$/) || word.match(/[۔؟]$/)) {
-          chunks.push(currentChunk.trim());
-          currentChunk = '';
-        }
-      }
-    }
-    if (currentChunk.trim()) {
-      chunks.push(currentChunk.trim());
+    // Set language - try detected first, then selected
+    utterance.lang = detectedLang === 'ur' ? 'ur-PK' 
+      : detectedLang === 'hi' ? 'hi-IN'
+      : detectedLang === 'zh-CN' ? 'zh-CN'
+      : detectedLang === 'ja' ? 'ja-JP'
+      : detectedLang === 'en-GB' ? 'en-GB'
+      : 'en-US';
+
+    // Find best matching voice
+    const voice = findVoiceForLang(utterance.lang);
+    if (voice) {
+      utterance.voice = voice;
     }
 
-    if (chunks.length === 0) {
-      onEnd?.();
-      return;
-    }
+    // Natural speech settings
+    utterance.rate = 1.0; // Normal speed
+    utterance.pitch = 1.0; // Normal pitch
+    utterance.volume = 1.0;
 
-    setIsSpeaking(true);
-    isPlayingQueueRef.current = true;
-    
-    // Ensure context is alive
-    initAudioContext();
-    const ctx = audioCtxRef.current;
-    if (!ctx) {
+    // Handle events
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+
+    utterance.onend = () => {
       setIsSpeaking(false);
-      onEnd?.();
-      return;
-    }
+      utteranceRef.current = null;
+    };
 
-    // Fetch and decode concurrently
-    const playQueue = async () => {
-      try {
-        // PRE-FETCH ALL CHUNKS IN BACKGROUND TO ELIMINATE PAUSES
-        const fetchPromises = chunks.map(chunk => 
-          fetch('/api/voice/tts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lang: newLang, gender: newGender, text: chunk })
-          }).then(res => res.ok ? res.arrayBuffer() : null)
-        );
-
-        for (let i = 0; i < chunks.length; i++) {
-          if (mySessionId !== currentPlaySessionIdRef.current) break; // aborted
-
-          try {
-            const arrayBuffer = await fetchPromises[i];
-            if (!arrayBuffer) {
-              console.warn(`Fetch failed for chunk ${i}: "${chunks[i]}"`);
-              continue; // Skip broken chunks and keep playing
-            }
-            
-            if (mySessionId !== currentPlaySessionIdRef.current) break;
-            
-            // Safari compatibility for older/mobile WebKit engines where decodeAudioData does not return a Promise
-            const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
-              try {
-                const promise = ctx.decodeAudioData(
-                  arrayBuffer,
-                  (buffer) => resolve(buffer),
-                  (err) => reject(err || new Error('decodeAudioData failed'))
-                );
-                if (promise && typeof promise.catch === 'function') {
-                  promise.catch(reject);
-                }
-              } catch (err) {
-                reject(err);
-              }
-            });
-            
-            if (mySessionId !== currentPlaySessionIdRef.current) break;
-            
-            await new Promise<void>((resolve) => {
-              const source = ctx.createBufferSource();
-              source.buffer = audioBuffer;
-              
-              // Add a GainNode to double the volume
-              const gainNode = ctx.createGain();
-              gainNode.gain.value = 2.0;
-              
-              source.connect(gainNode);
-              gainNode.connect(ctx.destination);
-              
-              source.onended = () => resolve();
-              sourceNodeRef.current = source;
-              source.start(0);
-            });
-          } catch (chunkError) {
-            console.error(`Error playing chunk ${i}:`, chunkError);
-            // Allow remaining chunks to play even if one fails
-          }
-        }
-      } catch (err) {
-        console.error('Web Audio API playback failed', err);
-      } finally {
-        if (mySessionId === currentPlaySessionIdRef.current) {
-          setIsSpeaking(false);
-          isPlayingQueueRef.current = false;
-          onEnd?.();
-        }
+    utterance.onerror = (event) => {
+      console.warn('SpeechSynthesis error:', event.error);
+      setIsSpeaking(false);
+      utteranceRef.current = null;
+      
+      // Fallback to server TTS if SpeechSynthesis fails
+      if (event.error === 'voice-unavailable' || event.error === 'language-unavailable') {
+        console.log('Falling back to server-side TTS...');
+        speakViaServer(cleanText, detectedLang);
       }
     };
 
-    playQueue();
+    utteranceRef.current = utterance;
+    
+    // Chrome has a bug where speech stops after ~15s. This workaround keeps it alive.
+    const synthesis = window.speechSynthesis;
+    synthesis.speak(utterance);
+
+    // Chrome workaround: re-trigger speech if it gets stuck
+    const checkInterval = setInterval(() => {
+      if (!synthesis.speaking) {
+        clearInterval(checkInterval);
+      } else {
+        synthesis.pause();
+        synthesis.resume();
+      }
+    }, 10000);
+
+    // Clean up interval when speech ends
+    utterance.onend = () => {
+      clearInterval(checkInterval);
+      setIsSpeaking(false);
+      utteranceRef.current = null;
+    };
 
   }, [selectedVoiceUri, voiceGender, stopSpeaking]);
 
+  // Fallback: use server-side TTS via API route
+  const speakViaServer = async (text: string, lang: string) => {
+    try {
+      const res = await fetch('/api/voice/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          lang: lang || selectedVoiceUri, 
+          gender: voiceGender, 
+          text 
+        })
+      });
+      
+      if (!res.ok) throw new Error('Server TTS failed');
+      
+      const audioBlob = await res.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      audio.onplay = () => setIsSpeaking(true);
+      audio.onended = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      await audio.play();
+    } catch (err) {
+      console.warn('Server TTS fallback also failed:', err);
+      setIsSpeaking(false);
+    }
+  };
+
   const toggleLiveVoice = useCallback(() => {
-    setLiveVoiceMode(prev => {
-      const next = !prev;
-      if (!next && isSpeaking) {
-        stopSpeaking();
-      } else if (next) {
-        // Unlock audio context explicitly on user tap
-        initAudioContext();
-      }
-      return next;
-    });
-  }, [isSpeaking, stopSpeaking]);
+    setLiveVoiceMode(prev => !prev);
+  }, []);
 
   return (
     <TTSContext.Provider value={{

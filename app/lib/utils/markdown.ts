@@ -1,3 +1,5 @@
+import { PREVIEW_LANGUAGES } from './preview';
+
 export function parseMarkdown(text: string): string {
   if (!text) return '';
 
@@ -14,15 +16,24 @@ export function parseMarkdown(text: string): string {
     .replace(/\[SEARCH:\s*(?:"|')?([^"\]]+)(?:"|')?\]/gi, '<div class="flex items-center gap-2 text-accent my-2 animate-pulse bg-accent/10 w-max px-3 py-1.5 rounded-lg border border-accent/20"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-spin"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span class="text-xs font-medium tracking-wide">Web Searching: $1...</span></div>')
     // Maps Search UI
     .replace(/\[MAPS:\s*(?:"|')?([^"\]]+)(?:"|')?\]/gi, '<div class="flex items-center gap-2 text-accent my-2 animate-pulse bg-accent/10 w-max px-3 py-1.5 rounded-lg border border-accent/20"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-bounce"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg><span class="text-xs font-medium tracking-wide">Locating: $1...</span></div>')
-    // Fenced code blocks -> styled block with header + copy button
+    // Fenced code blocks -> styled block with header + copy + preview buttons
     .replace(/```(\w+)?\n?([\s\S]*?)```/g, (_m, lang, code) => {
       const language = (lang || 'text').toLowerCase();
       const clean = code.replace(/\n$/, '');
+      const escaped = clean
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
       return (
         `<div class="code-block">` +
         `<div class="code-block-header">` +
         `<span class="code-lang">${language}</span>` +
+        `<div class="flex items-center gap-1.5">` +
+        (PREVIEW_LANGUAGES.includes(language) 
+          ? `<button type="button" class="code-preview" data-lang="${language}" data-code="${escaped}" aria-label="Preview code" title="Run in preview">▶ Preview</button>`
+          : '') +
         `<button type="button" class="code-copy" aria-label="Copy code">Copy</button>` +
+        `</div>` +
         `</div>` +
         `<pre><code>${clean}</code></pre>` +
         `</div>`

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import {
@@ -23,6 +23,12 @@ import {
   VolumeX,
   Globe,
   LoaderCircle,
+  Search,
+  FileText,
+  File,
+  FileSpreadsheet,
+  FileArchive,
+  File as FileIcon,
 } from 'lucide-react';
 import { useChat, type ChatAttachment } from '@/app/components/providers/ChatProvider';
 import CameraModal from './CameraModal';
@@ -38,7 +44,7 @@ const SUGGESTIONS = [
   { icon: Code2, title: 'Explain some code', prompt: 'Explain how async/await works in JavaScript with an example.' },
 ];
 
-const MODE_PLACEHOLDERS = {
+const MODE_PLACEHOLDERS: Record<string, string> = {
   casual: "Chat naturally, I'm here for you.",
   developer: 'Write code, debug, or architect systems.',
   research: 'Dive deep into research, analyse data.',
@@ -52,6 +58,28 @@ const SLASH_COMMANDS = [
   { cmd: 'help', label: 'Show help', desc: 'List slash commands and modes.', icon: HelpCircle },
 ];
 
+// --- Gemini-style search stages ---
+const SEARCH_STAGES = [
+  { icon: Globe, text: 'Analyzing the web...', delay: 0 },
+  { icon: Search, text: 'Searching sources...', delay: 1200 },
+  { icon: FileText, text: 'Reading results...', delay: 2500 },
+  { icon: Sparkles, text: 'Generating answer...', delay: 3800 },
+];
+
+// --- File type icon + color ---
+function getFileIcon(mimeType: string, name: string) {
+  const ext = name.split('.').pop()?.toLowerCase();
+  if (mimeType.startsWith('image/')) return { Icon: ImageIcon, color: '#a855f7' };
+  if (mimeType.includes('pdf') || ext === 'pdf') return { Icon: FileText, color: '#ef4444' };
+  if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || ext === 'xlsx' || ext === 'xls' || ext === 'csv') return { Icon: FileSpreadsheet, color: '#22c55e' };
+  if (mimeType.includes('zip') || mimeType.includes('rar') || ext === 'zip' || ext === 'rar') return { Icon: FileArchive, color: '#f59e0b' };
+  if (mimeType.includes('text') || ext === 'txt' || ext === 'md') return { Icon: FileText, color: '#6366f1' };
+  if (mimeType.includes('document') || mimeType.includes('word') || ext === 'doc' || ext === 'docx') return { Icon: FileText, color: '#3b82f6' };
+  return { Icon: FileIcon, color: '#6b7280' };
+}
+
+const ACCEPTED_FILE_TYPES = '.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.zip,.rar,.json,.xml,.html,.css,.js,.ts,.tsx,.py,.java,.cpp,.hpp,.go,.rb,.php,.png,.jpg,.jpeg,.gif,.webp,.svg,.ico,.bmp';
+
 export default function ChatInterface() {
   const [input, setInput] = useState('');
   const [slashOpen, setSlashOpen] = useState(false);
@@ -61,8 +89,10 @@ export default function ChatInterface() {
   const [showCamera, setShowCamera] = useState(false);
   const [isImageMode, setIsImageMode] = useState(false);
   const [isVideoMode, setIsVideoMode] = useState(false);
-  const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [micActive, setMicActive] = useState(false);
+  const [searchStage, setSearchStage] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [isMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -83,9 +113,11 @@ export default function ChatInterface() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const slashRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0);
   const prevStreamingRef = useRef(false);
   const lastSpokenMessageRef = useRef('');
   const searchAttemptsRef = useRef(0);
+  const searchStageTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { data: session } = useSession();
   const userName = session?.user?.name?.split(' ')[0] || 'there';
 
@@ -106,7 +138,30 @@ export default function ChatInterface() {
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   }, [input]);
 
-  // === AI VOICE: Auto-read responses when AI Voice is enabled ===
+  // --- Gemini-style multi-stage search animation ---
+  const startSearchAnimation = useCallback(() => {
+    setSearchStage(0);
+    let currentStage = 0;
+    const timer = setInterval(() => {
+      currentStage++;
+      if (currentStage < SEARCH_STAGES.length) {
+        setSearchStage(currentStage);
+      } else {
+        clearInterval(timer);
+      }
+    }, 1200);
+    searchStageTimerRef.current = timer;
+  }, []);
+
+  const stopSearchAnimation = useCallback(() => {
+    if (searchStageTimerRef.current) {
+      clearInterval(searchStageTimerRef.current);
+      searchStageTimerRef.current = null;
+    }
+    setSearchStage(null);
+  }, []);
+
+  // === AI VOICE + SEARCH HANDLER ===
   useEffect(() => {
     if (prevStreamingRef.current && !isStreaming) {
       const lastMessage = messages[messages.length - 1];
@@ -118,28 +173,51 @@ export default function ChatInterface() {
         if (searchMatch) {
           searchAttemptsRef.current++;
           if (searchAttemptsRef.current > 2) {
-            setSearchStatus(null);
+            stopSearchAnimation();
             sendMessage('[SYSTEM SEARCH ERROR] Unavailable.', undefined, { isHidden: true });
             prevStreamingRef.current = isStreaming;
             return;
           }
           const query = searchMatch[1];
-          setSearchStatus(query);
+          setSearchQuery(query);
+          startSearchAnimation();
+          
           fetch(`/api/search?q=${encodeURIComponent(query)}`)
             .then(r => r.json())
             .then(data => {
-              setSearchStatus(null);
+              stopSearchAnimation();
               sendMessage(`[SYSTEM SEARCH RESULTS FOR "${query}"]\n${data.results}\n\nAnswer based ONLY on results.`, undefined, { isHidden: true });
             })
             .catch(() => {
-              setSearchStatus(null);
+              stopSearchAnimation();
               sendMessage('[SYSTEM SEARCH ERROR] Failed.', undefined, { isHidden: true });
             });
           prevStreamingRef.current = isStreaming;
           return;
         }
 
-        // AI VOICE: Read response aloud if enabled and not already spoken
+        // Check for maps command
+        const mapsMatch = text.match(/\[MAPS:\s*(?:"|')?([^"\]}]+)(?:"|')?\]/i);
+        if (mapsMatch) {
+          const query = mapsMatch[1];
+          setSearchQuery(`📍 ${query}`);
+          startSearchAnimation();
+          
+          fetch(`/api/maps?q=${encodeURIComponent(query)}`)
+            .then(r => r.json())
+            .then(data => {
+              stopSearchAnimation();
+              sendMessage(`[SYSTEM MAPS RESULTS FOR "${query}"]\n${data.results}\n\nAnswer based ONLY on results.`, undefined, { isHidden: true });
+            })
+            .catch(() => {
+              stopSearchAnimation();
+              sendMessage('[SYSTEM MAPS ERROR] Failed.', undefined, { isHidden: true });
+            });
+          prevStreamingRef.current = isStreaming;
+          return;
+        }
+
+        // AI VOICE: Read response aloud if enabled
         if (aiVoiceEnabled && text !== lastSpokenMessageRef.current && !text.startsWith('[SYSTEM')) {
           lastSpokenMessageRef.current = text;
           speak(text);
@@ -147,7 +225,11 @@ export default function ChatInterface() {
       }
     }
     prevStreamingRef.current = isStreaming;
-  }, [isStreaming, messages, aiVoiceEnabled, speak, sendMessage]);
+    
+    return () => {
+      stopSearchAnimation();
+    };
+  }, [isStreaming, messages, aiVoiceEnabled, speak, sendMessage, startSearchAnimation, stopSearchAnimation]);
 
   const slashQuery = input.startsWith('/') ? input.split(/\s+/)[0].slice(1).toLowerCase() : '';
   const filteredCommands = SLASH_COMMANDS.filter(c => slashQuery ? c.cmd.startsWith(slashQuery) : true);
@@ -185,6 +267,13 @@ export default function ChatInterface() {
     let finalInput = input;
     if (isImageMode && !finalInput.startsWith('/img')) finalInput = `/img ${finalInput.trim()}`;
     else if (isVideoMode && !finalInput.startsWith('/video')) finalInput = `/video ${finalInput.trim()}`;
+    
+    // If there are non-image attachments (PDF, docs, etc.), append them to the message context
+    const hasNonImageFiles = attachments.some(a => !a.mimeType.startsWith('image/'));
+    if (hasNonImageFiles && !finalInput.trim()) {
+      finalInput = 'Please analyze the attached file(s).';
+    }
+    
     searchAttemptsRef.current = 0;
     sendMessage(finalInput, attachments);
     setInput(''); setAttachments([]); setIsImageMode(false); setIsVideoMode(false);
@@ -200,38 +289,108 @@ export default function ChatInterface() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
+  // --- Enhanced file handling with PDF/DOCX/TXT support ---
+  const processFile = async (file: File): Promise<ChatAttachment | null> => {
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      setNotice(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max is 10MB.`);
+      window.setTimeout(() => setNotice(null), 4000);
+      return null;
+    }
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      const dataUri = await new Promise<string>(resolve => { reader.onload = ev => resolve(ev.target?.result as string); reader.readAsDataURL(file); });
+      const img = new window.Image();
+      const compressedUri = await new Promise<string>(resolve => {
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+          const MAX_DIMENSION = 800;
+          if (width > height && width > MAX_DIMENSION) { height *= MAX_DIMENSION / width; width = MAX_DIMENSION; }
+          else if (height > MAX_DIMENSION) { width *= MAX_DIMENSION / height; height = MAX_DIMENSION; }
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) { ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }
+          else resolve(dataUri);
+        };
+        img.src = dataUri;
+      });
+      return { url: compressedUri, mimeType: 'image/jpeg', name: file.name };
+    }
+
+    // For non-image files, read as text/data URL and send to server for processing
+    const reader = new FileReader();
+    const content = await new Promise<string>(resolve => {
+      reader.onload = ev => resolve(ev.target?.result as string);
+      
+      if (file.type.startsWith('text/') || file.name.match(/\.(txt|md|json|xml|html|css|js|ts|tsx|py|java|cpp|hpp|go|rb|php|csv)$/i)) {
+        reader.readAsText(file);
+      } else {
+        reader.readAsDataURL(file);
+      }
+    });
+
+    return {
+      url: content,
+      mimeType: file.type || 'application/octet-stream',
+      name: file.name,
+    };
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
+    
     const newAttachments: ChatAttachment[] = [];
     for (const file of files) {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        const dataUri = await new Promise<string>(resolve => { reader.onload = ev => resolve(ev.target?.result as string); reader.readAsDataURL(file); });
-        const img = new window.Image();
-        const compressedUri = await new Promise<string>(resolve => {
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            let { width, height } = img;
-            const MAX_DIMENSION = 800;
-            if (width > height && width > MAX_DIMENSION) { height *= MAX_DIMENSION / width; width = MAX_DIMENSION; }
-            else if (height > MAX_DIMENSION) { width *= MAX_DIMENSION / height; height = MAX_DIMENSION; }
-            canvas.width = width; canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) { ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.8)); }
-            else resolve(dataUri);
-          };
-          img.src = dataUri;
-        });
-        newAttachments.push({ url: compressedUri, mimeType: 'image/jpeg', name: file.name });
-      } else {
-        setNotice('Only images supported for analysis.');
-        window.setTimeout(() => setNotice(null), 3000);
-      }
+      const result = await processFile(file);
+      if (result) newAttachments.push(result);
     }
     setAttachments(prev => [...prev, ...newAttachments]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  // --- Drag and drop handlers ---
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setDragOver(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    dragCounterRef.current = 0;
+    
+    const files = Array.from(e.dataTransfer.files || []);
+    if (!files.length) return;
+    
+    const newAttachments: ChatAttachment[] = [];
+    for (const file of files) {
+      const result = await processFile(file);
+      if (result) newAttachments.push(result);
+    }
+    setAttachments(prev => [...prev, ...newAttachments]);
+  }, []);
 
   const handleCameraCapture = (dataUri: string) => {
     setAttachments(prev => [...prev, { url: dataUri, mimeType: 'image/jpeg', name: `camera-${Date.now()}.jpg` }]);
@@ -244,18 +403,24 @@ export default function ChatInterface() {
   const showThinking = isStreaming && (!lastMessage || lastMessage.sender === 'user');
 
   return (
-    <section className="relative flex min-h-0 flex-1 flex-col bg-background/50">
+    <section 
+      className="relative flex min-h-0 flex-1 flex-col bg-background/50"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       {/* === AI VOICE HEADER TOGGLE (like Gemini) === */}
-      <div className="sticky top-0 z-40 flex items-center justify-end gap-3 px-4 py-2 border-b border-border/30 bg-background/80 backdrop-blur-md">
-        <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-40 flex items-center justify-end gap-2 px-2 sm:px-4 py-1.5 sm:py-2 border-b border-border/30 bg-background/80 backdrop-blur-md">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Speaking Indicator Waveform */}
           {isSpeaking && (
             <div className="flex items-center gap-0.5 mr-1">
-              <span className="sound-bar h-3 w-0.5 rounded-full bg-accent animate-pulse" />
-              <span className="sound-bar h-4 w-0.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: '0.15s' }} />
-              <span className="sound-bar h-2.5 w-0.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: '0.3s' }} />
-              <span className="sound-bar h-4 w-0.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: '0.1s' }} />
-              <span className="sound-bar h-3 w-0.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: '0.25s' }} />
+              <span className="sound-bar h-2.5 sm:h-3 w-0.5 rounded-full bg-accent animate-pulse" />
+              <span className="sound-bar h-3 sm:h-4 w-0.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: '0.15s' }} />
+              <span className="sound-bar h-2 sm:h-2.5 w-0.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: '0.3s' }} />
+              <span className="sound-bar h-3 sm:h-4 w-0.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: '0.1s' }} />
+              <span className="sound-bar h-2.5 sm:h-3 w-0.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: '0.25s' }} />
             </div>
           )}
 
@@ -271,14 +436,14 @@ export default function ChatInterface() {
               }
             }}
             className={[
-              'flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold transition-all duration-200 border',
+              'flex items-center gap-1.5 sm:gap-2 rounded-full px-3 sm:px-4 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold transition-all duration-200 border',
               aiVoiceEnabled
                 ? 'bg-accent text-white border-accent shadow-sm shadow-accent/30'
                 : 'bg-surface text-muted border-border hover:text-foreground hover:border-accent/50',
             ].join(' ')}
           >
-            {aiVoiceEnabled ? <Volume2 size={15} className={isSpeaking ? 'animate-pulse' : ''} /> : <VolumeX size={15} />}
-            <span>{aiVoiceEnabled ? (isSpeaking ? 'Speaking...' : 'Voice On') : 'Voice'}</span>
+            {aiVoiceEnabled ? <Volume2 size={13} className={isSpeaking ? 'animate-pulse' : ''} /> : <VolumeX size={13} />}
+            <span className="hidden sm:inline">{aiVoiceEnabled ? (isSpeaking ? 'Speaking...' : 'Voice On') : 'Voice'}</span>
           </button>
         </div>
       </div>
@@ -286,14 +451,52 @@ export default function ChatInterface() {
       {/* Camera Modal */}
       {showCamera && <CameraModal onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />}
 
-      {/* Web Search Status - Inline pill */}
-      {searchStatus && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
-          <div className="flex items-center gap-2 bg-surface/95 border border-border/50 rounded-full px-4 py-2 shadow-lg backdrop-blur-md">
-            <Globe size={16} className="text-accent animate-pulse shrink-0" />
-            <LoaderCircle size={14} className="text-accent animate-spin shrink-0" />
-            <span className="text-xs font-medium text-foreground">Searching...</span>
-            <span className="text-xs text-muted truncate max-w-[150px]">{searchStatus}</span>
+      {/* === GEMINI-STYLE MULTI-STAGE SEARCH ANIMATION === */}
+      {searchStage !== null && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-fade-in-down" style={{ maxWidth: '90vw' }}>
+          <div className="flex items-center gap-3 bg-surface/95 border border-border/50 rounded-xl px-4 py-2.5 shadow-xl backdrop-blur-md">
+            {/* Current Stage Icon */}
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
+              {(() => {
+                const StageIcon = SEARCH_STAGES[searchStage]?.icon || LoaderCircle;
+                return <StageIcon size={15} className={searchStage < 3 ? 'animate-spin' : 'animate-pulse'} />;
+              })()}
+            </span>
+            
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold text-foreground tracking-wide">
+                {SEARCH_STAGES[searchStage]?.text || 'Processing...'}
+              </span>
+              {searchQuery && (
+                <span className="text-xs text-muted truncate max-w-[200px] sm:max-w-[300px]">
+                  {searchQuery}
+                </span>
+              )}
+            </div>
+
+            {/* Stage Dots Progress */}
+            <div className="flex items-center gap-1 ml-auto">
+              {SEARCH_STAGES.map((_, i) => (
+                <span
+                  key={i}
+                  className={[
+                    'h-1.5 rounded-full transition-all duration-300',
+                    i === searchStage ? 'w-4 bg-accent' : i < searchStage ? 'w-1.5 bg-accent/40' : 'w-1.5 bg-border',
+                  ].join(' ')}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === DRAG & DROP OVERLAY === */}
+      {dragOver && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm animate-fade-in">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-accent bg-surface/80 px-8 py-10 shadow-xl">
+            <Paperclip size={40} className="text-accent animate-bounce" />
+            <p className="text-sm font-semibold text-foreground">Drop files here</p>
+            <p className="text-xs text-muted">PDFs, images, documents, code files — anything</p>
           </div>
         </div>
       )}
@@ -350,7 +553,7 @@ export default function ChatInterface() {
       </div>
 
       {/* Docked Input */}
-      <div className="px-3 pb-4 sm:px-4 sm:pb-6">
+      <div className="px-3 pb-4 sm:px-4 sm:pb-6 mobile-input-safe">
         <div className="mx-auto w-full max-w-3xl">
           {(noticeText ?? notice) && (
             <div className="mb-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent animate-fade-in">{noticeText ?? notice}</div>
@@ -380,6 +583,7 @@ export default function ChatInterface() {
               'flex flex-col gap-2 rounded-[28px] border p-2 shadow-sm transition-all glass-pill',
               isImageMode ? 'border-[#a855f7] focus-within:border-[#a855f7]' 
                 : isVideoMode ? 'border-[#3b82f6] focus-within:border-[#3b82f6]'
+                : dragOver ? 'border-accent border-dashed'
                 : 'border-border focus-within:border-accent focus-within:shadow-md'
             ].join(' ')}>
               {isVideoMode && (
@@ -388,17 +592,35 @@ export default function ChatInterface() {
                   <span className="text-[10px] text-muted">Free · Hugging Face</span>
                 </div>
               )}
+              
+              {/* Attachments preview */}
               {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-2 pt-2">
-                  {attachments.map((att, idx) => (
-                    <div key={idx} className="group relative h-14 w-14 sm:h-16 sm:w-16 overflow-hidden rounded-lg border border-border">
-                      <Image src={att.url} alt={att.name} fill className="object-cover" unoptimized />
-                      <button type="button" onClick={() => removeAttachment(idx)}
-                        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black"><X size={12} /></button>
-                    </div>
-                  ))}
+                  {attachments.map((att, idx) => {
+                    const { Icon: FileTypeIcon, color } = getFileIcon(att.mimeType, att.name);
+                    const isImage = att.mimeType.startsWith('image/');
+                    return (
+                      <div key={idx} className="group relative h-14 w-14 sm:h-16 sm:w-16 overflow-hidden rounded-lg border border-border">
+                        {isImage ? (
+                          <Image src={att.url} alt={att.name} fill className="object-cover" unoptimized />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-surface-2" style={{ color }}>
+                            <FileTypeIcon size={20} />
+                          </div>
+                        )}
+                        <button type="button" onClick={() => removeAttachment(idx)}
+                          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black"><X size={12} /></button>
+                        {!isImage && (
+                          <div className="absolute bottom-0 left-0 right-0 truncate bg-black/50 px-1 text-[8px] text-white">
+                            {att.name}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+              
               <textarea ref={textareaRef} value={input} rows={1} placeholder={placeholder}
                 onChange={e => {
                   const v = e.target.value; setInput(v);
@@ -409,33 +631,40 @@ export default function ChatInterface() {
                 className="max-h-[150px] sm:max-h-[200px] w-full resize-none bg-transparent px-3 py-2 text-sm sm:text-base leading-relaxed text-foreground outline-none placeholder:text-muted disabled:opacity-60"
               />
               <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-0.5 sm:gap-1">
-                  <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" multiple className="hidden" />
+                <div className="flex items-center gap-0 sm:gap-0.5">
+                  <input type="file" ref={fileInputRef} onChange={handleFileChange} accept={ACCEPTED_FILE_TYPES} multiple className="hidden" />
                   <button type="button" onClick={() => { setIsImageMode(!isImageMode); setIsVideoMode(false); }}
-                    className={['rounded-lg p-1.5 sm:p-2 transition-colors', isImageMode ? 'bg-[#a855f7]/10 text-[#a855f7]' : 'text-muted hover:bg-surface-2 hover:text-foreground'].join(' ')}
-                  ><Wand2 size={16} /></button>
+                    className={['rounded-lg p-1 sm:p-1.5 sm:p-2 transition-colors', isImageMode ? 'bg-[#a855f7]/10 text-[#a855f7]' : 'text-muted hover:bg-surface-2 hover:text-foreground'].join(' ')}
+                    title="Image generation mode"
+                  ><Wand2 size={15} /></button>
                   <button type="button" onClick={() => { setIsVideoMode(!isVideoMode); setIsImageMode(false); }}
-                    className={['rounded-lg p-1.5 sm:p-2 transition-colors', isVideoMode ? 'bg-[#3b82f6]/10 text-[#3b82f6]' : 'text-muted hover:bg-surface-2 hover:text-foreground'].join(' ')}
-                  ><Video size={16} /></button>
+                    className={['rounded-lg p-1 sm:p-1.5 sm:p-2 transition-colors', isVideoMode ? 'bg-[#3b82f6]/10 text-[#3b82f6]' : 'text-muted hover:bg-surface-2 hover:text-foreground'].join(' ')}
+                    title="Video generation mode"
+                  ><Video size={15} /></button>
                   <button type="button" onClick={() => fileInputRef.current?.click()}
-                    className="rounded-lg p-1.5 sm:p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-                  ><Paperclip size={16} /></button>
+                    className="rounded-lg p-1 sm:p-1.5 sm:p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                    title="Attach files (PDF, images, docs, code...)"
+                  ><Paperclip size={15} /></button>
                   {isMobile && (
                     <button type="button" onClick={() => setShowCamera(true)}
-                      className="rounded-lg p-1.5 sm:p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-                    ><Camera size={16} /></button>
+                      className="rounded-lg p-1 sm:p-1.5 sm:p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                      title="Take a photo"
+                    ><Camera size={15} /></button>
                   )}
                   <button type="button" onClick={handleMicClick}
-                    className={['relative rounded-lg p-1.5 sm:p-2 transition-colors', micActive ? 'bg-danger text-white shadow-lg shadow-danger/30' : 'text-muted hover:bg-surface-2 hover:text-foreground'].join(' ')}
-                  >{micActive ? <MicOff size={16} /> : <Mic size={16} />}</button>
+                    className={['relative rounded-lg p-1 sm:p-1.5 sm:p-2 transition-colors', micActive ? 'bg-danger text-white shadow-lg shadow-danger/30' : 'text-muted hover:bg-surface-2 hover:text-foreground'].join(' ')}
+                    title={micActive ? 'Stop recording' : 'Voice input'}
+                  >{micActive ? <MicOff size={15} /> : <Mic size={15} />}</button>
                 </div>
                 {isStreaming ? (
                   <button type="button" onClick={stop}
-                    className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-surface-2 text-foreground transition-all hover:bg-danger hover:text-white"
+                    className="flex h-7 w-7 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-surface-2 text-foreground transition-all hover:bg-danger hover:text-white"
+                    title="Stop generating"
                   ><div className="h-3 w-3 rounded-[2px] bg-current" /></button>
                 ) : (
                   <button type="button" onClick={handleSend} disabled={!input.trim() && attachments.length === 0}
-                    className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-accent text-accent-foreground transition-all hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted"
+                    className="flex h-7 w-7 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-accent text-accent-foreground transition-all hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted"
+                    title="Send message"
                   ><ArrowUp size={16} /></button>
                 )}
               </div>

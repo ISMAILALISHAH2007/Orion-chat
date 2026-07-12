@@ -262,7 +262,8 @@ body {
   color: var(--muted);
   letter-spacing: 0.5px;
 }
-.code-copy {
+.code-copy,
+.code-preview {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -271,11 +272,14 @@ body {
   color: var(--muted);
   font-size: 0.72rem;
   cursor: pointer;
-  padding: 3px 6px;
+  padding: 3px 8px;
   border-radius: 6px;
   transition: var(--transition-fast);
+  font-weight: 500;
 }
 .code-copy:hover { color: var(--foreground); background: var(--surface-hover); }
+.code-preview { color: #22c55e; }
+.code-preview:hover { color: #16a34a; background: rgba(34, 197, 94, 0.1); }
 .code-block pre {
   margin: 0;
   padding: 14px 16px;
@@ -660,5 +664,103 @@ body {
     padding-bottom: max(8px, env(safe-area-inset-bottom, 8px));
   }
 }
+
+/* ==========================================================================
+   PHONE-SPECIFIC FIXES (max-width: 480px)
+   ========================================================================== */
+@media (max-width: 480px) {
+  /* Prevent horizontal overflow on all containers */
+  .overflow-x-auto {
+    max-width: calc(100vw - 16px);
+  }
+
+  /* Smaller code blocks on phones */
+  .code-block pre {
+    padding: 10px 12px;
+    font-size: 0.75rem;
+  }
+  .code-block-header {
+    padding: 5px 10px;
+  }
+  .code-lang {
+    font-size: 0.65rem;
+  }
+  .code-copy,
+  .code-preview {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+  }
+
+  /* Smaller generated images on phones */
+  .generated-image {
+    border-radius: 12px;
+    max-width: 100%;
+  }
+
+  /* Compact message spacing */
+  .msg-content {
+    font-size: 0.85rem;
+    line-height: 1.55;
+  }
+  .msg-content h1 { font-size: 1rem; }
+  .msg-content h2 { font-size: 0.95rem; }
+  .msg-content h3 { font-size: 0.9rem; }
+
+  /* Better touch targets for chat toolbar buttons */
+  .glass-pill button.rounded-lg {
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  /* Smaller thinking indicator */
+  .thinking-dots span {
+    width: 5px;
+    height: 5px;
+  }
+
+  /* Scrollbar fix for touch devices */
+  ::-webkit-scrollbar {
+    width: 3px;
+  }
+
+  /* Auth card full width on phone */
+  .auth-card {
+    max-width: 100%;
+    padding: 1.25rem 1rem;
+  }
+}
+
+/* Extra small devices (under 380px) */
+@media (max-width: 380px) {
+  .msg-content {
+    font-size: 0.8rem;
+  }
+  .code-block pre {
+    padding: 8px 10px;
+    font-size: 0.7rem;
+  }
+  .text-xs {
+    font-size: 0.65rem;
+  }
+}
+
+/* ==========================================================================
+   Prevent text overflow on messages
+   ========================================================================== */
+.msg-content pre,
+.msg-content code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.msg-content img,
+.msg-content video {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+
+
+
 
 
