@@ -3,7 +3,6 @@ import {
   getDefaultModelForMode,
   getActiveProvider,
   getVisionModel,
-  getHiddenFallbackModel,
   type AIProviderName,
 } from '@/app/lib/ai/provider';
 import { checkRateLimit } from '@/app/lib/rate-limit';
@@ -217,14 +216,17 @@ async function saveVideoResult(userId: string | undefined, prompt: string, array
   const videoUrl = record ? `/api/video?id=${record.id}` : `data:video/mp4;base64,${base64}`;
   const downloadName = (record?.id ?? `ultron-video-${Date.now()}`);
   
+  // Build download link: for persisted videos, use API endpoint; for data URIs, just link directly
+  const downloadLink = record
+    ? `[Download Video](/api/video?id=${record.id}&download=1 "${downloadName}")`
+    : `[Download Video](${videoUrl} "${downloadName}")`;
+  
   return [
     `[VIDEO: ${videoUrl}]`,
     ``,
-    `[Download Video](${videoUrl}&download=1 "${downloadName}")`
+    downloadLink
   ].join('\n');
 }
-
-
 async function persistExchange(
   userId: string | undefined,
   sessionId: string | undefined,
@@ -396,8 +398,6 @@ export async function POST(req: Request) {
 
     // ----- 5. System prompt — base + slash overrides + memories -----
     const currentDate = new Date().toLocaleString('en-US', { timeZone: timeZone || 'UTC', timeZoneName: 'short' });
-    const currentVoiceLang = voiceLang || 'en';
-    const currentVoiceGender = voiceGender || 'female';
     
     let systemPrompt = `You are ULTRON, a highly advanced cognitive AI assistant. Current mode: ${String(mode).toUpperCase()}. Response style should be precise, intelligent, and highly capable.
 

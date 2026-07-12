@@ -38,7 +38,7 @@ interface TopNavProps {
 export default function TopNav({ onOpenSidebar }: TopNavProps) {
   const { mode, setMode } = useMode();
   const { theme, toggleTheme } = useTheme();
-  const { voices, selectedVoiceUri, setSelectedVoiceUri, liveVoiceMode, toggleLiveVoice } = useTTS();
+  const { voices, selectedVoiceUri, setSelectedVoiceUri, liveVoiceMode, setLiveVoiceMode } = useTTS();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -113,8 +113,24 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
         )}
       </div>
 
-      {/* Right: Empty spacer */}
-      <div className="flex w-8 sm:w-10 items-center justify-end" />
+      {/* Right: Live Voice button */}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => setLiveVoiceMode(!liveVoiceMode)}
+          title={liveVoiceMode ? 'Live Voice ON — tap to stop' : 'Live Voice — tap to start conversation'}
+          className={[
+            'flex items-center gap-1.5 rounded-full px-2.5 sm:px-3 py-1.5 text-[11px] font-semibold transition-all duration-200 border',
+            liveVoiceMode
+              ? 'bg-[#22c55e] text-white border-[#22c55e] shadow-sm shadow-[#22c55e]/30 animate-pulse'
+              : 'bg-surface text-muted border-border hover:text-foreground hover:border-[#22c55e]/50',
+          ].join(' ')}
+        >
+          <span className={liveVoiceMode ? 'animate-pulse' : ''}>
+            {liveVoiceMode ? '○' : '○'}
+          </span>
+          <span className="hidden sm:inline">{liveVoiceMode ? 'LIVE' : 'Voice'}</span>
+        </button>
+      </div>
     </header>
   );
 }

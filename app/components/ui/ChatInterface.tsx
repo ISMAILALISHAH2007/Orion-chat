@@ -58,12 +58,20 @@ const SLASH_COMMANDS = [
   { cmd: 'help', label: 'Show help', desc: 'List slash commands and modes.', icon: HelpCircle },
 ];
 
-// --- Gemini-style search stages ---
-const SEARCH_STAGES = [
-  { icon: Globe, text: 'Analyzing the web...', delay: 0 },
-  { icon: Search, text: 'Searching sources...', delay: 1200 },
-  { icon: FileText, text: 'Reading results...', delay: 2500 },
-  { icon: Sparkles, text: 'Generating answer...', delay: 3800 },
+// --- Gemini-style thinking + search stages (slower, more deliberate) ---
+const THINKING_STAGES = [
+  { icon: Sparkles, text: 'Thinking...' },
+  { icon: Globe, text: 'Analyzing the web...' },
+  { icon: Search, text: 'Searching sources...' },
+  { icon: FileText, text: 'Reading results...' },
+  { icon: Sparkles, text: 'Generating answer...' },
+];
+
+// Thinking stage that shows when user sends a message
+// (before any response comes back)
+const PRE_THINK_STAGES = [
+  { icon: Sparkles, text: 'Thinking...' },
+  { icon: LoaderCircle, text: 'Processing your request...' },
 ];
 
 // --- File type icon + color ---
@@ -99,13 +107,21 @@ export default function ChatInterface() {
   });
   const { messages, sendMessage, isStreaming, stop } = useChat();
   const { mode } = useMode();
-  const { speak, isSpeaking, stopSpeaking, selectedVoiceUri, initAudioContext, aiVoiceEnabled, setAiVoiceEnabled } = useTTS();
-  const { isRecording, startRecording, stopRecording, transcript, voiceError, setVoiceError } = useVoice({
+  const { speak, isSpeaking, stopSpeaking, selectedVoiceUri, initAudioContext, aiVoiceEnabled, setAiVoiceEnabled, liveVoiceMode, setLiveVoiceMode } = useTTS();
+  const { isRecording, startRecording, stopRecording, transcript, voiceError, setVoiceError, setContinuousMode } = useVoice({
     language: selectedVoiceUri,
     onSpeechEnd: (finalText) => {
-      if (micActive) {
-        setInput((prev) => (prev ? prev + ' ' + finalText : finalText));
-        setMicActive(false);
+      if (micActive || liveVoiceMode) {
+        if (liveVoiceMode) {
+          // In live conversation mode: auto-send the transcribed speech
+          setInput('');
+          setTimeout(() => {
+            sendMessage(finalText);
+          }, 50);
+        } else {
+          setInput((prev) => (prev ? prev + ' ' + finalText : finalText));
+          setMicActive(false);
+        }
       }
     }
   });
@@ -138,30 +154,71 @@ export default function ChatInterface() {
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   }, [input]);
 
-  // --- Gemini-style multi-stage search animation ---
-  const startSearchAnimation = useCallback(() => {
-    setSearchStage(0);
+  const [thinkingStage, setThinkingStage] = useState<number | null>(null);
+  const [isThinking, setIsThinking] = useState(false);
+
+  const thinkingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Show thinking stage 0 immediately (with auto-advance)
+  const showThinkingStage0 = useCallback(() => {
+    setThinkingStage(0);
+    setIsThinking(true);
+    // Auto-advance through stages
     let currentStage = 0;
     const timer = setInterval(() => {
       currentStage++;
-      if (currentStage < SEARCH_STAGES.length) {
-        setSearchStage(currentStage);
+      if (currentStage < PRE_THINK_STAGES.length) {
+        setThinkingStage(currentStage);
       } else {
         clearInterval(timer);
       }
-    }, 1200);
-    searchStageTimerRef.current = timer;
+    }, 1500);
+    return timer;
+  }, []);
+
+  // --- Gemini-style multi-stage search animation (slower, visible until completion) ---
+  const startSearchAnimation = useCallback(() => {
+    // Cancel any existing thinking animation
+    setThinkingStage(null);
+    setIsThinking(false);
+    
+    // Brief pause before showing the analytic search stages
+    const thinkingTimer = setTimeout(() => {
+      setSearchStage(1); // Start from "Analyzing the web..." (stage 1, skipping "Thinking...")
+      
+      let currentStage = 1;
+      const timer = setInterval(() => {
+        currentStage++;
+        if (currentStage < THINKING_STAGES.length) {
+          setSearchStage(currentStage);
+        } else {
+          // Stay on "Generating answer..." until search completes
+          clearInterval(timer);
+        }
+      }, 1800); // 1.8s per stage for deliberate pacing
+      searchStageTimerRef.current = timer;
+    }, 800);
+    
+    thinkingTimerRef.current = thinkingTimer;
   }, []);
 
   const stopSearchAnimation = useCallback(() => {
+    // Clear the thinking timer (pre-800ms delay)
+    if (thinkingTimerRef.current) {
+      clearTimeout(thinkingTimerRef.current);
+      thinkingTimerRef.current = null;
+    }
+    // Clear the search stage interval
     if (searchStageTimerRef.current) {
       clearInterval(searchStageTimerRef.current);
       searchStageTimerRef.current = null;
     }
     setSearchStage(null);
+    setThinkingStage(null);
+    setIsThinking(false);
   }, []);
 
-  // === AI VOICE + SEARCH HANDLER ===
+  // === AI VOICE + SEARCH HANDLER (with thinking stages) ===
   useEffect(() => {
     if (prevStreamingRef.current && !isStreaming) {
       const lastMessage = messages[messages.length - 1];
@@ -180,13 +237,20 @@ export default function ChatInterface() {
           }
           const query = searchMatch[1];
           setSearchQuery(query);
+          
+          // Clear any residual thinking animation, then start search stages
+          stopSearchAnimation();
           startSearchAnimation();
           
           fetch(`/api/search?q=${encodeURIComponent(query)}`)
             .then(r => r.json())
             .then(data => {
-              stopSearchAnimation();
-              sendMessage(`[SYSTEM SEARCH RESULTS FOR "${query}"]\n${data.results}\n\nAnswer based ONLY on results.`, undefined, { isHidden: true });
+              // Keep on final stage (Generating answer...) for 1.2 more seconds
+              // then stop animation and send results
+              setTimeout(() => {
+                stopSearchAnimation();
+                sendMessage(`[SYSTEM SEARCH RESULTS FOR "${query}"]\n${data.results}\n\nAnswer based ONLY on results.`, undefined, { isHidden: true });
+              }, 1200);
             })
             .catch(() => {
               stopSearchAnimation();
@@ -201,13 +265,18 @@ export default function ChatInterface() {
         if (mapsMatch) {
           const query = mapsMatch[1];
           setSearchQuery(`📍 ${query}`);
+          
+          // Clear any residual thinking animation, then start search stages
+          stopSearchAnimation();
           startSearchAnimation();
           
           fetch(`/api/maps?q=${encodeURIComponent(query)}`)
             .then(r => r.json())
             .then(data => {
-              stopSearchAnimation();
-              sendMessage(`[SYSTEM MAPS RESULTS FOR "${query}"]\n${data.results}\n\nAnswer based ONLY on results.`, undefined, { isHidden: true });
+              setTimeout(() => {
+                stopSearchAnimation();
+                sendMessage(`[SYSTEM MAPS RESULTS FOR "${query}"]\n${data.results}\n\nAnswer based ONLY on results.`, undefined, { isHidden: true });
+              }, 1200);
             })
             .catch(() => {
               stopSearchAnimation();
@@ -256,6 +325,19 @@ export default function ChatInterface() {
     textareaRef.current?.focus();
   };
 
+  // When liveVoiceMode toggles ON, start recording in continuous mode
+  useEffect(() => {
+    if (liveVoiceMode) {
+      setContinuousMode(true);
+      initAudioContext();
+      startRecording();
+    } else {
+      setContinuousMode(false);
+      stopRecording();
+      stopSpeaking();
+    }
+  }, [liveVoiceMode]);
+
   const handleMicClick = () => {
     initAudioContext();
     if (micActive) { stopRecording(); setMicActive(false); }
@@ -273,6 +355,12 @@ export default function ChatInterface() {
     if (hasNonImageFiles && !finalInput.trim()) {
       finalInput = 'Please analyze the attached file(s).';
     }
+    
+    // Start thinking animation immediately when user sends
+    showThinkingStage0();
+    
+    // Cancel any existing search animation
+    stopSearchAnimation();
     
     searchAttemptsRef.current = 0;
     sendMessage(finalInput, attachments);
@@ -319,14 +407,30 @@ export default function ChatInterface() {
       return { url: compressedUri, mimeType: 'image/jpeg', name: file.name };
     }
 
-    // For non-image files, read as text/data URL and send to server for processing
+    // For non-image files, read content based on type
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const isArchive = /^(zip|rar|7z|tar|gz)$/i.test(ext);
+    
+    if (isArchive) {
+      // For archives: attach metadata (filename + size) and a note, not raw binary
+      const fileSize = (file.size / 1024).toFixed(1);
+      const note = `📦 Archive file: ${file.name} (${fileSize} KB) — attached. Archives cannot be read directly; please extract and re-upload individual files for analysis.`;
+      return {
+        url: `data:text/plain;charset=utf-8,${encodeURIComponent(note)}`,
+        mimeType: 'text/plain',
+        name: file.name,
+      };
+    }
+
     const reader = new FileReader();
     const content = await new Promise<string>(resolve => {
       reader.onload = ev => resolve(ev.target?.result as string);
       
+      // Text-based files: read as text for AI to analyze
       if (file.type.startsWith('text/') || file.name.match(/\.(txt|md|json|xml|html|css|js|ts|tsx|py|java|cpp|hpp|go|rb|php|csv)$/i)) {
         reader.readAsText(file);
       } else {
+        // Other binary files (PDF, DOCX, etc.) - read as data URL but keep metadata
         reader.readAsDataURL(file);
       }
     });
@@ -451,23 +555,33 @@ export default function ChatInterface() {
       {/* Camera Modal */}
       {showCamera && <CameraModal onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />}
 
-      {/* === GEMINI-STYLE MULTI-STAGE SEARCH ANIMATION === */}
-      {searchStage !== null && (
+      {/* === GEMINI-STYLE THINKING + SEARCH ANIMATION === */}
+      {(thinkingStage !== null || searchStage !== null) && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-fade-in-down" style={{ maxWidth: '90vw' }}>
           <div className="flex items-center gap-3 bg-surface/95 border border-border/50 rounded-xl px-4 py-2.5 shadow-xl backdrop-blur-md">
             {/* Current Stage Icon */}
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
               {(() => {
-                const StageIcon = SEARCH_STAGES[searchStage]?.icon || LoaderCircle;
-                return <StageIcon size={15} className={searchStage < 3 ? 'animate-spin' : 'animate-pulse'} />;
+                if (searchStage !== null) {
+                  const StageIcon = THINKING_STAGES[searchStage]?.icon || LoaderCircle;
+                  return <StageIcon size={15} className={searchStage < 3 ? 'animate-spin' : 'animate-pulse'} />;
+                }
+                if (thinkingStage !== null) {
+                  const StageIcon = PRE_THINK_STAGES[thinkingStage]?.icon || Sparkles;
+                  return <StageIcon size={15} className="animate-spin" />;
+                }
+                return <LoaderCircle size={15} className="animate-spin" />;
               })()}
             </span>
             
             <div className="flex flex-col">
               <span className="text-sm font-semibold text-foreground tracking-wide">
-                {SEARCH_STAGES[searchStage]?.text || 'Processing...'}
+                {searchStage !== null 
+                  ? THINKING_STAGES[searchStage]?.text || 'Generating answer...'
+                  : PRE_THINK_STAGES[thinkingStage || 0]?.text || 'Thinking...'
+                }
               </span>
-              {searchQuery && (
+              {searchQuery && searchStage !== null && (
                 <span className="text-xs text-muted truncate max-w-[200px] sm:max-w-[300px]">
                   {searchQuery}
                 </span>
@@ -475,17 +589,19 @@ export default function ChatInterface() {
             </div>
 
             {/* Stage Dots Progress */}
-            <div className="flex items-center gap-1 ml-auto">
-              {SEARCH_STAGES.map((_, i) => (
-                <span
-                  key={i}
-                  className={[
-                    'h-1.5 rounded-full transition-all duration-300',
-                    i === searchStage ? 'w-4 bg-accent' : i < searchStage ? 'w-1.5 bg-accent/40' : 'w-1.5 bg-border',
-                  ].join(' ')}
-                />
-              ))}
-            </div>
+            {searchStage !== null && (
+              <div className="flex items-center gap-1 ml-auto">
+                {THINKING_STAGES.map((_, i) => (
+                  <span
+                    key={i}
+                    className={[
+                      'h-1.5 rounded-full transition-all duration-300',
+                      i === searchStage ? 'w-4 bg-accent' : i < searchStage ? 'w-1.5 bg-accent/40' : 'w-1.5 bg-border',
+                    ].join(' ')}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -8,21 +8,14 @@ export interface TTSVoice {
   voice: SpeechSynthesisVoice | null;
 }
 
-// Find a matching voice for a given language code
 function findVoiceForLang(lang: string): SpeechSynthesisVoice | null {
   if (typeof window === 'undefined' || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
-  
-  // Try exact match first
   const exact = voices.find(v => v.lang.toLowerCase().startsWith(lang.toLowerCase()));
   if (exact) return exact;
-  
-  // Try base language match
   const baseLang = lang.split('-')[0].toLowerCase();
   const base = voices.find(v => v.lang.toLowerCase().startsWith(baseLang));
   if (base) return base;
-  
-  // Return any English voice as fallback
   return voices.find(v => v.lang.startsWith('en')) || voices[0] || null;
 }
 
@@ -40,17 +33,57 @@ const CLOUD_VOICES: TTSVoice[] = [
   { uri: 'ja', name: 'Japanese', lang: 'ja', voice: null },
 ];
 
+// Clean text for natural speech — strip punctuation marks so TTS doesn't read them
+function cleanTextForSpeech(text: string): string {
+  return text
+    .replace(/\[VOICE:[^\]]+\]/gi, '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/!\[.*?\]\(.*?\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[*_#`>|~]/g, '')
+    // Remove standalone punctuation marks (not part of words, URLs, or numbers)
+    .replace(/(?<!\w)[.,!?;:](?!\w)/g, '')
+    // Remove multiple dots, colons, semicolons
+    .replace(/[.:;]{2,}/g, '.')
+    // Clean up extra spaces
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Detect language from Unicode blocks
+function detectLanguage(text: string): string {
+  if (/[\u0600-\u06FF]/.test(text)) return 'ur';
+  if (/[\u0900-\u097F]/.test(text)) return 'hi';
+  if (/[\u4e00-\u9fff]/.test(text)) return 'zh-CN';
+  if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'ja';
+  if (/[\u0400-\u04FF]/.test(text)) return 'ru';
+  return 'en';
+}
+
+function getVoiceCode(lang: string): string {
+  if (lang === 'ur') return 'ur-PK';
+  if (lang === 'hi') return 'hi-IN';
+  if (lang === 'zh-CN') return 'zh-CN';
+  if (lang === 'ja') return 'ja-JP';
+  if (lang === 'en-GB') return 'en-GB';
+  if (lang === 'ar') return 'ar-SA';
+  if (lang === 'es') return 'es-ES';
+  if (lang === 'fr') return 'fr-FR';
+  if (lang === 'de') return 'de-DE';
+  if (lang === 'it') return 'it-IT';
+  return 'en-US';
+}
+
 interface TTSContextType {
   voices: TTSVoice[];
   selectedVoiceUri: string;
   setSelectedVoiceUri: (uri: string) => void;
   voiceGender: 'female' | 'male';
   setVoiceGender: (gender: 'female' | 'male') => void;
-  speak: (text: string) => void;
+  speak: (text: string, onDone?: () => void) => void;
   stopSpeaking: () => void;
   isSpeaking: boolean;
   liveVoiceMode: boolean;
-  toggleLiveVoice: () => void;
   setLiveVoiceMode: (mode: boolean) => void;
   initAudioContext: () => void;
   aiVoiceEnabled: boolean;
@@ -68,24 +101,17 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const [voiceGender, setVoiceGender] = useState<'female' | 'male'>('female');
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const onDoneRef = useRef<(() => void) | null>(null);
 
-  // Initialize speech synthesis and load voices
   useEffect(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    
-    // Chrome loads voices asynchronously
     if (window.speechSynthesis.getVoices().length === 0) {
-      window.speechSynthesis.addEventListener('voiceschanged', () => {
-        // Force re-render by no-op state update
-      }, { once: true });
+      window.speechSynthesis.addEventListener('voiceschanged', () => {}, { once: true });
     }
   }, []);
 
   const initAudioContext = useCallback(() => {
-    // Just a no-op for SpeechSynthesis - no AudioContext needed
-    // But kept for backwards compatibility
     if (typeof window !== 'undefined' && window.speechSynthesis) {
-      // Cancel any stale utterances
       window.speechSynthesis.cancel();
     }
   }, []);
@@ -95,97 +121,43 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       window.speechSynthesis.cancel();
     }
     utteranceRef.current = null;
+    onDoneRef.current = null;
     setIsSpeaking(false);
   }, []);
 
-  // Clean text for natural speech
-  const cleanTextForSpeech = (text: string): string => {
-    return text
-      .replace(/\[VOICE:[^\]]+\]/gi, '')
-      .replace(/```[\s\S]*?```/g, '') // Remove code blocks
-      .replace(/!\[.*?\]\(.*?\)/g, '') // Remove images
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert links to text
-      .replace(/[*_#`>|~]/g, '') // Remove markdown formatting
-      .replace(/\s+/g, ' ')
-      .trim();
-  };
-
-  // Auto-detect language code from text content
-  const detectLanguage = (text: string): string => {
-    if (/[\u0600-\u06FF]/.test(text)) return 'ur'; // Arabic/Urdu
-    if (/[\u0900-\u097F]/.test(text)) return 'hi'; // Hindi
-    if (/[\u4e00-\u9fff]/.test(text)) return 'zh-CN'; // Chinese
-    if (/[\u3040-\u309f\u30a0-\u30ff]/.test(text)) return 'ja'; // Japanese
-    if (/[\u0400-\u04FF]/.test(text)) return 'ru'; // Russian
-    return selectedVoiceUri; // Default to selected voice
-  };
-
-  const speak = useCallback((text: string) => {
-    // Stop any current speech
+  const speak = useCallback((text: string, onDone?: () => void) => {
     stopSpeaking();
 
     if (typeof window === 'undefined' || !window.speechSynthesis) {
-      console.warn('SpeechSynthesis not available in this browser');
+      console.warn('SpeechSynthesis not available');
       return;
     }
 
     const cleanText = cleanTextForSpeech(text);
-    if (!cleanText) return;
-
-    // Detect language from text content
-    const detectedLang = detectLanguage(cleanText);
-
-    // Create utterance
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    // Set language - try detected first, then selected
-    utterance.lang = detectedLang === 'ur' ? 'ur-PK' 
-      : detectedLang === 'hi' ? 'hi-IN'
-      : detectedLang === 'zh-CN' ? 'zh-CN'
-      : detectedLang === 'ja' ? 'ja-JP'
-      : detectedLang === 'en-GB' ? 'en-GB'
-      : 'en-US';
-
-    // Find best matching voice
-    const voice = findVoiceForLang(utterance.lang);
-    if (voice) {
-      utterance.voice = voice;
+    if (!cleanText) {
+      onDone?.();
+      return;
     }
 
-    // Natural speech settings
-    utterance.rate = 1.0; // Normal speed
-    utterance.pitch = 1.0; // Normal pitch
+    const detectedLang = detectLanguage(cleanText);
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    
+    utterance.lang = getVoiceCode(detectedLang);
+    
+    const voice = findVoiceForLang(utterance.lang);
+    if (voice) utterance.voice = voice;
+
+    // Natural human-like speech settings
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
-    // Handle events
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-    };
-
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      utteranceRef.current = null;
-    };
-
-    utterance.onerror = (event) => {
-      console.warn('SpeechSynthesis error:', event.error);
-      setIsSpeaking(false);
-      utteranceRef.current = null;
-      
-      // Fallback to server TTS if SpeechSynthesis fails
-      if (event.error === 'voice-unavailable' || event.error === 'language-unavailable') {
-        console.log('Falling back to server-side TTS...');
-        speakViaServer(cleanText, detectedLang);
-      }
-    };
-
     utteranceRef.current = utterance;
-    
-    // Chrome has a bug where speech stops after ~15s. This workaround keeps it alive.
-    const synthesis = window.speechSynthesis;
-    synthesis.speak(utterance);
+    onDoneRef.current = onDone || null;
 
-    // Chrome workaround: re-trigger speech if it gets stuck
+    const synthesis = window.speechSynthesis;
+
+    // Chrome workaround: prevent 15s speech cutoff — create interval BEFORE speak()
     const checkInterval = setInterval(() => {
       if (!synthesis.speaking) {
         clearInterval(checkInterval);
@@ -195,28 +167,46 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       }
     }, 10000);
 
-    // Clean up interval when speech ends
+    // Single onend handler that also cleans up the check interval
     utterance.onend = () => {
       clearInterval(checkInterval);
       setIsSpeaking(false);
       utteranceRef.current = null;
+      const cb = onDoneRef.current;
+      onDoneRef.current = null;
+      cb?.();
     };
 
-  }, [selectedVoiceUri, voiceGender, stopSpeaking]);
+    utterance.onerror = (event) => {
+      clearInterval(checkInterval);
+      console.warn('SpeechSynthesis error:', event.error);
+      setIsSpeaking(false);
+      utteranceRef.current = null;
+      const cb = onDoneRef.current;
+      onDoneRef.current = null;
+      
+      if (event.error === 'voice-unavailable' || event.error === 'language-unavailable') {
+        speakViaServer(cleanText, detectedLang, cb || undefined);
+      } else {
+        cb?.();
+      }
+    };
 
-  // Fallback: use server-side TTS via API route
-  const speakViaServer = async (text: string, lang: string) => {
+    utterance.onstart = () => setIsSpeaking(true);
+
+    // Call speak() AFTER all handlers and interval are set up
+    synthesis.speak(utterance);
+
+  }, [stopSpeaking]);
+
+  // Server-side TTS fallback via API
+  const speakViaServer = async (text: string, lang: string, onDone?: () => void) => {
     try {
       const res = await fetch('/api/voice/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          lang: lang || selectedVoiceUri, 
-          gender: voiceGender, 
-          text 
-        })
+        body: JSON.stringify({ lang: lang || 'en', gender: voiceGender, text })
       });
-      
       if (!res.ok) throw new Error('Server TTS failed');
       
       const audioBlob = await res.blob();
@@ -227,22 +217,20 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       audio.onended = () => {
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
+        onDone?.();
       };
       audio.onerror = () => {
         setIsSpeaking(false);
         URL.revokeObjectURL(audioUrl);
+        onDone?.();
       };
-      
       await audio.play();
     } catch (err) {
-      console.warn('Server TTS fallback also failed:', err);
+      console.warn('Server TTS fallback failed:', err);
       setIsSpeaking(false);
+      onDone?.();
     }
   };
-
-  const toggleLiveVoice = useCallback(() => {
-    setLiveVoiceMode(prev => !prev);
-  }, []);
 
   return (
     <TTSContext.Provider value={{
@@ -255,11 +243,10 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       stopSpeaking,
       isSpeaking,
       liveVoiceMode,
-      toggleLiveVoice,
       setLiveVoiceMode,
       initAudioContext,
       aiVoiceEnabled,
-      setAiVoiceEnabled
+      setAiVoiceEnabled,
     }}>
       {children}
     </TTSContext.Provider>
