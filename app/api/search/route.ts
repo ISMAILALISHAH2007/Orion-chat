@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
+
+export const dynamic = 'force-dynamic';
 /**
  * Free AI Web Search — Resilient multi-source fallback
  * Uses DuckDuckGo (primary) + fallback sources.
@@ -24,7 +26,7 @@ function formatResults(results: SearchResult[]): string {
 function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { signal: controller.signal })
+  return fetch(url, { signal: controller.signal, cache: 'no-store' })
     .finally(() => clearTimeout(timeout));
 }
 
@@ -100,6 +102,7 @@ async function searchDuckDuckGoHTML(query: string): Promise<SearchResult[]> {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
       body: new URLSearchParams({ q: query }),
+      cache: 'no-store',
       signal: controller.signal
     }).finally(() => clearTimeout(timeout));
     
@@ -132,6 +135,7 @@ async function searchYahoo(query: string): Promise<SearchResult[]> {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
+      cache: 'no-store',
       signal: controller.signal
     }).finally(() => clearTimeout(timeout));
     

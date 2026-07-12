@@ -1,5 +1,8 @@
 import { streamText, generateText, tool } from 'ai';
 import { z } from 'zod';
+
+export const dynamic = 'force-dynamic';
+
 import { performSearch } from '@/app/api/search/route';
 import {
   getDefaultModelForMode,
