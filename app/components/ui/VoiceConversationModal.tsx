@@ -99,7 +99,11 @@ function VoiceConversationModalInner({
             }
 
             if (part.text) {
-              setTranscript(prev => prev + part.text);
+              // Strip out stage directions/captions like [sighs], (laughs), *clears throat*, etc.
+              const cleanText = part.text.replace(/\[.*?\]|\(.*?\)|\*.*?\*/g, '');
+              if (cleanText) {
+                setTranscript(prev => prev + cleanText);
+              }
             }
           }
         }
@@ -152,8 +156,8 @@ function VoiceConversationModalInner({
 
       ws.onopen = () => {
         const identityText = voiceGender === 'male' 
-          ? 'You are currently adopting a MALE persona. When speaking in Urdu or Hindi, you MUST use grammatically correct MALE pronouns and verb endings (e.g. "main kar sakta hoon", "main ja raha hoon"). This is critical.'
-          : 'You are currently adopting a FEMALE persona. When speaking in Urdu or Hindi, you MUST use grammatically correct FEMALE pronouns and verb endings (e.g. "main kar sakti hoon", "main ja rahi hoon"). This is critical.';
+          ? 'ROLEPLAY: You are a MALE. When speaking Hindi or Urdu, you MUST use MALE grammar (e.g., "main kar sakta hoon", "main aa raha hoon"). NEVER use female grammar.'
+          : 'ROLEPLAY: You are a FEMALE. When speaking Hindi or Urdu, you MUST use FEMALE grammar (e.g., "main kar sakti hoon", "main aa rahi hoon"). NEVER use male grammar.';
 
         const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -162,7 +166,7 @@ function VoiceConversationModalInner({
             model: "models/gemini-2.5-flash-native-audio-latest",
             systemInstruction: {
               parts: [{
-                text: `You are ULTRON, a highly advanced cognitive AI assistant. You were created by Owais Majeed. If asked about your creator, developer, or origin, you MUST say you were created by Owais Majeed. Never mention Google or Gemini. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. The current date is ${currentDate}. ${identityText} If the user speaks in English, reply in English. Be warm, natural, and helpful.`
+                text: `You are ULTRON, a highly advanced cognitive AI assistant created by Owais Majeed. Never mention Google or Gemini. You are in LIVE VOICE mode. Keep responses concise and conversational. Do not output paralinguistic captions like [laughs] or *sighs*. The current date is ${currentDate}. ${identityText} Be warm, natural, and helpful.`
               }]
             },
             generationConfig: {
