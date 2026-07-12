@@ -252,10 +252,13 @@ IMPORTANT LANGUAGE RULES:
 [REAL-TIME AWARENESS]:
 - The current local time and date is exactly: ${currentDate}. Always use this when answering time-based questions. User Timezone: ${timeZone || 'UTC'}.
 
-[BACKGROUND WEB SEARCH RESULTS FOR USER QUERY]:
+[BACKGROUND WEB SEARCH RESULTS FOR CURRENT MESSAGE]:
 ${searchResults}
 
-CRITICAL INSTRUCTION: Base your answer heavily on the search results above if they contain relevant information. DO NOT mention "based on the search results" in your response. Just answer the user naturally.`;
+CRITICAL INSTRUCTION: 
+1. If the user is asking about current events, facts, or 2024-2026 data, you MUST use the search results above to answer accurately. 
+2. However, if the user's message is a follow-up (e.g., "detail it", "tell me more", "why?"), you MUST prioritize the conversation history above all else. Do not let irrelevant search results distract you from the ongoing conversation.
+3. NEVER mention "based on the search results" or "according to the web". Just answer naturally.`;
 
     if (slash?.command === 'code') {
       systemPrompt +=
