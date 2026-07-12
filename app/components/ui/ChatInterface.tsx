@@ -71,6 +71,34 @@ function getFileIcon(mimeType: string, name: string) {
 
 const ACCEPTED_FILE_TYPES = '.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.zip,.rar,.json,.xml,.html,.css,.js,.ts,.tsx,.py,.java,.cpp,.hpp,.go,.rb,.php,.png,.jpg,.jpeg,.gif,.webp,.svg,.ico,.bmp';
 
+function ThinkingAnimation() {
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setStage((prev) => (prev + 1) % 3), 800);
+    return () => clearInterval(timer);
+  }, []);
+  const stages = ['Analyzing...', 'Researching...', 'Answering...'];
+
+  return (
+    <div className="flex items-center gap-3 mt-4 mb-2 p-3 bg-surface border border-border/50 rounded-2xl w-max shadow-sm animate-in fade-in slide-in-from-bottom-2">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/20 via-purple-500/20 to-accent/20 animate-spin-slow" />
+        <Sparkles size={16} className="text-accent relative z-10" />
+      </span>
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium bg-gradient-to-r from-blue-500 via-purple-500 to-accent bg-clip-text text-transparent animate-pulse">
+          {stages[stage]}
+        </span>
+        <div className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatInterface() {
   const [input, setInput] = useState('');
   const [slashOpen, setSlashOpen] = useState(false);
@@ -87,7 +115,7 @@ export default function ChatInterface() {
     if (typeof window === 'undefined') return false;
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   });
-  const { messages, sendMessage, isStreaming, stop } = useChat();
+  const { messages, sendMessage, isStreaming, isResearching, stop } = useChat();
   const { mode } = useMode();
   const { liveVoiceMode, setLiveVoiceMode, speak, aiVoiceEnabled, initAudioContext, voiceConversationOpen, setVoiceConversationOpen, voiceGender, setVoiceGender } = useTTS();
   const { isRecording, startRecording, stopRecording, transcript, voiceError, setVoiceError, setContinuousMode } = useVoice({
@@ -114,9 +142,6 @@ export default function ChatInterface() {
   const { data: session } = useSession();
   const userName = session?.user?.name?.split(' ')[0] || 'there';
 
-  // ----- GEMINI-STYLE THINKING STATE -----
-  const [isThinking, setIsThinking] = useState(false);
-
   const isEmpty = messages.length === 0;
 
   let placeholder = MODE_PLACEHOLDERS[mode as keyof typeof MODE_PLACEHOLDERS] ?? MODE_PLACEHOLDERS.casual;
@@ -135,15 +160,7 @@ export default function ChatInterface() {
     el.style.height = Math.min(el.scrollHeight, 160) + 'px';
   }, [input]);
 
-  // === THINKING ANIMATION CONTROLLER ===
-  useEffect(() => {
-    if (isStreaming) setIsThinking(true);
-    else if (prevStreamingRef.current && !isStreaming) {
-      const timer = setTimeout(() => setIsThinking(false), 500);
-      return () => clearTimeout(timer);
-    }
-    prevStreamingRef.current = isStreaming;
-  }, [isStreaming]);
+
 
   // === LATEST AI RESPONSE FOR VOICE CONVERSATION MODE ===
   const lastAiMsg = messages.filter(m => m.sender === 'ai' && !m.isHidden).slice(-1)[0];
@@ -160,45 +177,19 @@ export default function ChatInterface() {
         
         // Clean reasoning tags for natural speech output
         const cleanText = text.replace(/\[REASONING\][\s\S]*?\[\/REASONING\]/gi, '').trim();
-        const isSystem = cleanText.startsWith('[SYSTEM') || cleanText.startsWith('[SEARCH') || cleanText.startsWith('[MAPS');
 
         // Speak if the normal AI voice settings are enabled OR if the Live Voice modal session is active
         const shouldSpeak = aiVoiceEnabled || voiceConversationOpen;
 
-        if (shouldSpeak && cleanText && !isSystem && text !== lastSpokenMessageRef.current) {
+        if (shouldSpeak && cleanText && text !== lastSpokenMessageRef.current) {
           lastSpokenMessageRef.current = text;
           initAudioContext();
           speak(cleanText);
         }
-        const searchMatch = text.match(/\[SEARCH:\s*(?:"|')?([^"\]}]+)(?:"|')?\]/i);
-        if (searchMatch) {
-          searchAttemptsRef.current++;
-          if (searchAttemptsRef.current > 2) {
-            sendMessage('[SYSTEM SEARCH ERROR] Unavailable.', undefined, { isHidden: true });
-            prevStreamingRef.current = isStreaming; return;
-          }
-          const query = searchMatch[1];
-          setIsThinking(true);
-          fetch(`/api/search?q=${encodeURIComponent(query)}`)
-            .then(r => r.json())
-            .then(data => { setTimeout(() => { setIsThinking(false); sendMessage(`[SYSTEM SEARCH RESULTS FOR "${query}"]\n${data.results}\n\nAnswer based ONLY on results.`, undefined, { isHidden: true }); }, 600); })
-            .catch(() => { setIsThinking(false); sendMessage('[SYSTEM SEARCH ERROR] Failed.', undefined, { isHidden: true }); });
-          prevStreamingRef.current = isStreaming; return;
-        }
-        const mapsMatch = text.match(/\[MAPS:\s*(?:"|')?([^"\]}]+)(?:"|')?\]/i);
-        if (mapsMatch) {
-          const query = mapsMatch[1];
-          setIsThinking(true);
-          fetch(`/api/maps?q=${encodeURIComponent(query)}`)
-            .then(r => r.json())
-            .then(data => { setTimeout(() => { setIsThinking(false); sendMessage(`[SYSTEM MAPS RESULTS FOR "${query}"]\n${data.results}\n\nAnswer based ONLY on results.`, undefined, { isHidden: true }); }, 600); })
-            .catch(() => { setIsThinking(false); sendMessage('[SYSTEM MAPS ERROR] Failed.', undefined, { isHidden: true }); });
-          prevStreamingRef.current = isStreaming; return;
-        }
       }
     }
     prevStreamingRef.current = isStreaming;
-  }, [isStreaming, messages, sendMessage, aiVoiceEnabled, speak, initAudioContext, voiceConversationOpen]);
+  }, [isStreaming, messages, aiVoiceEnabled, speak, initAudioContext, voiceConversationOpen]);
 
   // Live Voice mode
   useEffect(() => {
@@ -249,7 +240,6 @@ export default function ChatInterface() {
     }
     const hasNonImageFiles = attachments.some(a => !a.mimeType.startsWith('image/'));
     if (hasNonImageFiles && !finalInput.trim()) finalInput = 'Please analyze the attached file(s).';
-    setIsThinking(true);
     searchAttemptsRef.current = 0;
     sendMessage(finalInput, attachments);
     setInput(''); setAttachments([]); setIsImageMode(false); setIsVideoMode(false); setIsSearchMode(false);
@@ -351,7 +341,6 @@ export default function ChatInterface() {
   const removeAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
 
   const handleVoiceConvSend = useCallback((text: string) => {
-    setIsThinking(true);
     searchAttemptsRef.current = 0;
     sendMessage(text, undefined, { isHidden: false });
   }, [sendMessage]);
@@ -360,32 +349,13 @@ export default function ChatInterface() {
     setVoiceConversationOpen(false);
   }, [setVoiceConversationOpen]);
 
-  const lastMessage = messages[messages.length - 1];
-  const showInlineThinking = isStreaming && (!lastMessage || lastMessage.sender === 'user');
-  const showThinkingIndicator = isThinking || showInlineThinking;
+
 
   return (
     <div className="gemini-chat-container" onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop}>
       {showCamera && <CameraModal onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />}
 
-      {/* === GEMINI 2026 THINKING BANNER (gradient orb + multi-color dots) === */}
-      {showThinkingIndicator && (
-        <div className={[
-          'gemini-thinking-banner animate-fade-in-down',
-          mode === 'research' ? 'deep-think' : '',
-        ].join(' ')}>
-          {/* Gemini gradient spinning orb */}
-          <div className="gemini-thinking-orb" />
-          {/* Deep Think: show reasoning label */}
-          {mode === 'research' && <span className="gemini-reasoning-label">Reasoning</span>}
-          {/* Multi-color bouncing dots */}
-          <div className="gemini-think-indicator">
-            <span className="gemini-think-dot" />
-            <span className="gemini-think-dot" />
-            <span className="gemini-think-dot" />
-          </div>
-        </div>
-      )}
+
 
       {/* === DRAG & DROP OVERLAY === */}
       {dragOver && (
@@ -425,16 +395,7 @@ export default function ChatInterface() {
                 <MessageBubble key={idx} sender={msg.sender} text={msg.text} mode={msg.mode} attachments={msg.attachments}
                   isStreaming={isStreaming && idx === arr.length - 1 && msg.sender === 'ai'} />
               ))}
-              {showInlineThinking && (
-                <div className="gemini-inline-thinking">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-surface">
-                    <Sparkles size={14} className="text-accent animate-spin-slow" />
-                  </span>
-                  <div className="gemini-think-indicator">
-                    <span className="gemini-think-dot" /><span className="gemini-think-dot" /><span className="gemini-think-dot" />
-                  </div>
-                </div>
-              )}
+              {isResearching && <ThinkingAnimation />}
               <div ref={messagesEndRef} />
             </>
           )}

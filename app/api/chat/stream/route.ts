@@ -1,4 +1,6 @@
-import { streamText, generateText } from 'ai';
+import { streamText, generateText, tool } from 'ai';
+import { z } from 'zod';
+import { performSearch } from '@/app/api/search/route';
 import {
   getDefaultModelForMode,
   getActiveProvider,
@@ -49,184 +51,7 @@ function parseSlashCommand(text: string): { command: SlashCommand; prompt: strin
   return { command: cmd as SlashCommand, prompt: rest.trim() };
 }
 
-async function generateImageInline(userId: string | undefined, prompt: string) {
-  try {
-    // Use the new retry-with-fallback logic
-    const result = await generateImageWithFallback(prompt, {
-      retryCount: 1,       // 2 attempts per model (fits within 60s maxDuration)
-      verifyTimeout: 3000, // 3s per HEAD request (lightweight, 3s is plenty)
-    });
-
-    const imageUrl = result.url;
-    const modelUsed = result.model;
-    const verified = result.verified;
-
-    console.log(`[Image] Generated with ${modelUsed} (verified: ${verified})`);
-
-    let record = null;
-    if (userId) {
-      try {
-        record = await prisma.image.create({
-          data: { userId, prompt, imageUrl },
-          select: { id: true, imageUrl: true },
-        });
-      } catch (e) {
-        console.error('Failed to persist generated image:', e);
-      }
-    }
-
-    const downloadName = (record?.id ?? `ultron-${Date.now()}`) + '.png';
-    
-    // Always provide a clickable download link, even if verification timed out
-    const downloadLink = `[⬇️ Download image](/api/download?url=${encodeURIComponent(imageUrl)}&name=${encodeURIComponent(downloadName)} "${downloadName}")`;
-    
-    return [
-      `![${prompt}](${imageUrl})`,
-      ``,
-      downloadLink,
-    ].join('\n');
-  } catch (error) {
-    console.error('[Image] Generation failed:', error);
-    // Ultimate fallback: return a simple URL without verification
-    const fallbackUrl = buildPollinationsImageUrl(prompt);
-    return [
-      `![${prompt}](${fallbackUrl})`,
-      ``,
-      `> The image is being generated — it may take a few seconds to appear. ` +
-      `[⬇️ Download](${fallbackUrl})`,
-    ].join('\n');
-  }
-}
-
-// Free AI video generation using Hugging Face Inference API
-// Multiple model fallbacks for maximum reliability
-const VIDEO_MODELS = [
-  'cerspense/zeroscope_v2_576w',        // Primary: fast, reliable text-to-video
-  'damo-vilab/text-to-video-ms-1.7b',   // Fallback 1: good quality text-to-video
-  'Aliemori/Text-to-video',             // Fallback 2: lightweight text-to-video
-];
-
-async function generateVideoInline(userId: string | undefined, prompt: string) {
-  const hfToken = process.env.HUGGINGFACE_API_KEY || '';
-  
-  // Try each model in order until one works
-  for (let i = 0; i < VIDEO_MODELS.length; i++) {
-    const modelId = VIDEO_MODELS[i];
-    try {
-      console.log(`Trying video model ${i + 1}/${VIDEO_MODELS.length}: ${modelId}`);
-      
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000); // 20s per model to allow fallbacks
-      
-      const res = await fetch(
-        `https://api-inference.huggingface.co/models/${modelId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${hfToken}`,
-            'Content-Type': 'application/json',
-          },
-          method: 'POST',
-          body: JSON.stringify({ inputs: prompt }),
-          signal: controller.signal,
-        }
-      );
-      clearTimeout(timeout);
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.warn(`Model ${modelId} failed (${res.status}): ${errText.substring(0, 200)}`);
-        
-        // If the model is loading (503), wait and retry once
-        if (res.status === 503) {
-          console.log(`Model ${modelId} is loading, waiting 15s...`);
-          await new Promise(resolve => setTimeout(resolve, 15000));
-          
-          const retryController = new AbortController();
-          const retryTimeout = setTimeout(() => retryController.abort(), 20000);
-          
-          const retryRes = await fetch(
-            `https://api-inference.huggingface.co/models/${modelId}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${hfToken}`,
-                'Content-Type': 'application/json',
-              },
-              method: 'POST',
-              body: JSON.stringify({ inputs: prompt }),
-              signal: retryController.signal,
-            }
-          );
-          clearTimeout(retryTimeout);
-          
-          if (!retryRes.ok) {
-            const retryErr = await retryRes.text();
-            console.warn(`Model ${modelId} retry also failed: ${retryErr.substring(0, 200)}`);
-            continue; // Try next model
-          }
-          
-          const arrayBuffer = await retryRes.arrayBuffer();
-          if (arrayBuffer.byteLength < 100) {
-            console.warn(`Model ${modelId} returned empty/small response`);
-            continue;
-          }
-          
-          return await saveVideoResult(userId, prompt, arrayBuffer);
-        }
-        
-        continue; // Try next model
-      }
-
-      const arrayBuffer = await res.arrayBuffer();
-      
-      if (arrayBuffer.byteLength < 100) {
-        console.warn(`Model ${modelId} returned empty/small response`);
-        continue;
-      }
-      
-      return await saveVideoResult(userId, prompt, arrayBuffer);
-    } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        console.warn(`Model ${modelId} timed out after 20s`);
-      } else {
-        console.warn(`Model ${modelId} error:`, err?.message || err);
-      }
-      continue; // Try next model on any error
-    }
-  }
-
-  // All models failed
-  return `⚠️ **Video Generation Failed**: All video generation models are currently unavailable. This is a free service and models may be loading. Try again in a few minutes, or use a different prompt.`;
-}
-
-async function saveVideoResult(userId: string | undefined, prompt: string, arrayBuffer: ArrayBuffer) {
-  const base64 = Buffer.from(arrayBuffer).toString('base64');
-  
-  let record = null;
-  if (userId) {
-    try {
-      record = await prisma.video.create({
-        data: { userId, prompt, videoUrl: base64 },
-        select: { id: true }
-      });
-    } catch (e) {
-      console.error('Failed to persist video:', e);
-    }
-  }
-  
-  const videoUrl = record ? `/api/video?id=${record.id}` : `data:video/mp4;base64,${base64}`;
-  const downloadName = (record?.id ?? `ultron-video-${Date.now()}`);
-  
-  // Build download link: for persisted videos, use API endpoint; for data URIs, just link directly
-  const downloadLink = record
-    ? `[Download Video](/api/video?id=${record.id}&download=1 "${downloadName}")`
-    : `[Download Video](${videoUrl} "${downloadName}")`;
-  
-  return [
-    `[VIDEO: ${videoUrl}]`,
-    ``,
-    downloadLink
-  ].join('\n');
-}
+// Media generation is now handled asynchronously by /api/media/generate
 async function persistExchange(
   userId: string | undefined,
   sessionId: string | undefined,
@@ -340,7 +165,7 @@ export async function POST(req: Request) {
 
     if (slash?.command === 'img') {
       await sessionPromiseTask;
-      const text = await generateImageInline(userId, slash.prompt);
+      const text = `I'm working on that! I will notify you when it's ready.\n\n[GENERATING_IMAGE: ${slash.prompt}]`;
       await persistExchange(userId, activeSessionId, userContent, text);
       return NextResponse.json(
         { text, sessionId: activeSessionId, image: true },
@@ -350,7 +175,7 @@ export async function POST(req: Request) {
     
     if (slash?.command === 'video') {
       await sessionPromiseTask;
-      const text = await generateVideoInline(userId, slash.prompt);
+      const text = `I'm working on your video! I will notify you when it's ready.\n\n[GENERATING_VIDEO: ${slash.prompt}]`;
       await persistExchange(userId, activeSessionId, userContent, text);
       return NextResponse.json(
         { text, sessionId: activeSessionId, video: true },
@@ -372,7 +197,7 @@ export async function POST(req: Request) {
 
     if (videoIntent) {
       await sessionPromiseTask;
-      const text = await generateVideoInline(userId, videoIntent);
+      const text = `I'm working on your video! I will notify you when it's ready.\n\n[GENERATING_VIDEO: ${videoIntent}]`;
       await persistExchange(userId, activeSessionId, userContent, text);
       return NextResponse.json(
         { text, sessionId: activeSessionId, video: true },
@@ -382,7 +207,7 @@ export async function POST(req: Request) {
 
     if (imageIntent) {
       await sessionPromiseTask;
-      const text = await generateImageInline(userId, imageIntent);
+      const text = `I'm working on that! I will notify you when it's ready.\n\n[GENERATING_IMAGE: ${imageIntent}]`;
       await persistExchange(userId, activeSessionId, userContent, text);
       return NextResponse.json(
         { text, sessionId: activeSessionId, image: true },
@@ -390,13 +215,19 @@ export async function POST(req: Request) {
       );
     }
 
-    // ----- 4. Long-term memory retrieval -----
-    const [, memories] = await Promise.all([
+    // ----- 4. Long-term memory retrieval & Web Search -----
+    const searchPromise = performSearch(userContent).catch(err => {
+      console.warn('Pre-search failed:', err);
+      return 'Search unavailable.';
+    });
+
+    const [, memories, searchResults] = await Promise.all([
       sessionPromiseTask,
-      memoryPromise
+      memoryPromise,
+      searchPromise
     ]);
 
-    // ----- 5. System prompt — base + slash overrides + memories -----
+    // ----- 5. System prompt — base + slash overrides + memories + search results -----
     const currentDate = new Date().toLocaleString('en-US', { timeZone: timeZone || 'UTC', timeZoneName: 'short' });
     
     let systemPrompt = `You are ULTRON, a highly advanced cognitive AI assistant. Current mode: ${String(mode).toUpperCase()}. Response style should be precise, intelligent, and highly capable.
@@ -420,24 +251,11 @@ IMPORTANT LANGUAGE RULES:
 
 [REAL-TIME AWARENESS]:
 - The current local time and date is exactly: ${currentDate}. Always use this when answering time-based questions. User Timezone: ${timeZone || 'UTC'}.
-- [WEB SEARCH TOOL]: If the user asks for real-time information, weather, news, facts you do not know, or anything requiring a live search, you MUST output exactly: [SEARCH: "your detailed query here"]. Do not write anything else. The system will intercept this, perform the search, and feed you the results.
 
-CRITICAL - AFTER SEARCH RESULTS ARRIVE:
-When the SYSTEM SEARCH RESULTS message arrives, you MUST follow these rules EXACTLY:
-1. Base your answer ENTIRELY on the provided search results. Do NOT use any of your training data for real-time information.
-2. If the search results contain the information, provide a complete, accurate answer citing the relevant details.
-3. If the search results are empty or say "unavailable", honestly tell the user you couldn't find current information.
-4. NEVER make up data, statistics, names, dates, or facts not present in the search results.
-5. Format your answer clearly with bullet points or sections for readability.
-6. For weather, news, stock prices, sports scores, and other time-sensitive data: ONLY use the search results.
+[BACKGROUND WEB SEARCH RESULTS FOR USER QUERY]:
+${searchResults}
 
-- [MAPS TOOL]: If the user asks for a physical location, address, coordinates, or nearby places, you MUST output exactly: [MAPS: "your search query"]. Example: [MAPS: "restaurants near Central Park New York"]. Do not write anything else.
-
-CRITICAL - AFTER MAPS RESULTS ARRIVE:
-When the SYSTEM MAPS RESULTS message arrives, you MUST follow these rules EXACTLY:
-1. Base your location answer ENTIRELY on the provided maps results.
-2. If results contain addresses, hours, ratings, or contact info, include them.
-3. If no results found, honestly tell the user.`;
+CRITICAL INSTRUCTION: Base your answer heavily on the search results above if they contain relevant information. DO NOT mention "based on the search results" in your response. Just answer the user naturally.`;
 
     if (slash?.command === 'code') {
       systemPrompt +=

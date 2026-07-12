@@ -146,12 +146,9 @@ async function searchDuckDuckGoLite(query: string): Promise<SearchResult[]> {
   }
 }
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const query = searchParams.get('q');
-
+export async function performSearch(query: string): Promise<string> {
   if (!query || query.trim().length === 0) {
-    return NextResponse.json({ results: 'Please provide a search query.' });
+    return 'Please provide a search query.';
   }
 
   const trimmedQuery = query.trim();
@@ -179,18 +176,21 @@ export async function GET(req: Request) {
       if (combined.length > 0) {
         bestResults = combined;
       } else {
-        return NextResponse.json({
-          results: `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`
-        });
+        return `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`;
       }
     }
 
-    return NextResponse.json({ results: formatResults(bestResults) });
+    return formatResults(bestResults);
   } catch (err) {
     // Global catch — never crash
     console.error('[Search] Unexpected error:', err);
-    return NextResponse.json({
-      results: `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`
-    });
+    return `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`;
   }
+}
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const query = searchParams.get('q');
+  const results = await performSearch(query || '');
+  return NextResponse.json({ results });
 }

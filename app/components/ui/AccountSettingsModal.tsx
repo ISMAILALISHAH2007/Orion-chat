@@ -2,7 +2,7 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from '@/app/components/providers/ThemeProvider';
 import { useTTS } from '@/app/components/providers/TTSProvider';
-import { X, Sun, Moon, Volume2, LogOut, User, Check, Settings } from 'lucide-react';
+import { X, Sun, Moon, Volume2, LogOut, Check, Settings } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 interface AccountSettingsModalProps {
@@ -12,7 +12,7 @@ interface AccountSettingsModalProps {
 export default function AccountSettingsModal({ onClose }: AccountSettingsModalProps) {
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
-  const { voices, selectedVoiceUri, setSelectedVoiceUri } = useTTS();
+  const { voiceGender, setVoiceGender } = useTTS();
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,16 +31,16 @@ export default function AccountSettingsModal({ onClose }: AccountSettingsModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in px-4">
-      <div 
-        ref={modalRef} 
+      <div
+        ref={modalRef}
         className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl animate-slide-up"
       >
         <div className="flex items-center justify-between border-b border-white/10 p-4">
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
             <Settings size={20} className="text-muted" /> Settings
           </h2>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="rounded-full p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
           >
             <X size={20} />
@@ -84,25 +84,25 @@ export default function AccountSettingsModal({ onClose }: AccountSettingsModalPr
             {/* AI Voice Selection */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                <Volume2 size={16} className="text-muted" /> AI Voice Model
+                <Volume2 size={16} className="text-muted" /> AI Voice
               </label>
-              <div className="relative">
-                <select
-                  value={selectedVoiceUri}
-                  onChange={(e) => setSelectedVoiceUri(e.target.value)}
-                  className="w-full appearance-none rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-accent"
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setVoiceGender('male')}
+                  className={`flex-1 flex items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-medium transition-all ${voiceGender === 'male' ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-transparent text-muted hover:bg-surface-2'}`}
                 >
-                  {voices.map(v => (
-                    <option key={v.uri} value={v.uri}>{v.name}</option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                  <svg className="h-4 w-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
+                  Male
+                  {voiceGender === 'male' && <Check size={14} />}
+                </button>
+                <button
+                  onClick={() => setVoiceGender('female')}
+                  className={`flex-1 flex items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-medium transition-all ${voiceGender === 'female' ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-transparent text-muted hover:bg-surface-2'}`}
+                >
+                  Female
+                  {voiceGender === 'female' && <Check size={14} />}
+                </button>
               </div>
-              <p className="text-xs text-muted">Select the language and accent for live voice mode.</p>
+              <p className="text-xs text-muted">Select the AI voice gender for live conversations and read-aloud.</p>
             </div>
           </div>
         </div>

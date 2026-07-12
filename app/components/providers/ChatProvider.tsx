@@ -32,6 +32,7 @@ interface ChatContextType {
   messages: ChatMessage[];
   input: string;
   isStreaming: boolean;
+  isResearching: boolean;
   sessionId: string;
   sessionsList: ChatSessionItem[];
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
@@ -56,6 +57,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isResearching, setIsResearching] = useState(false);
   const [input, setInput] = useState('');
   const [sessionId, setSessionIdState] = useState<string>('current');
   const [sessionsList, setSessionsList] = useState<ChatSessionItem[]>([]);
@@ -170,6 +172,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (isStreaming) return;
 
       setIsStreaming(true);
+      setIsResearching(true);
       if (!options?.isHidden) setInput('');
       
       setMessages((prev) => [...prev, { sender: 'user', text, attachments, isHidden: options?.isHidden }]);
@@ -245,6 +248,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           if (reply.image) {
             window.dispatchEvent(new Event('images-updated'));
           }
+          setIsResearching(false);
           return;
         }
 
@@ -256,6 +260,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           const { value, done } = await reader.read();
           if (done) break;
           accumulated += decoder.decode(value, { stream: true });
+          
+          if (accumulated.length > 0) setIsResearching(false);
 
           setMessages((prev) => {
             const last = prev[prev.length - 1];
@@ -283,6 +289,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         }
       } finally {
         setIsStreaming(false);
+        setIsResearching(false);
         abortControllerRef.current = null;
       }
     },
@@ -295,6 +302,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         messages,
         input,
         isStreaming,
+        isResearching,
         sessionId,
         sessionsList,
         handleInputChange,

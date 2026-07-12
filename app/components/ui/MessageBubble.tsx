@@ -5,6 +5,7 @@ import { Sparkles, Volume2, VolumeX, ChevronDown, BrainCircuit } from 'lucide-re
 import { parseMarkdown } from '@/app/lib/utils/markdown';
 import { generatePreviewHtml } from '@/app/lib/utils/preview';
 import { useTTS } from '@/app/components/providers/TTSProvider';
+import { useChat } from '@/app/components/providers/ChatProvider';
 
 interface MessageBubbleProps {
   sender: 'user' | 'ai';
@@ -30,10 +31,62 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
   const contentRef = useRef<HTMLDivElement>(null);
   const { speak, stopSpeaking, isSpeaking, initAudioContext } = useTTS();
   const [reasoningOpen, setReasoningOpen] = useState(false);
+  const { sessionId } = useChat();
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
 
-  const reasoning = parseReasoning(text);
-  const displayText = reasoning ? reasoning.mainText : text;
+  const [localTextOverride, setLocalTextOverride] = useState<string | null>(null);
+  const mediaGeneratingRef = useRef(false);
+
+  const rawText = localTextOverride ?? text;
+  const reasoning = parseReasoning(rawText);
+  const displayText = reasoning ? reasoning.mainText : rawText;
   const reasoningText = reasoning?.reasoningText;
+
+  // Background Media Generation Trigger
+  useEffect(() => {
+    if (sender === 'user' || isStreaming) return;
+
+    const videoGenMatch = displayText.match(/\[GENERATING_VIDEO:\s*(.*?)\]/);
+    const imageGenMatch = displayText.match(/\[GENERATING_IMAGE:\s*(.*?)\]/);
+
+    if ((videoGenMatch || imageGenMatch) && !mediaGeneratingRef.current) {
+      mediaGeneratingRef.current = true;
+      const type = videoGenMatch ? 'video' : 'image';
+      const prompt = videoGenMatch ? videoGenMatch[1] : (imageGenMatch ? imageGenMatch[1] : '');
+      const tagToReplace = videoGenMatch ? videoGenMatch[0] : (imageGenMatch ? imageGenMatch[0] : '');
+
+      fetch('/api/media/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, type, sessionId })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.url) {
+            const newTag = type === 'video' ? `[VIDEO: ${data.url}]` : `[IMAGE: ${data.url}]`;
+            setLocalTextOverride(displayText.replace(tagToReplace, newTag));
+            if (Notification.permission === 'granted') {
+              new Notification("Ultron", { body: `Your ${type} is ready!` });
+            } else if (Notification.permission !== 'denied') {
+              Notification.requestPermission().then(perm => {
+                if (perm === 'granted') new Notification("Ultron", { body: `Your ${type} is ready!` });
+              });
+            }
+            // Play a soft chime
+            try {
+              const audio = new Audio('/sounds/notify.mp3');
+              audio.volume = 0.5;
+              audio.play().catch(() => {});
+            } catch (e) {}
+          } else {
+            setLocalTextOverride(displayText.replace(tagToReplace, `⚠️ **Failed to generate ${type}**: ${data.error}`));
+          }
+        })
+        .catch(err => {
+          setLocalTextOverride(displayText.replace(tagToReplace, `⚠️ **Failed to generate ${type}**: Network error`));
+        });
+    }
+  }, [displayText, isStreaming, sender, sessionId]);
 
   // Wire up copy + preview buttons in code blocks
   useEffect(() => {
@@ -68,6 +121,15 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
       };
       btn.addEventListener('click', onClick);
       cleanups.push(() => btn.removeEventListener('click', onClick));
+    });
+
+    const imageElements = Array.from(root.querySelectorAll<HTMLImageElement>('.generated-image'));
+    imageElements.forEach((img) => {
+      img.style.cursor = 'pointer';
+      img.title = 'Click to expand';
+      const onClick = () => setFullScreenImage(img.src);
+      img.addEventListener('click', onClick);
+      cleanups.push(() => img.removeEventListener('click', onClick));
     });
 
     return () => cleanups.forEach((c) => c());
@@ -149,6 +211,19 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
           </button>
         )}
       </div>
+      
+      {fullScreenImage && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-4 sm:p-8 cursor-zoom-out" onClick={() => setFullScreenImage(null)}>
+          <img src={fullScreenImage} className="max-h-full max-w-full rounded-xl object-contain shadow-2xl cursor-default" onClick={(e) => e.stopPropagation()} />
+          <button className="absolute top-4 sm:top-8 right-4 sm:right-8 text-white hover:text-accent bg-black/50 p-2 sm:p-3 rounded-full transition" onClick={() => setFullScreenImage(null)}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+          <a href={fullScreenImage} download="generated-image.jpg" target="_blank" onClick={(e) => e.stopPropagation()} className="absolute bottom-6 sm:bottom-10 right-6 sm:right-10 bg-accent text-black font-bold px-6 py-3 rounded-full hover:bg-accent/90 hover:scale-105 active:scale-95 transition shadow-[0_0_20px_rgba(var(--accent),0.3)] flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Download
+          </a>
+        </div>
+      )}
     </div>
   );
 }

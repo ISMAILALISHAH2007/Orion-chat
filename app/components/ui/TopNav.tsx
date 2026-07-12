@@ -39,20 +39,12 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
   const { mode, setMode } = useMode();
   const { theme, toggleTheme } = useTheme();
   const {
-    liveVoiceMode,
-    setLiveVoiceMode,
-    aiVoiceEnabled,
     setAiVoiceEnabled,
     voiceConversationOpen,
     setVoiceConversationOpen,
-    isSpeaking,
-    initAudioContext,
+    speak,
     stopSpeaking,
-    voices,
-    selectedVoiceUri,
-    setSelectedVoiceUri,
-    voiceGender,
-    setVoiceGender,
+    initAudioContext,
   } = useTTS();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -142,25 +134,6 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
               );
             })}
 
-            {/* Voice Gender Selection */}
-            <div className="h-px w-full bg-border my-1" />
-            <div className="px-3 py-2">
-              <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Voice</div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setVoiceGender('male'); setOpen(false); }}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${voiceGender === 'male' ? 'bg-accent text-accent-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
-                >
-                  Male
-                </button>
-                <button
-                  onClick={() => { setVoiceGender('female'); setOpen(false); }}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${voiceGender === 'female' ? 'bg-accent text-accent-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
-                >
-                  Female
-                </button>
-              </div>
-            </div>
           </div>
         )}
       </div>

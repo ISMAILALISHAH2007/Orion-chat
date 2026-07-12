@@ -11,13 +11,14 @@ export function escapeScriptTags(code: string): string {
 }
 
 export function generatePreviewHtml(code: string, lang: string): string {
-  const decoded = escapeScriptTags(code);
   const language = lang.toLowerCase();
   const title = `ULTRON Code Preview — ${language}`;
 
   if (['html', 'jsx', 'tsx'].includes(language)) {
-    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title><style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif}*{box-sizing:border-box}</style></head><body>${decoded}</body></html>`;
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title><style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif}*{box-sizing:border-box}</style></head><body>${code}</body></html>`;
   }
+
+  const decoded = escapeScriptTags(code);
 
   if (['javascript', 'js'].includes(language)) {
     return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title><style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:20px}#output{background:#16213e;border-radius:12px;padding:16px;margin-top:16px;border:1px solid #2a2a4a;white-space:pre-wrap;font-family:monospace;font-size:13px;line-height:1.6}.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.badge{background:#4f46e5;color:#fff;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:600}.run-btn{background:#22c55e;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:.2s}.run-btn:hover{background:#16a34a}</style></head><body><div class="header"><span class="badge">JavaScript Runner</span><button class="run-btn" onclick="runCode()">▶ Run</button></div><div id="output">Waiting...</div><script>const originalLog=console.log;const output=document.getElementById('output');const logs=[];console.log=function(...args){logs.push(args.map(a=>typeof a==='object'?JSON.stringify(a,null,2):String(a)).join(' '));output.textContent=logs.join('\\n')};console.error=function(...args){logs.push('❌ '+args.map(a=>String(a)).join(' '));output.textContent=logs.join('\\n')};function runCode(){logs.length=0;output.textContent='Running...';try{${decoded}}catch(e){logs.push('❌ Error: '+e.message);output.textContent=logs.join('\\n')}}runCode();</script></body></html>`;
