@@ -99,7 +99,14 @@ function VoiceConversationModalInner({
               }]
             },
             generationConfig: {
-              responseModalities: ["AUDIO"]
+              responseModalities: ["AUDIO"],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: "Aoede" // Female voice
+                  }
+                }
+              }
             }
           }
         };
@@ -334,7 +341,7 @@ function VoiceConversationModalInner({
                   <Loader2 size={28} className="text-white animate-spin" />
                 </div>
               </div>
-              <span className="voice-conv-status-text">Connecting to Gemini...</span>
+              <span className="voice-conv-status-text">Connecting to Ultron...</span>
             </div>
           )}
 
@@ -358,7 +365,7 @@ function VoiceConversationModalInner({
                 <span className="voice-wave speak" />
                 <span className="voice-wave speak" />
               </div>
-              <span className="voice-conv-status-text">Gemini is speaking...</span>
+              <span className="voice-conv-status-text">Ultron is speaking...</span>
             </div>
           )}
         </div>
@@ -367,7 +374,7 @@ function VoiceConversationModalInner({
         <div className="voice-conv-transcript-area">
           {transcript && (
             <div className="voice-conv-transcript-item ai animate-fade-in">
-              <span className="voice-conv-label">GEMINI</span>
+              <span className="voice-conv-label">ULTRON</span>
               <p className="voice-conv-text">{transcript}</p>
             </div>
           )}
