@@ -84,7 +84,7 @@ function VoiceConversationModalInner({
       streamerRef.current = streamer;
 
       // 3. Setup WebSocket directly to Gemini Bidi API
-      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${token}`;
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${token}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -92,7 +92,7 @@ function VoiceConversationModalInner({
         // Send Setup message
         const setupMsg = {
           setup: {
-            model: "models/gemini-2.0-flash-exp",
+            model: "models/gemini-3.1-flash-live-preview",
             systemInstruction: {
               parts: [{
                 text: "You are ULTRON, a highly advanced cognitive AI assistant. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. If the user speaks in English, reply in English. If they speak Urdu/Hindi, reply appropriately. Be warm, natural, and helpful."
