@@ -15,7 +15,12 @@ async function generateVideo(userId: string | undefined, prompt: string): Promis
       'Authorization': `Bearer ${mhToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ name: "Ultron Video Generation", prompt })
+    body: JSON.stringify({ 
+      name: "Ultron Video Generation",
+      style: { prompt },
+      end_seconds: 5,
+      aspect_ratio: "16:9"
+    })
   });
 
   if (!createRes.ok) {
