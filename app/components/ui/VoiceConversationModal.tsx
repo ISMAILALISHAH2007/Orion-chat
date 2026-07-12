@@ -13,7 +13,43 @@ interface VoiceConversationModalProps {
   latestAiResponse: string;
 }
 
-export default function VoiceConversationModal({
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
+  constructor(props: {children: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="voice-conv-overlay flex items-center justify-center p-4">
+          <div className="bg-red-900/90 text-white p-6 rounded-2xl max-w-lg shadow-2xl border border-red-500 w-full relative z-50 overflow-hidden">
+            <div className="flex items-center gap-3 mb-4 text-red-200">
+              <AlertCircle size={28} />
+              <h2 className="text-xl font-bold">Fatal React Crash Caught</h2>
+            </div>
+            <div className="bg-black/50 p-4 rounded-lg overflow-auto max-h-64 mb-6">
+              <p className="font-mono text-sm text-red-300 break-words whitespace-pre-wrap">
+                {this.state.error?.name}: {this.state.error?.message}
+              </p>
+              <p className="font-mono text-xs text-red-400/80 mt-2 break-words whitespace-pre-wrap">
+                {this.state.error?.stack}
+              </p>
+            </div>
+            <button onClick={() => window.location.reload()} className="w-full py-3 bg-red-600 hover:bg-red-500 font-bold rounded-lg transition-colors">
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function VoiceConversationModalInner({
   isOpen,
   onEndSession,
   sendMessage,
@@ -364,5 +400,13 @@ export default function VoiceConversationModal({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function VoiceConversationModal(props: VoiceConversationModalProps) {
+  return (
+    <ErrorBoundary>
+      <VoiceConversationModalInner {...props} />
+    </ErrorBoundary>
   );
 }
