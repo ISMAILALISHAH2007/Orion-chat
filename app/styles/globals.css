@@ -36,7 +36,7 @@
   --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: var(--font-jetbrains), 'JetBrains Mono', ui-monospace, monospace;
 
-  /* ---- Legacy aliases (kept so existing pages keep working) ---- */
+  /* ---- Legacy aliases ---- */
   --bg-color: var(--background);
   --sidebar-bg: var(--surface);
   --card-bg: var(--surface);
@@ -88,6 +88,25 @@
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 24px;
+
+  /* Custom animations */
+  --animate-spin-slow: spin-slow 3s linear infinite;
+  --animate-scale-in: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-fade-in-down: fade-in-down 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes scale-in {
+  0% { opacity: 0; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fade-in-down {
+  0% { opacity: 0; transform: translateY(-10px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 html {
@@ -99,14 +118,24 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   height: 100dvh;
+  height: 100svh; /* Mobile Safari fix */
   width: 100vw;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.4s ease, color 0.4s ease;
 }
 
+/* Safe area insets for modern mobile devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
 /* Subtle, theme-aware scrollbars */
-*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
   background: var(--border-strong);
@@ -168,23 +197,39 @@ body {
   animation: voice-pulse 1.5s infinite ease-out;
 }
 
+/* Voice wave animation */
+@keyframes voice-bar-beat {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.5; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
 /* ==========================================================================
-   MARKDOWN / MESSAGE CONTENT
+   RESPONSIVE MESSAGE CONTENT
    ========================================================================== */
 .msg-content {
-  font-size: 0.975rem;
+  font-size: 0.95rem;
   line-height: 1.7;
   color: var(--foreground);
   word-wrap: break-word;
+  overflow-wrap: break-word;
 }
-.msg-content h1 { font-size: 1.4rem; font-weight: 700; margin: 1rem 0 0.5rem; font-family: var(--font-display); }
-.msg-content h2 { font-size: 1.2rem; font-weight: 700; margin: 0.9rem 0 0.5rem; font-family: var(--font-display); }
-.msg-content h3 { font-size: 1.05rem; font-weight: 600; margin: 0.8rem 0 0.4rem; }
+@media (max-width: 640px) {
+  .msg-content {
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+}
+.msg-content h1 { font-size: 1.3rem; font-weight: 700; margin: 0.8rem 0 0.4rem; font-family: var(--font-display); }
+@media (max-width: 640px) {
+  .msg-content h1 { font-size: 1.1rem; }
+}
+.msg-content h2 { font-size: 1.1rem; font-weight: 700; margin: 0.7rem 0 0.4rem; font-family: var(--font-display); }
+.msg-content h3 { font-size: 1rem; font-weight: 600; margin: 0.6rem 0 0.3rem; }
 .msg-content strong { font-weight: 700; }
-.msg-content a { color: var(--accent); text-decoration: underline; }
+.msg-content a { color: var(--accent); text-decoration: underline; word-break: break-all; }
 .msg-content li { margin: 0.2rem 0 0.2rem 1.25rem; }
-.msg-content p { margin: 0.4rem 0; }
-.msg-content hr { border: none; border-top: 1px solid var(--border); margin: 0.9rem 0; }
+.msg-content p { margin: 0.3rem 0; }
+.msg-content hr { border: none; border-top: 1px solid var(--border); margin: 0.7rem 0; }
 
 .msg-content code.inline-code {
   background: var(--surface-2);
@@ -235,6 +280,7 @@ body {
   margin: 0;
   padding: 14px 16px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .code-block code {
   font-family: var(--font-mono);
@@ -245,7 +291,6 @@ body {
 
 /* ==========================================================================
    LEGACY CLASSES — restyled to the clean professional theme
-   (used by auth pages + dashboard subpages)
    ========================================================================== */
 .glass {
   background: var(--surface);
@@ -267,35 +312,40 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 100dvh;
+  min-height: 100svh;
   width: 100vw;
   background-color: var(--background);
-  padding: 1.5rem;
+  padding: 1rem;
 }
 .auth-card {
   width: 100%;
   max-width: 420px;
-  padding: 2.5rem;
+  padding: 2rem 1.5rem;
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
 }
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 1.5rem 1.25rem;
+  }
+}
 .auth-header { text-align: center; }
 .auth-title {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.6rem;
+  font-size: 1.5rem;
   margin-top: 0.5rem;
   color: var(--foreground);
+}
+@media (max-width: 480px) {
+  .auth-title { font-size: 1.3rem; }
 }
 .auth-subtitle { font-size: 0.9rem; color: var(--muted); margin-top: 0.25rem; }
 .auth-form { display: flex; flex-direction: column; gap: 1.1rem; }
 .form-group { display: flex; flex-direction: column; gap: 0.45rem; }
-.form-label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--muted);
-}
+.form-label { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
 .form-input {
   background: var(--input);
   border: 1px solid var(--border);
@@ -333,28 +383,41 @@ body {
 
 /* Dashboard subpages */
 .dashboard-subpage {
-  padding: 2.5rem;
+  padding: 2rem;
   flex: 1;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem;
+}
+@media (max-width: 640px) {
+  .dashboard-subpage { padding: 1rem; }
 }
 .subpage-header { display: flex; flex-direction: column; gap: 0.4rem; }
 .subpage-title {
   font-family: var(--font-display);
-  font-size: 1.9rem;
+  font-size: 1.7rem;
   font-weight: 700;
   color: var(--foreground);
+}
+@media (max-width: 640px) {
+  .subpage-title { font-size: 1.4rem; }
 }
 .subpage-description { color: var(--muted); font-size: 0.95rem; }
 .custom-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+@media (max-width: 640px) {
+  .custom-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
 }
 .custom-card {
-  padding: 1.5rem;
+  padding: 1.25rem;
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
@@ -375,12 +438,6 @@ body {
   color: var(--muted);
   text-transform: uppercase;
 }
-
-/* Responsive */
-@media (max-width: 900px) {
-  .dashboard-subpage { padding: 1.5rem; }
-}
-
 
 /* ==========================================================================
    GEMINI & GLASSMORPHISM DESIGN SYSTEM
@@ -443,6 +500,15 @@ body {
   left: 20%;
 }
 
+@media (max-width: 640px) {
+  .live-voice-blob-1 {
+    width: 200px;
+    height: 200px;
+    top: 10%;
+    left: 10%;
+  }
+}
+
 .live-voice-blob-2 {
   background: #d96570;
   width: 250px;
@@ -452,6 +518,15 @@ body {
   animation-delay: -3s;
 }
 
+@media (max-width: 640px) {
+  .live-voice-blob-2 {
+    width: 180px;
+    height: 180px;
+    top: 30%;
+    right: 10%;
+  }
+}
+
 .live-voice-blob-3 {
   background: #9b72cb;
   width: 350px;
@@ -459,6 +534,15 @@ body {
   bottom: 10%;
   left: 30%;
   animation-delay: -6s;
+}
+
+@media (max-width: 640px) {
+  .live-voice-blob-3 {
+    width: 200px;
+    height: 200px;
+    bottom: 20%;
+    left: 20%;
+  }
 }
 
 @keyframes blob-float {
@@ -473,6 +557,10 @@ body {
   justify-content: center;
   gap: 8px;
   height: 60px;
+}
+
+@media (max-width: 640px) {
+  .live-voice-wave { height: 40px; gap: 5px; }
 }
 
 .live-voice-bar {
@@ -536,3 +624,46 @@ body {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px var(--accent-soft);
 }
+
+/* ==========================================================================
+   RESPONSIVE SIDEBAR OVERRIDES
+   ========================================================================== */
+@media (max-width: 768px) {
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+}
+
+/* ==========================================================================
+   READ ALOUD BUTTON ANIMATION
+   ========================================================================== */
+@keyframes sound-wave {
+  0% { height: 3px; }
+  50% { height: 12px; }
+  100% { height: 3px; }
+}
+
+.read-aloud-active .sound-bar {
+  animation: sound-wave 0.6s infinite ease-in-out;
+}
+
+.read-aloud-active .sound-bar:nth-child(1) { animation-delay: 0s; }
+.read-aloud-active .sound-bar:nth-child(2) { animation-delay: 0.1s; }
+.read-aloud-active .sound-bar:nth-child(3) { animation-delay: 0.2s; }
+.read-aloud-active .sound-bar:nth-child(4) { animation-delay: 0.15s; }
+
+/* ==========================================================================
+   MOBILE INPUT SAFE AREA
+   ========================================================================== */
+@media (max-width: 640px) {
+  .mobile-input-safe {
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 8px));
+  }
+}
+
+

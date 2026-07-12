@@ -35,6 +35,8 @@ interface TTSContextType {
   toggleLiveVoice: () => void;
   setLiveVoiceMode: (mode: boolean) => void;
   initAudioContext: () => void;
+  aiVoiceEnabled: boolean;
+  setAiVoiceEnabled: (enabled: boolean) => void;
 }
 
 const TTSContext = createContext<TTSContextType | undefined>(undefined);
@@ -44,6 +46,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const [selectedVoiceUri, setSelectedVoiceUri] = useState<string>('en');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [liveVoiceMode, setLiveVoiceMode] = useState(false);
+  const [aiVoiceEnabled, setAiVoiceEnabled] = useState(false);
 
   const [voiceGender, setVoiceGender] = useState<'female' | 'male'>('female');
 
@@ -313,7 +316,9 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       liveVoiceMode,
       toggleLiveVoice,
       setLiveVoiceMode,
-      initAudioContext
+      initAudioContext,
+      aiVoiceEnabled,
+      setAiVoiceEnabled
     }}>
       {children}
     </TTSContext.Provider>

@@ -89,13 +89,17 @@ export default function Sidebar({
     <>
       {showAccountModal && <AccountSettingsModal onClose={() => setShowAccountModal(false)} />}
       
-      {/* Mobile backdrop */}
+      {/* Mobile backdrop - improved with smooth transition */}
       {mobileOpen && (
-        <button
-          aria-label="Close sidebar"
-          onClick={onCloseMobile}
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
-        />
+        <div
+          className="fixed inset-0 z-40 md:hidden animate-fade-in"
+        >
+          <button
+            aria-label="Close sidebar"
+            onClick={onCloseMobile}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+          />
+        </div>
       )}
 
       <aside
@@ -178,7 +182,8 @@ export default function Sidebar({
         </nav>
 
         {/* History */}
-        <div className="mt-1 flex-1 overflow-y-auto px-3 py-2">
+        {/* History section - hidden on mobile when collapsed */}
+        <div className="mt-1 flex-1 overflow-y-auto px-3 py-2" style={{ WebkitOverflowScrolling: 'touch' }}>
           {!collapsed &&
             (grouped.length === 0 ? (
               <p className="px-1 py-2 text-xs text-muted">No conversations yet.</p>

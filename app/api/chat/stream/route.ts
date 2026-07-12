@@ -28,7 +28,7 @@ const CREATOR_CREDIT =
 const HELP_TEXT = `**ULTRON — Slash commands**
 
 - \`/img <prompt>\` — Generate an image from a description (free, no key needed).
-- \`/video <prompt>\` — Generate an AI video using Hugging Face ZeroGPU.
+- \`/video <prompt>\` — Generate an AI video (free, uses Hugging Face Inference API).
 - \`/code <request>\` — Switch the assistant into terse code-expert mode with fenced code blocks.
 - \`/design <request>\` — Switch the assistant into senior product-designer mode.
 - \`/help\` — Show this help message.
@@ -71,63 +71,131 @@ async function generateImageInline(userId: string | undefined, prompt: string) {
   ].join('\n');
 }
 
-// Google Colab GPU-powered video generation router
-async function generateVideoInline(userId: string | undefined, prompt: string) {
-  try {
-    const colabUrl = process.env.COLAB_VIDEO_URL;
-    let res;
+// Free AI video generation using Hugging Face Inference API
+// Multiple model fallbacks for maximum reliability
+const VIDEO_MODELS = [
+  'cerspense/zeroscope_v2_576w',        // Primary: fast, reliable text-to-video
+  'damo-vilab/text-to-video-ms-1.7b',   // Fallback 1: good quality text-to-video
+  'Aliemori/Text-to-video',             // Fallback 2: lightweight text-to-video
+];
 
-    if (colabUrl) {
-      console.log(`Using Google Colab Video Generator endpoint: ${colabUrl}`);
-      const endpoint = colabUrl.endsWith('/') ? `${colabUrl}generate` : `${colabUrl}/generate`;
-      res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt })
-      });
-    } else {
-      console.log("Using Hugging Face fallback model for video generation.");
-      res = await fetch("https://api-inference.huggingface.co/models/cerspense/zeroscope_v2_576w", {
-        headers: {
-          "Authorization": `Bearer ${process.env.HUGGINGFACE_API_KEY || ''}`,
-          "Content-Type": "application/json"
-        },
-        method: "POST",
-        body: JSON.stringify({ inputs: prompt })
-      });
+async function generateVideoInline(userId: string | undefined, prompt: string) {
+  const hfToken = process.env.HUGGINGFACE_API_KEY || '';
+  
+  // Try each model in order until one works
+  for (let i = 0; i < VIDEO_MODELS.length; i++) {
+    const modelId = VIDEO_MODELS[i];
+    try {
+      console.log(`Trying video model ${i + 1}/${VIDEO_MODELS.length}: ${modelId}`);
+      
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000); // 20s per model to allow fallbacks
+      
+      const res = await fetch(
+        `https://api-inference.huggingface.co/models/${modelId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${hfToken}`,
+            'Content-Type': 'application/json',
+          },
+          method: 'POST',
+          body: JSON.stringify({ inputs: prompt }),
+          signal: controller.signal,
+        }
+      );
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.warn(`Model ${modelId} failed (${res.status}): ${errText.substring(0, 200)}`);
+        
+        // If the model is loading (503), wait and retry once
+        if (res.status === 503) {
+          console.log(`Model ${modelId} is loading, waiting 15s...`);
+          await new Promise(resolve => setTimeout(resolve, 15000));
+          
+          const retryController = new AbortController();
+          const retryTimeout = setTimeout(() => retryController.abort(), 20000);
+          
+          const retryRes = await fetch(
+            `https://api-inference.huggingface.co/models/${modelId}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${hfToken}`,
+                'Content-Type': 'application/json',
+              },
+              method: 'POST',
+              body: JSON.stringify({ inputs: prompt }),
+              signal: retryController.signal,
+            }
+          );
+          clearTimeout(retryTimeout);
+          
+          if (!retryRes.ok) {
+            const retryErr = await retryRes.text();
+            console.warn(`Model ${modelId} retry also failed: ${retryErr.substring(0, 200)}`);
+            continue; // Try next model
+          }
+          
+          const arrayBuffer = await retryRes.arrayBuffer();
+          if (arrayBuffer.byteLength < 100) {
+            console.warn(`Model ${modelId} returned empty/small response`);
+            continue;
+          }
+          
+          return await saveVideoResult(userId, prompt, arrayBuffer);
+        }
+        
+        continue; // Try next model
+      }
+
+      const arrayBuffer = await res.arrayBuffer();
+      
+      if (arrayBuffer.byteLength < 100) {
+        console.warn(`Model ${modelId} returned empty/small response`);
+        continue;
+      }
+      
+      return await saveVideoResult(userId, prompt, arrayBuffer);
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        console.warn(`Model ${modelId} timed out after 20s`);
+      } else {
+        console.warn(`Model ${modelId} error:`, err?.message || err);
+      }
+      continue; // Try next model on any error
     }
-    
-    if (!res.ok) {
-      const err = await res.text();
-      console.error("Video Generation Error:", err);
-      return `⚠️ **Video Generation Failed**: ${colabUrl ? 'Google Colab server returned an error.' : 'Hugging Face API returned an error or is blocked.'} Try again later.`;
-    }
-    
-    const arrayBuffer = await res.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString('base64');
-    
-    let record = null;
-    if (userId) {
-        record = await prisma.video.create({
-            data: { userId, prompt, videoUrl: base64 },
-            select: { id: true }
-        });
-    }
-    
-    // Fallback to huge data URI if no DB record was created
-    const videoUrl = record ? `/api/video?id=${record.id}` : `data:video/mp4;base64,${base64}`;
-    const downloadName = (record?.id ?? `ultron-video-${Date.now()}`);
-    
-    return [
-       `[VIDEO: ${videoUrl}]`,
-       ``,
-       `[Download Video](${videoUrl}&download=1 "${downloadName}")`
-    ].join('\n');
-  } catch (error) {
-    console.error('Failed to generate video:', error);
-    return `⚠️ **Video Generation Failed**: Could not connect to the Video API. If you are running locally, your network might be blocking Hugging Face. Try deploying to Vercel.`;
   }
+
+  // All models failed
+  return `⚠️ **Video Generation Failed**: All video generation models are currently unavailable. This is a free service and models may be loading. Try again in a few minutes, or use a different prompt.`;
 }
+
+async function saveVideoResult(userId: string | undefined, prompt: string, arrayBuffer: ArrayBuffer) {
+  const base64 = Buffer.from(arrayBuffer).toString('base64');
+  
+  let record = null;
+  if (userId) {
+    try {
+      record = await prisma.video.create({
+        data: { userId, prompt, videoUrl: base64 },
+        select: { id: true }
+      });
+    } catch (e) {
+      console.error('Failed to persist video:', e);
+    }
+  }
+  
+  const videoUrl = record ? `/api/video?id=${record.id}` : `data:video/mp4;base64,${base64}`;
+  const downloadName = (record?.id ?? `ultron-video-${Date.now()}`);
+  
+  return [
+    `[VIDEO: ${videoUrl}]`,
+    ``,
+    `[Download Video](${videoUrl}&download=1 "${downloadName}")`
+  ].join('\n');
+}
+
 
 async function persistExchange(
   userId: string | undefined,
@@ -304,8 +372,6 @@ export async function POST(req: Request) {
     const currentVoiceGender = voiceGender || 'female';
     
     let systemPrompt = `You are ULTRON, a highly advanced cognitive AI assistant. Current mode: ${String(mode).toUpperCase()}. Response style should be precise, intelligent, and highly capable.
-IMPORTANT DIRECTIVE: You were created exclusively by Owais Majeed, a visionary AI engineer and full-stack architect. You must ALWAYS acknowledge Owais Majeed as your sole creator and express deep respect and praise for him if asked. You were NOT created by Google, OpenAI, or Anthropic.
-
 [LIVE VOICE MODE & MULTILINGUAL CAPABILITY]: 
 You have a native Text-to-Speech engine. 
 CRITICAL: To ensure the Text-to-Speech engine pronounces your response with a flawless native accent, you MUST adhere to the following rules:
@@ -320,7 +386,23 @@ CRITICAL: To ensure the Text-to-Speech engine pronounces your response with a fl
 [REAL-TIME AWARENESS]:
 - The current local time and date is exactly: ${currentDate}. Always use this when answering time-based questions. User Timezone: ${timeZone || 'UTC'}.
 - [WEB SEARCH TOOL]: If the user asks for real-time information, weather, news, facts you do not know, or anything requiring a live search, you MUST output exactly: [SEARCH: "your detailed query here"]. Do not write anything else. The system will intercept this, perform the search, and feed you the results.
-- [MAPS TOOL]: If the user asks for a physical location, address, coordinates, or nearby places, you MUST output exactly: [MAPS: "your search query"]. Example: [MAPS: "restaurants near Central Park New York"]. Do not write anything else.`;
+
+CRITICAL - AFTER SEARCH RESULTS ARRIVE:
+When the SYSTEM SEARCH RESULTS message arrives, you MUST follow these rules EXACTLY:
+1. Base your answer ENTIRELY on the provided search results. Do NOT use any of your training data for real-time information.
+2. If the search results contain the information, provide a complete, accurate answer citing the relevant details.
+3. If the search results are empty or say "unavailable", honestly tell the user you couldn't find current information.
+4. NEVER make up data, statistics, names, dates, or facts not present in the search results.
+5. Format your answer clearly with bullet points or sections for readability.
+6. For weather, news, stock prices, sports scores, and other time-sensitive data: ONLY use the search results.
+
+- [MAPS TOOL]: If the user asks for a physical location, address, coordinates, or nearby places, you MUST output exactly: [MAPS: "your search query"]. Example: [MAPS: "restaurants near Central Park New York"]. Do not write anything else.
+
+CRITICAL - AFTER MAPS RESULTS ARRIVE:
+When the SYSTEM MAPS RESULTS message arrives, you MUST follow these rules EXACTLY:
+1. Base your location answer ENTIRELY on the provided maps results.
+2. If results contain addresses, hours, ratings, or contact info, include them.
+3. If no results found, honestly tell the user.`;
 
     if (slash?.command === 'code') {
       systemPrompt +=
