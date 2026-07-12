@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/lib/auth';
 import { prisma } from '@/app/lib/db';
 
-async function generateVideo(userId: string | undefined, prompt: string): Promise<string> {
+async function startVideoJob(prompt: string): Promise<string> {
   const mhToken = process.env.MAGIC_HOUR_API_KEY || '';
   if (!mhToken) throw new Error('MAGIC_HOUR_API_KEY missing');
 
@@ -33,68 +33,103 @@ async function generateVideo(userId: string | undefined, prompt: string): Promis
   const jobId = createData.id;
   if (!jobId) throw new Error('Magic Hour returned no job ID');
 
-  console.log(`[Media API] Magic Hour Job Created: ${jobId}. Polling...`);
+  console.log(`[Media API] Magic Hour Job Created: ${jobId}. Returning to client for polling.`);
+  return jobId;
+}
 
-  const MAX_ITERATIONS = 90;
-  const POLLING_INTERVAL_MS = 4000;
-  let videoUrl = null;
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const jobId = searchParams.get('jobId');
+    const prompt = searchParams.get('prompt') || 'Video';
+    if (!jobId) return NextResponse.json({ error: 'Missing jobId' }, { status: 400 });
 
-  for (let i = 0; i < MAX_ITERATIONS; i++) {
-    await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL_MS));
-    
+    const mhToken = process.env.MAGIC_HOUR_API_KEY || '';
+    if (!mhToken) throw new Error('MAGIC_HOUR_API_KEY missing');
+
     const statusRes = await fetch(`https://api.magichour.ai/v1/text-to-video/${jobId}`, {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${mhToken}` }
     });
 
-    if (!statusRes.ok) continue;
+    if (!statusRes.ok) {
+      return NextResponse.json({ status: 'processing' }, { status: 200 });
+    }
+
     const statusData = await statusRes.json();
-    console.log(`[Media API] Job ${jobId} status: ${statusData.status}`);
+    console.log(`[Media API] Polling Job ${jobId} status: ${statusData.status}`);
 
     if (statusData.status === 'complete' || statusData.status === 'completed') {
+      let videoUrl = null;
       if (statusData.downloads && statusData.downloads.length > 0) {
         videoUrl = typeof statusData.downloads[0] === 'string' 
           ? statusData.downloads[0] 
           : (statusData.downloads[0].url || statusData.downloads[0].download_url);
       } else if (statusData.url) videoUrl = statusData.url;
       else if (statusData.video_url) videoUrl = statusData.video_url;
-      break;
+
+      if (!videoUrl) return NextResponse.json({ error: 'Video completed but no URL found' }, { status: 500 });
+
+      console.log(`[Media API] Downloading video from ${videoUrl}`);
+      const videoRes = await fetch(videoUrl);
+      if (!videoRes.ok) throw new Error('Failed to download generated video');
+
+      const arrayBuffer = await videoRes.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64 = buffer.toString('base64');
+
+      const session = await getServerSession(authOptions);
+      const userId = session?.user?.id as string | undefined;
+
+      let recordId = '';
+      if (userId) {
+        const record = await prisma.video.create({
+          data: { userId, prompt, videoUrl: base64 },
+          select: { id: true }
+        });
+        recordId = record.id;
+      }
+      
+      const finalUrl = recordId ? `/api/video?id=${recordId}` : `data:video/mp4;base64,${base64}`;
+
+      const sessionId = searchParams.get('sessionId');
+      if (sessionId && sessionId !== 'current') {
+        const searchTag = `[GENERATING_VIDEO: ${prompt}]`;
+        const replacementTag = `[VIDEO: ${finalUrl}]`;
+
+        const msg = await prisma.message.findFirst({
+          where: { chatSessionId: sessionId, role: 'assistant', content: { contains: searchTag } },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        if (msg) {
+          await prisma.message.update({
+            where: { id: msg.id },
+            data: { content: msg.content.replace(searchTag, replacementTag) }
+          });
+          console.log(`[Media API] Updated DB message ${msg.id} with final video URL`);
+        }
+      }
+
+      return NextResponse.json({ status: 'complete', url: finalUrl }, { status: 200 });
     } else if (statusData.status === 'failed' || statusData.status === 'error' || statusData.status === 'canceled') {
-      throw new Error('API reported an error during generation');
+      return NextResponse.json({ error: 'API reported an error during generation' }, { status: 500 });
     }
+
+    return NextResponse.json({ status: 'processing' }, { status: 200 });
+  } catch (error: any) {
+    console.error('[Media API Polling Error]:', error);
+    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
-
-  if (!videoUrl) throw new Error('Video generation timed out after 360s');
-
-  console.log(`[Media API] Downloading video from ${videoUrl}`);
-  const videoRes = await fetch(videoUrl);
-  if (!videoRes.ok) throw new Error('Failed to download generated video');
-
-  const arrayBuffer = await videoRes.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  const base64 = buffer.toString('base64');
-
-  let recordId = '';
-  if (userId) {
-    const record = await prisma.video.create({
-      data: { userId, prompt, videoUrl: base64 },
-      select: { id: true }
-    });
-    recordId = record.id;
-  }
-  return recordId ? `/api/video?id=${recordId}` : `data:video/mp4;base64,${base64}`;
 }
 
 async function generateImage(userId: string | undefined, prompt: string): Promise<string> {
   console.log(`[Media API] Using unlimited Pollinations.ai for image: "${prompt}"`);
   
-  // Safe URL encoding for prompt
   const encodedPrompt = encodeURIComponent(prompt);
-  // Add a cache buster so we don't get stuck with old images for same prompts
   const seed = Math.floor(Math.random() * 1000000);
   const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?nologo=true&seed=${seed}`;
   
-  // Fetch to check validity and buffer
   const imageRes = await fetch(imageUrl);
   if (!imageRes.ok) throw new Error('Failed to fetch image from Pollinations');
   
@@ -104,18 +139,13 @@ async function generateImage(userId: string | undefined, prompt: string): Promis
 
   let recordId = '';
   if (userId) {
-    // Note: The previous schema might not support base64 directly in imageUrl if it's too large, but wait, the video field did. The image model is imageUrl String
-    // Oh wait, prisma.image.imageUrl is `String`. Base64 images are very long.
-    // If it's too long, it might crash, but Video was using String.
-    // Wait, the previous image generation saved the URL from replicate! If we use Pollinations, we can just save the pollination URL directly instead of base64 to save DB space, but base64 avoids hotlinking. 
-    // Wait, `app/api/image/route.ts` is probably serving it? Let me just save the pollination URL to keep it fast!
     const record = await prisma.image.create({
       data: { userId, prompt, imageUrl: imageUrl },
       select: { id: true }
     });
     recordId = record.id;
   }
-  return imageUrl; // Returning the raw pollination URL is fast and unlimited!
+  return imageUrl; 
 }
 
 export async function POST(req: Request) {
@@ -127,42 +157,35 @@ export async function POST(req: Request) {
     if (!prompt || !type || !sessionId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
-
-    let finalUrl = '';
     
     if (type === 'video') {
-      finalUrl = await generateVideo(userId, prompt);
+      const jobId = await startVideoJob(prompt);
+      return NextResponse.json({ jobId }, { status: 200 });
     } else if (type === 'image') {
-      finalUrl = await generateImage(userId, prompt);
+      const finalUrl = await generateImage(userId, prompt);
+      
+      if (sessionId !== 'current') {
+        const searchTag = `[GENERATING_IMAGE: ${prompt}]`;
+        const replacementTag = `[IMAGE: ${finalUrl}]`;
+
+        const msg = await prisma.message.findFirst({
+          where: { chatSessionId: sessionId, role: 'assistant', content: { contains: searchTag } },
+          orderBy: { createdAt: 'desc' }
+        });
+
+        if (msg) {
+          await prisma.message.update({
+            where: { id: msg.id },
+            data: { content: msg.content.replace(searchTag, replacementTag) }
+          });
+          console.log(`[Media API] Updated DB message ${msg.id} with final image URL`);
+        }
+      }
+
+      return NextResponse.json({ url: finalUrl }, { status: 200 });
     } else {
       return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
     }
-
-    // Attempt to update the message content in the database to persist the media URL
-    if (sessionId !== 'current') {
-      const searchTag = type === 'video' ? `[GENERATING_VIDEO: ${prompt}]` : `[GENERATING_IMAGE: ${prompt}]`;
-      const replacementTag = type === 'video' ? `[VIDEO: ${finalUrl}]` : `[IMAGE: ${finalUrl}]`;
-
-      const msg = await prisma.message.findFirst({
-        where: { 
-          chatSessionId: sessionId, 
-          role: 'assistant',
-          content: { contains: searchTag }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
-
-      if (msg) {
-        await prisma.message.update({
-          where: { id: msg.id },
-          data: { content: msg.content.replace(searchTag, replacementTag) }
-        });
-        console.log(`[Media API] Updated DB message ${msg.id} with final URL`);
-      }
-    }
-
-    return NextResponse.json({ url: finalUrl }, { status: 200 });
-
   } catch (error: any) {
     console.error('[Media API] Error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

@@ -55,6 +55,31 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
       const prompt = videoGenMatch ? videoGenMatch[1] : (imageGenMatch ? imageGenMatch[1] : '');
       const tagToReplace = videoGenMatch ? videoGenMatch[0] : (imageGenMatch ? imageGenMatch[0] : '');
 
+      const pollJob = async (jobId: string) => {
+        try {
+          const res = await fetch(`/api/media/generate?jobId=${jobId}&prompt=${encodeURIComponent(prompt)}&sessionId=${encodeURIComponent(sessionId || '')}`);
+          const data = await res.json();
+          if (data.status === 'processing') {
+            setTimeout(() => pollJob(jobId), 4000);
+          } else if (data.url) {
+            const newTag = `[VIDEO: ${data.url}]`;
+            setLocalTextOverride(displayText.replace(tagToReplace, newTag));
+            if (Notification.permission === 'granted') {
+              new Notification("Ultron", { body: `Your video is ready!` });
+            }
+            try {
+              const audio = new Audio('/sounds/notify.mp3');
+              audio.volume = 0.5;
+              audio.play().catch(() => {});
+            } catch (e) {}
+          } else {
+            setLocalTextOverride(displayText.replace(tagToReplace, `⚠️ **Failed to generate video**: ${data.error || 'Unknown error'}`));
+          }
+        } catch (e) {
+          setTimeout(() => pollJob(jobId), 4000); // Retry on network blips during polling
+        }
+      };
+
       fetch('/api/media/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -62,17 +87,14 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
       })
         .then(res => res.json())
         .then(data => {
-          if (data.url) {
-            const newTag = type === 'video' ? `[VIDEO: ${data.url}]` : `[IMAGE: ${data.url}]`;
+          if (data.jobId) {
+            pollJob(data.jobId);
+          } else if (data.url) {
+            const newTag = `[IMAGE: ${data.url}]`;
             setLocalTextOverride(displayText.replace(tagToReplace, newTag));
             if (Notification.permission === 'granted') {
-              new Notification("Ultron", { body: `Your ${type} is ready!` });
-            } else if (Notification.permission !== 'denied') {
-              Notification.requestPermission().then(perm => {
-                if (perm === 'granted') new Notification("Ultron", { body: `Your ${type} is ready!` });
-              });
+              new Notification("Ultron", { body: `Your image is ready!` });
             }
-            // Play a soft chime
             try {
               const audio = new Audio('/sounds/notify.mp3');
               audio.volume = 0.5;
