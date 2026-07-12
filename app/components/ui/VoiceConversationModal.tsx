@@ -289,6 +289,19 @@ function VoiceConversationModalInner({
     };
   }, [isOpen, startLiveSession, stopAll]);
 
+  // ====== AUTO RECONNECT LOGIC ======
+  useEffect(() => {
+    if (shouldReconnect && isOpen) {
+      console.log('Executing auto-reconnect...');
+      const timer = setTimeout(() => {
+        setShouldReconnect(false);
+        sessionActiveRef.current = true;
+        startLiveSession();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldReconnect, isOpen, startLiveSession]);
+
 
 
   // ====== ESCAPE KEY ======
@@ -400,22 +413,7 @@ function VoiceConversationModalInner({
           )}
         </div>
 
-        {/* Transcript display */}
-        <div className="voice-conv-transcript-area">
-          {transcript && (
-            <div className="voice-conv-transcript-item ai animate-fade-in">
-              <span className="voice-conv-label">ULTRON</span>
-              <p className="voice-conv-text">{transcript}</p>
-            </div>
-          )}
-
-          {/* Show history count */}
-          {turnCount > 0 && (
-            <div className="voice-conv-turn-count">
-              {turnCount} exchanges so far
-            </div>
-          )}
-        </div>
+        {/* Captions and transcript removed entirely per user request */}
 
         {/* Controls */}
         <div className="voice-conv-controls">
