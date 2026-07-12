@@ -141,60 +141,6 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
                 </button>
               );
             })}
-
-            {/* Voice Language Separator */}
-            <div className="gemini-dropdown-separator">Voice Language</div>
-            {voices.map((v) => {
-              const active = v.uri === selectedVoiceUri;
-              return (
-                <button
-                  key={v.uri}
-                  role="menuitemradio"
-                  aria-checked={active}
-                  onClick={() => {
-                    setSelectedVoiceUri(v.uri);
-                    setOpen(false);
-                  }}
-                  className={[
-                    'gemini-model-option',
-                    active ? 'active' : '',
-                  ].join(' ')}
-                >
-                  <div className="flex-1">
-                    <div className="gemini-model-option-name">{v.name}</div>
-                    <div className="gemini-model-option-desc">{v.lang}</div>
-                  </div>
-                  {active && <Check size={16} className="mt-0.5 shrink-0 text-accent" />}
-                </button>
-              );
-            })}
-
-            {/* Voice Gender Separator */}
-            <div className="gemini-dropdown-separator">Voice Gender</div>
-            {(['female', 'male'] as const).map((g) => {
-              const active = g === voiceGender;
-              return (
-                <button
-                  key={g}
-                  role="menuitemradio"
-                  aria-checked={active}
-                  onClick={() => {
-                    setVoiceGender(g);
-                    setOpen(false);
-                  }}
-                  className={[
-                    'gemini-model-option',
-                    active ? 'active' : '',
-                  ].join(' ')}
-                >
-                  <div className="flex-1">
-                    <div className="gemini-model-option-name">{g === 'female' ? 'Female' : 'Male'}</div>
-                    <div className="gemini-model-option-desc">{g === 'female' ? 'Natural feminine voice' : 'Natural masculine voice'}</div>
-                  </div>
-                  {active && <Check size={16} className="mt-0.5 shrink-0 text-accent" />}
-                </button>
-              );
-            })}
           </div>
         )}
       </div>

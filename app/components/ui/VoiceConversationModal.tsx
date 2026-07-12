@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Square, Volume2, Mic, Circle, Loader2, AlertCircle } from 'lucide-react';
-import { useTTS } from '@/app/components/providers/TTSProvider';
+import { AudioStreamer } from '@/app/lib/audio-streamer';
 
 type ConvState = 'listening' | 'processing' | 'speaking';
 
@@ -21,209 +21,196 @@ export default function VoiceConversationModal({
   latestAiResponse,
 }: VoiceConversationModalProps) {
   const [convState, setConvState] = useState<ConvState>('listening');
-  const [lastTranscript, setLastTranscript] = useState('');
-  const [spokenResponse, setSpokenResponse] = useState('');
-  const [interimTranscript, setInterimTranscript] = useState('');
-  const [history, setHistory] = useState<Array<{ role: 'user' | 'ai'; text: string }>>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<string>('');
+  const [turnCount, setTurnCount] = useState(0);
 
-  const recognitionRef = useRef<any>(null);
-  const prevStreamingRef = useRef(false);
-  const prevSpeakingRef = useRef(false);
-  const lastTranscriptRef = useRef('');
-  const spokenResponseRef = useRef('');
-  const shouldListenRef = useRef(false);
-  const convStateRef = useRef<ConvState>('listening');
-  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const streamerRef = useRef<AudioStreamer | null>(null);
+  const sessionActiveRef = useRef(false);
 
-  const { speak, stopSpeaking, isSpeaking, initAudioContext, selectedVoiceUri } = useTTS();
-
-  // Map selectedVoiceUri to BCP-47 speech recognition language code
-  const recognitionLanguage = (() => {
-    if (selectedVoiceUri === 'ur') return 'ur-PK';
-    if (selectedVoiceUri === 'hi') return 'hi-IN';
-    if (selectedVoiceUri === 'zh-CN') return 'zh-CN';
-    if (selectedVoiceUri === 'ja') return 'ja-JP';
-    if (selectedVoiceUri === 'en-GB') return 'en-GB';
-    if (selectedVoiceUri === 'ar') return 'ar-SA';
-    if (selectedVoiceUri === 'es') return 'es-ES';
-    if (selectedVoiceUri === 'fr') return 'fr-FR';
-    if (selectedVoiceUri === 'de') return 'de-DE';
-    if (selectedVoiceUri === 'it') return 'it-IT';
-    return 'en-US';
-  })();
-
-  // ====== SPEECH RECOGNITION ======
-  const startListening = useCallback(async () => {
-    if (!shouldListenRef.current) return;
-
+  // Initialize the stream and WebSocket
+  const startLiveSession = useCallback(async () => {
     try {
-      // Clear any existing recognition sessions
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch (_) { }
-        recognitionRef.current = null;
+      setErrorMessage(null);
+      setConvState('processing');
+
+      // 1. Fetch Token securely from backend
+      const res = await fetch('/api/voice-token');
+      if (!res.ok) {
+        throw new Error('Failed to fetch voice token. Ensure GEMINI_API_KEY is in .env.local');
       }
-      if (restartTimeoutRef.current) {
-        clearTimeout(restartTimeoutRef.current);
-        restartTimeoutRef.current = null;
-      }
+      const data = await res.json();
+      const token = data.token;
 
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      // 2. Setup Audio Streamer
+      const streamer = new AudioStreamer();
+      streamerRef.current = streamer;
 
-      if (!SpeechRecognition) {
-        setErrorMessage('Speech recognition is not supported in this browser. Please try using Chrome, Safari, or Edge.');
-        return;
-      }
+      // 3. Setup WebSocket directly to Gemini Bidi API
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${token}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-      const recognition = new SpeechRecognition();
-      recognition.lang = recognitionLanguage;
-      recognition.continuous = false; // continuous false works better on mobile for segmenting sentences
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-
-      setConvState('listening');
-      convStateRef.current = 'listening';
-      setInterimTranscript('');
-
-      recognition.onresult = (event: any) => {
-        let final = '';
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript;
-          } else {
-            interim += event.results[i][0].transcript;
+      ws.onopen = () => {
+        // Send Setup message
+        const setupMsg = {
+          setup: {
+            model: "models/gemini-2.0-flash-exp",
+            systemInstruction: {
+              parts: [{
+                text: "You are ULTRON, a highly advanced cognitive AI assistant. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. If the user speaks in English, reply in English. If they speak Urdu/Hindi, reply appropriately. Be warm, natural, and helpful."
+              }]
+            },
+            generationConfig: {
+              responseModalities: ["AUDIO", "TEXT"]
+            }
           }
-        }
-        if (final) lastTranscriptRef.current += final + ' ';
-        const display = (lastTranscriptRef.current + interim).trim();
-        setInterimTranscript(interim);
-        if (display) setLastTranscript(display);
+        };
+        ws.send(JSON.stringify(setupMsg));
       };
 
-      recognition.onerror = (event: any) => {
-        console.warn('Speech recognition error:', event.error);
-        if (event.error === 'not-allowed') {
-          setErrorMessage('Microphone access denied. Please click the mic icon in your address bar and allow permission.');
-          shouldListenRef.current = false;
+      ws.onmessage = (event) => {
+        if (!sessionActiveRef.current) return;
+        
+        try {
+          // The data can be Blob or string, but Bidi usually sends strings (JSON) or we can read text
+          if (event.data instanceof Blob) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              handleGeminiMessage(JSON.parse(reader.result as string));
+            };
+            reader.readAsText(event.data);
+          } else {
+            handleGeminiMessage(JSON.parse(event.data));
+          }
+        } catch (e) {
+          console.error("Error parsing Gemini message", e);
         }
       };
 
-      recognition.onend = () => {
-        const finalText = lastTranscriptRef.current.trim();
-        lastTranscriptRef.current = '';
-        setInterimTranscript('');
+      ws.onclose = () => {
+        if (sessionActiveRef.current) {
+          setErrorMessage('Connection to Gemini Live lost. Closing session.');
+          handleEndSession();
+        }
+      };
 
-        if (finalText && shouldListenRef.current && convStateRef.current === 'listening') {
-          // User spoke successfully
-          setHistory((prev) => [...prev, { role: 'user', text: finalText }]);
-          setConvState('processing');
-          convStateRef.current = 'processing';
+      ws.onerror = (e) => {
+        console.error("WebSocket Error", e);
+        setErrorMessage('WebSocket connection error. See console for details.');
+      };
 
-          setTimeout(() => {
-            if (shouldListenRef.current) {
-              sendMessage(finalText);
+      // 4. Start Microphone and Stream to WebSocket
+      streamer.setOnAudioData((base64Pcm: string) => {
+        if (ws.readyState === WebSocket.OPEN && sessionActiveRef.current) {
+          ws.send(JSON.stringify({
+            realtimeInput: {
+              mediaChunks: [{
+                mimeType: "audio/pcm;rate=16000",
+                data: base64Pcm
+              }]
             }
-          }, 300);
-        } else if (shouldListenRef.current && convStateRef.current === 'listening') {
-          // Restart listening if no speech was detected
-          restartTimeoutRef.current = setTimeout(() => {
-            if (shouldListenRef.current && convStateRef.current === 'listening') {
-              startListening();
-            }
-          }, 300);
+          }));
         }
-      };
+      });
 
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err) {
-      console.error('Failed to start speech recognition:', err);
-    }
-  }, [recognitionLanguage, sendMessage]);
+      await streamer.startRecording();
+      setConvState('listening');
 
-  const stopListening = useCallback(() => {
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
-    }
-    if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch (_) { }
-      recognitionRef.current = null;
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage(err.message || 'Failed to initialize live voice session.');
+      setConvState('listening');
     }
   }, []);
 
-  // ====== STATE SYNCHRONIZATION & ANSWER PLAYBACK ======
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    if (isSpeaking) {
-      setConvState('speaking');
-      convStateRef.current = 'speaking';
-
-      // Clean and set spoken response text to display in real-time
-      if (latestAiResponse) {
-        const cleanText = latestAiResponse.replace(/\[REASONING\][\s\S]*?\[\/REASONING\]/gi, '').trim();
-        const isSystem = cleanText.startsWith('[SYSTEM') || cleanText.startsWith('[SEARCH') || cleanText.startsWith('[MAPS');
-
-        if (!isSystem && cleanText !== spokenResponseRef.current) {
-          setSpokenResponse(cleanText);
-          spokenResponseRef.current = cleanText;
-          setHistory((prev) => {
-            // Avoid duplicates
-            const exists = prev.some(h => h.role === 'ai' && h.text === cleanText);
-            if (exists) return prev;
-            return [...prev, { role: 'ai', text: cleanText }];
-          });
-        }
-      }
-    } else if (isStreaming) {
-      setConvState('processing');
-      convStateRef.current = 'processing';
-    } else {
-      // Both isSpeaking and isStreaming are false -> transition back to listening if we were active
-      const wasActive = prevSpeakingRef.current || prevStreamingRef.current;
-      if (wasActive && convStateRef.current !== 'listening') {
-        setConvState('listening');
-        convStateRef.current = 'listening';
-
-        const restartTimer = setTimeout(() => {
-          if (shouldListenRef.current && convStateRef.current === 'listening') {
-            startListening();
-          }
-        }, 600); // 600ms pause for natural conversational pacing
-        return () => clearTimeout(restartTimer);
-      }
+  const handleGeminiMessage = (msg: any) => {
+    // Check for setupComplete
+    if (msg.setupComplete) {
+      console.log('Gemini Live Setup Complete');
+      return;
     }
 
-    prevSpeakingRef.current = isSpeaking;
-    prevStreamingRef.current = isStreaming;
-  }, [isSpeaking, isStreaming, isOpen, latestAiResponse, startListening]);
+    // Check for serverContent
+    if (msg.serverContent) {
+      const { interrupted, turnComplete, modelTurn } = msg.serverContent;
 
-  // ====== INTERRUPT ======
-  const handleInterrupt = useCallback(() => {
-    stopSpeaking();
-    stopListening();
-    shouldListenRef.current = true; // Ensure loop stays active
-    setConvState('listening');
-    convStateRef.current = 'listening';
-    setTimeout(() => {
-      if (shouldListenRef.current) {
-        startListening();
+      if (interrupted) {
+        streamerRef.current?.interruptPlayback();
+        setConvState('listening');
       }
-    }, 100); // Quick reset time
-  }, [stopSpeaking, stopListening, startListening]);
 
-  // ====== END SESSION ======
+      if (modelTurn) {
+        setConvState('speaking');
+        const parts = modelTurn.parts;
+        for (const part of parts) {
+          if (part.inlineData && part.inlineData.mimeType.startsWith('audio/pcm')) {
+            streamerRef.current?.addPlaybackData(part.inlineData.data);
+          }
+          if (part.text) {
+            setTranscript(prev => prev + part.text);
+          }
+        }
+      }
+
+      if (turnComplete) {
+        setConvState('listening');
+        setTurnCount(prev => prev + 1);
+        setTranscript(''); // Clear transcript on turn complete
+      }
+    }
+  };
+
+  const stopAll = useCallback(() => {
+    sessionActiveRef.current = false;
+    if (streamerRef.current) {
+      streamerRef.current.stopRecording();
+      streamerRef.current = null;
+    }
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, []);
+
   const handleEndSession = useCallback(() => {
-    shouldListenRef.current = false; // End session permanently
-    stopListening();
-    stopSpeaking();
-    setConvState('listening');
+    stopAll();
     onEndSession();
-  }, [stopListening, stopSpeaking, onEndSession]);
+  }, [stopAll, onEndSession]);
+
+  const handleInterrupt = useCallback(() => {
+    // Send a client content to interrupt natively if possible, or just flush local queue
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+       // A client message forces the server to process new input and interrupt its playback
+       wsRef.current.send(JSON.stringify({
+         clientContent: {
+           turns: [{
+             role: "user",
+             parts: [] // empty part can trigger an interrupt on some implementations
+           }],
+           turnComplete: true
+         }
+       }));
+    }
+    streamerRef.current?.interruptPlayback();
+    setConvState('listening');
+  }, []);
+
+  // ====== INITIALIZATION ON OPEN ======
+  useEffect(() => {
+    if (isOpen) {
+      sessionActiveRef.current = true;
+      setTranscript('');
+      setTurnCount(0);
+      startLiveSession();
+    } else {
+      stopAll();
+    }
+    return () => {
+      stopAll();
+    };
+  }, [isOpen, startLiveSession, stopAll]);
 
   // ====== ESCAPE KEY ======
   useEffect(() => {
@@ -238,52 +225,7 @@ export default function VoiceConversationModal({
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, handleEndSession]);
 
-  // ====== INITIALIZATION ON OPEN ======
-  useEffect(() => {
-    if (!isOpen) return;
-
-    setConvState('listening');
-    convStateRef.current = 'listening';
-    shouldListenRef.current = true;
-    setLastTranscript('');
-    setSpokenResponse('');
-    setInterimTranscript('');
-    setHistory([]);
-    setErrorMessage(null);
-    lastTranscriptRef.current = '';
-    spokenResponseRef.current = '';
-
-    // Initialize/unlock Web Audio context (important for Safari/iOS)
-    initAudioContext();
-
-    const requestPermissionAndListen = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop()); // close the stream tracks immediately
-
-        if (shouldListenRef.current) {
-          startListening();
-        }
-      } catch (err) {
-        console.warn('Microphone access denied:', err);
-        setErrorMessage('Microphone access denied. Please click the camera/microphone icon in your browser address bar to allow mic access.');
-      }
-    };
-
-    // Wait a brief moment for modal transition to finish, then request permission and start
-    const startTimer = setTimeout(requestPermissionAndListen, 400);
-
-    return () => {
-      clearTimeout(startTimer);
-      shouldListenRef.current = false;
-      stopListening();
-      stopSpeaking();
-    };
-  }, [isOpen, startListening, stopListening, stopSpeaking, initAudioContext]);
-
   if (!isOpen) return null;
-
-  const lastUserText = history.filter((h) => h.role === 'user').slice(-1)[0]?.text || '';
 
   return (
     <div className="voice-conv-overlay">
@@ -320,7 +262,7 @@ export default function VoiceConversationModal({
               <div 
                 className="voice-conv-orb listening cursor-pointer hover:scale-105 active:scale-95 transition-transform"
                 onClick={handleInterrupt}
-                title="Tap to reset/restart listening"
+                title="Tap to reset"
               >
                 <div className="voice-conv-orb-inner">
                   <Mic size={32} className="text-white" />
@@ -350,7 +292,7 @@ export default function VoiceConversationModal({
                   <Loader2 size={28} className="text-white animate-spin" />
                 </div>
               </div>
-              <span className="voice-conv-status-text">Thinking...</span>
+              <span className="voice-conv-status-text">Connecting to Gemini...</span>
             </div>
           )}
 
@@ -374,43 +316,24 @@ export default function VoiceConversationModal({
                 <span className="voice-wave speak" />
                 <span className="voice-wave speak" />
               </div>
-              <span className="voice-conv-status-text">ULTRON is speaking...</span>
+              <span className="voice-conv-status-text">Gemini is speaking...</span>
             </div>
           )}
         </div>
 
         {/* Transcript display */}
         <div className="voice-conv-transcript-area">
-          {convState === 'listening' && lastTranscript && (
-            <div className="voice-conv-transcript-item user">
-              <span className="voice-conv-label">YOU</span>
-              <p className="voice-conv-text">
-                {lastTranscript}
-                {interimTranscript && (
-                  <span className="voice-conv-interim">{interimTranscript}</span>
-                )}
-              </p>
-            </div>
-          )}
-
-          {convState === 'processing' && lastUserText && (
-            <div className="voice-conv-transcript-item user sent">
-              <span className="voice-conv-label">YOU SAID</span>
-              <p className="voice-conv-text">{lastUserText}</p>
-            </div>
-          )}
-
-          {spokenResponse && (
+          {transcript && (
             <div className="voice-conv-transcript-item ai animate-fade-in">
-              <span className="voice-conv-label">ULTRON</span>
-              <p className="voice-conv-text">{spokenResponse}</p>
+              <span className="voice-conv-label">GEMINI</span>
+              <p className="voice-conv-text">{transcript}</p>
             </div>
           )}
 
           {/* Show history count */}
-          {history.filter(h => h.role === 'ai').length > 0 && (
+          {turnCount > 0 && (
             <div className="voice-conv-turn-count">
-              {history.filter(h => h.role === 'ai').length} exchanges so far
+              {turnCount} exchanges so far
             </div>
           )}
         </div>
