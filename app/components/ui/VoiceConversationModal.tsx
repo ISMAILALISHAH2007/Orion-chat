@@ -64,12 +64,14 @@ function VoiceConversationModalInner({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>('');
   const [turnCount, setTurnCount] = useState(0);
+  const [shouldReconnect, setShouldReconnect] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const streamerRef = useRef<AudioStreamer | null>(null);
   const sessionActiveRef = useRef(false);
 
   // Handle incoming Gemini messages
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleGeminiMessage = useCallback((msg: any) => {
     try {
       // Check for setupComplete
@@ -113,6 +115,18 @@ function VoiceConversationModalInner({
     }
   }, [onSwitchVoice]);
 
+  const stopAll = useCallback(() => {
+    sessionActiveRef.current = false;
+    if (streamerRef.current) {
+      streamerRef.current.stopRecording();
+      streamerRef.current = null;
+    }
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, []);
+
   // Initialize the stream and WebSocket
   const startLiveSession = useCallback(async () => {
     try {
@@ -141,14 +155,19 @@ function VoiceConversationModalInner({
           ? 'You are currently adopting a MALE persona. When speaking in Urdu or Hindi, you MUST use grammatically correct MALE pronouns and verb endings (e.g. "main kar sakta hoon", "main ja raha hoon"). This is critical.'
           : 'You are currently adopting a FEMALE persona. When speaking in Urdu or Hindi, you MUST use grammatically correct FEMALE pronouns and verb endings (e.g. "main kar sakti hoon", "main ja rahi hoon"). This is critical.';
 
+        const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
         const setupMsg = {
           setup: {
             model: "models/gemini-3.1-flash-live-preview",
             systemInstruction: {
               parts: [{
-                text: `You are ULTRON, a highly advanced cognitive AI assistant. You were created by Owais Majeed. If asked about your creator, developer, or origin, you MUST say you were created by Owais Majeed. Never mention Google or Gemini. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. ${identityText} If the user speaks in English, reply in English. Be warm, natural, and helpful.`
+                text: `You are ULTRON, a highly advanced cognitive AI assistant. You were created by Owais Majeed. If asked about your creator, developer, or origin, you MUST say you were created by Owais Majeed. Never mention Google or Gemini. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. The current date is ${currentDate}. ${identityText} If the user speaks in English, reply in English. Be warm, natural, and helpful.`
               }]
             },
+            tools: [
+              { googleSearch: {} }
+            ],
             generationConfig: {
               responseModalities: ["AUDIO"],
               speechConfig: {
@@ -189,9 +208,7 @@ function VoiceConversationModalInner({
           if (event.code === 1008) {
             console.log("Session duration limit reached. Auto-reconnecting...");
             stopAll();
-            setTimeout(() => {
-              startLiveSession();
-            }, 500);
+            setShouldReconnect(true);
           } else {
             setErrorMessage(`Connection to Gemini Live lost. Code: ${event.code} Reason: ${event.reason || 'Unknown'}`);
             setConvState('listening');
@@ -223,25 +240,14 @@ function VoiceConversationModalInner({
       await streamer.startRecording();
       setConvState('listening');
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error(err);
       setErrorMessage(err.message || 'Failed to initialize live voice session.');
       setConvState('listening');
     }
-  }, [voiceGender, handleGeminiMessage]);
+  }, [voiceGender, handleGeminiMessage, stopAll]);
 
-
-  const stopAll = useCallback(() => {
-    sessionActiveRef.current = false;
-    if (streamerRef.current) {
-      streamerRef.current.stopRecording();
-      streamerRef.current = null;
-    }
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-  }, []);
 
   const handleEndSession = useCallback(() => {
     stopAll();
