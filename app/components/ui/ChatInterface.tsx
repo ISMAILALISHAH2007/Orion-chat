@@ -71,23 +71,36 @@ function getFileIcon(mimeType: string, name: string) {
 
 const ACCEPTED_FILE_TYPES = '.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.zip,.rar,.json,.xml,.html,.css,.js,.ts,.tsx,.py,.java,.cpp,.hpp,.go,.rb,.php,.png,.jpg,.jpeg,.gif,.webp,.svg,.ico,.bmp';
 
-function ThinkingAnimation() {
+function isSearchQuery(query: string): boolean {
+  const trimmed = query.trim().toLowerCase();
+  
+  // ONLY trigger web search for highly dynamic, local, or specific lookup requests.
+  // General knowledge questions ("who is", "what is") will be answered by the AI directly.
+  const strictLookupRegex = /(contact|hospital|phone number|address|near me|location|news|weather|stock|price of|restaurant|store|clinic|directions|latest update)/i;
+  
+  return strictLookupRegex.test(trimmed);
+}
+
+function ThinkingAnimation({ isSearch }: { isSearch?: boolean }) {
   const [stage, setStage] = useState(0);
   useEffect(() => {
+    if (isSearch) return; // Keep it static on "Searching" if search is active
     const timer = setInterval(() => setStage((prev) => (prev + 1) % 3), 800);
     return () => clearInterval(timer);
-  }, []);
-  const stages = ['Analyzing...', 'Researching...', 'Answering...'];
+  }, [isSearch]);
+  
+  const stages = ['Analyzing...', 'Thinking...', 'Answering...'];
+  const text = isSearch ? 'Searching the live web...' : stages[stage];
 
   return (
     <div className="flex items-center gap-3 mt-4 mb-2 p-3 bg-surface border border-border/50 rounded-2xl w-max shadow-sm animate-in fade-in slide-in-from-bottom-2">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/20 via-purple-500/20 to-accent/20 animate-spin-slow" />
-        <Sparkles size={16} className="text-accent relative z-10" />
+        {isSearch ? <Globe size={16} className="text-accent relative z-10 animate-pulse" /> : <Sparkles size={16} className="text-accent relative z-10" />}
       </span>
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium bg-gradient-to-r from-blue-500 via-purple-500 to-accent bg-clip-text text-transparent animate-pulse">
-          {stages[stage]}
+          {text}
         </span>
         <div className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -395,7 +408,7 @@ export default function ChatInterface() {
                 <MessageBubble key={idx} sender={msg.sender} text={msg.text} mode={msg.mode} attachments={msg.attachments}
                   isStreaming={isStreaming && idx === arr.length - 1 && msg.sender === 'ai'} />
               ))}
-              {isResearching && <ThinkingAnimation />}
+              {isResearching && <ThinkingAnimation isSearch={isSearchQuery(messages.filter(m => m.sender === 'user').slice(-1)[0]?.text || '')} />}
               <div ref={messagesEndRef} />
             </>
           )}

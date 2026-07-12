@@ -3,28 +3,18 @@ import * as cheerio from 'cheerio';
 
 export const dynamic = 'force-dynamic';
 /**
- * Smart AI Web Search — Powered by Tavily API
+ * Smart AI Web Search — Powered by Serper.dev API
  * Includes intelligent intent detection to save credits.
  */
 
 function isSearchQuery(query: string): boolean {
   const trimmed = query.trim().toLowerCase();
   
-  // Always skip very short conversational messages unless they mention a year
-  if (trimmed.split(' ').length <= 2 && !/2024|2025|2026/.test(trimmed)) {
-    return false;
-  }
+  // ONLY trigger web search for highly dynamic, local, or specific lookup requests.
+  // General knowledge questions ("who is", "what is") will be answered by the AI directly.
+  const strictLookupRegex = /(contact|hospital|phone number|address|near me|location|news|weather|stock|price of|restaurant|store|clinic|directions|latest update)/i;
   
-  // Explicitly skip casual greetings and small talk (e.g. "tell me", "explain", "detail it")
-  const skipRegex = /^(hello|hi|hey|how are you|thanks|thank you|ok|okay|sure|tell me|explain|write|generate|create|detail it|can you|what is this|who are you)/i;
-  if (skipRegex.test(trimmed)) return false;
-  
-  // Explicit triggers for search
-  const triggerRegex = /(who|what|where|when|why|how|current|latest|news|weather|price of|stock|2024|2025|2026|update|today|now|search for)/i;
-  if (triggerRegex.test(trimmed)) return true;
-
-  // Default fallback: assume it might need search if it's a longer question
-  return trimmed.includes('?');
+  return strictLookupRegex.test(trimmed);
 }
 
 export async function performSearch(query: string): Promise<string> {
@@ -38,38 +28,52 @@ export async function performSearch(query: string): Promise<string> {
     return 'No search performed for this query to save credits. Answer from existing knowledge.';
   }
 
-  console.log(`[Search] Initiating Tavily search for: "${query}"`);
+  console.log(`[Search] Initiating Serper search for: "${query}"`);
   
   try {
-    const apiKey = process.env.TAVILY_API_KEY;
+    const apiKey = process.env.SERPER_API_KEY || process.env.TAVILY_API_KEY;
     if (!apiKey) {
-      console.error('[Search] Missing TAVILY_API_KEY in environment variables.');
+      console.error('[Search] Missing SERPER_API_KEY in environment variables.');
       return 'Search is temporarily unavailable (Missing API Key).';
     }
 
-    // 2. Call Tavily API
+    // 2. Call Serper.dev API
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     
-    const res = await fetch('https://api.tavily.com/search', {
+    // Fallback to Tavily if Serper key isn't provided but Tavily is
+    if (apiKey === process.env.TAVILY_API_KEY && process.env.TAVILY_API_KEY) {
+       // Old Tavily logic
+       const res = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: apiKey, query: query, search_depth: 'basic', include_answer: true, max_results: 5 }),
+        cache: 'no-store', signal: controller.signal
+      }).finally(() => clearTimeout(timeout));
+      if (!res.ok) return 'Search service is currently unresponsive.';
+      const data = await res.json();
+      let resultString = '';
+      if (data.answer) resultString += `[AI Answer]\n${data.answer}\n\n`;
+      if (data.results && data.results.length > 0) {
+        resultString += data.results.map((r: any, i: number) => `[Result ${i + 1}]\nTitle: ${r.title}\nURL: ${r.url}\nSnippet: ${r.content}`).join('\n\n---\n\n');
+      }
+      return resultString || `I couldn't find current web results for "${query}".`;
+    }
+
+    // New Serper Logic
+    const res = await fetch('https://google.serper.dev/search', {
       method: 'POST',
       headers: {
+        'X-API-KEY': apiKey,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        api_key: apiKey,
-        query: query,
-        search_depth: 'basic',
-        include_answer: true,
-        include_images: false,
-        max_results: 5
-      }),
+      body: JSON.stringify({ q: query }),
       cache: 'no-store', // Force Vercel to never cache this request
       signal: controller.signal
     }).finally(() => clearTimeout(timeout));
 
     if (!res.ok) {
-      console.warn(`[Search] Tavily API failed with status ${res.status}`);
+      console.warn(`[Search] Serper API failed with status ${res.status}`);
       return 'Search service is currently unresponsive.';
     }
 
@@ -77,16 +81,18 @@ export async function performSearch(query: string): Promise<string> {
     
     let resultString = '';
     
-    // Prioritize Tavily's AI-generated answer if available
-    if (data.answer) {
-      resultString += `[Tavily AI Answer]\n${data.answer}\n\n`;
+    // Prioritize Serper's direct answer box if Google generated one
+    if (data.answerBox && data.answerBox.snippet) {
+      resultString += `[Direct Answer]\n${data.answerBox.snippet}\n\n`;
+    } else if (data.knowledgeGraph && data.knowledgeGraph.description) {
+      resultString += `[Knowledge Graph]\n${data.knowledgeGraph.description}\n\n`;
     }
     
-    // Include the actual search results
-    if (data.results && data.results.length > 0) {
+    // Include the top organic search results
+    if (data.organic && data.organic.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      resultString += data.results.map((r: any, i: number) => 
-        `[Result ${i + 1}]\nTitle: ${r.title}\nURL: ${r.url}\nSnippet: ${r.content}`
+      resultString += data.organic.slice(0, 5).map((r: any, i: number) => 
+        `[Result ${i + 1}]\nTitle: ${r.title}\nURL: ${r.link}\nSnippet: ${r.snippet}`
       ).join('\n\n---\n\n');
     }
 
