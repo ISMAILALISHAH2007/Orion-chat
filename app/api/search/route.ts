@@ -165,36 +165,44 @@ export async function performSearch(query: string): Promise<string> {
     return 'Please provide a search query.';
   }
 
+  // If the query is extremely short and conversational, skip web search to prevent Wikipedia/DDG from returning irrelevant song titles or definitions.
   const trimmedQuery = query.trim();
+  const isConversationalFollowUp = trimmedQuery.split(' ').length <= 3 && !/who|what|where|when|why|how|price|stock/i.test(trimmedQuery);
+  
+  if (isConversationalFollowUp) {
+    console.log(`[Search] Bypassing search for conversational follow-up: "${trimmedQuery}"`);
+    return 'No search performed for follow-up message.';
+  }
+
   console.log(`[Search] Initiating multi-source search for: "${trimmedQuery}"`);
   
   try {
-    // 1. Wikipedia (Factual/instant)
-    const wikiResults = await searchWikipedia(trimmedQuery);
-    if (wikiResults.length > 0) {
-      console.log(`[Search] Wikipedia found ${wikiResults.length} results.`);
-      return formatResults(wikiResults);
-    }
-
-    // 2. DuckDuckGo Instant Answer
-    const instantResults = await searchDuckDuckGoInstant(trimmedQuery);
-    if (instantResults.length > 0) {
-      console.log(`[Search] DuckDuckGo Instant found ${instantResults.length} results.`);
-      return formatResults(instantResults);
-    }
-
-    // 3. DuckDuckGo HTML (POST)
+    // 1. DuckDuckGo HTML (POST) - Best for general questions and current events
     const htmlResults = await searchDuckDuckGoHTML(trimmedQuery);
     if (htmlResults.length > 0) {
       console.log(`[Search] DuckDuckGo HTML found ${htmlResults.length} results.`);
       return formatResults(htmlResults);
     }
 
-    // 4. Yahoo Search (Ultimate Fallback)
+    // 2. Yahoo Search (Ultimate Fallback) - Excellent alternative if Vercel blocks DDG
     const yahooResults = await searchYahoo(trimmedQuery);
     if (yahooResults.length > 0) {
       console.log(`[Search] Yahoo Search found ${yahooResults.length} results.`);
       return formatResults(yahooResults);
+    }
+
+    // 3. DuckDuckGo Instant Answer - Good for quick facts if main search fails
+    const instantResults = await searchDuckDuckGoInstant(trimmedQuery);
+    if (instantResults.length > 0) {
+      console.log(`[Search] DuckDuckGo Instant found ${instantResults.length} results.`);
+      return formatResults(instantResults);
+    }
+
+    // 4. Wikipedia (Factual/instant) - Last resort because it often returns irrelevant keyword matches (e.g. song titles)
+    const wikiResults = await searchWikipedia(trimmedQuery);
+    if (wikiResults.length > 0) {
+      console.log(`[Search] Wikipedia found ${wikiResults.length} results.`);
+      return formatResults(wikiResults);
     }
 
     return `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`;
