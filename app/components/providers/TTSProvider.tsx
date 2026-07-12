@@ -154,7 +154,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [liveVoiceMode, setLiveVoiceMode] = useState(false);
   const [aiVoiceEnabled, setAiVoiceEnabled] = useState(false);
-  const [voiceGender, setVoiceGender] = useState<'female' | 'male'>('female');
+  const [voiceGender, setVoiceGender] = useState<'female' | 'male'>('male');
   const [voiceConversationOpen, setVoiceConversationOpen] = useState(false);
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);

@@ -94,12 +94,7 @@ function VoiceConversationModalInner({
             if (part.inlineData && part.inlineData.mimeType?.startsWith('audio/pcm')) {
               streamerRef.current?.addPlaybackData(part.inlineData.data);
             }
-            if (part.functionCall && part.functionCall.name === 'switchVoice') {
-              const gender = part.functionCall.args?.gender;
-              if ((gender === 'male' || gender === 'female') && onSwitchVoice) {
-                onSwitchVoice(gender);
-              }
-            }
+
             if (part.text) {
               setTranscript(prev => prev + part.text);
             }
@@ -141,36 +136,18 @@ function VoiceConversationModalInner({
       wsRef.current = ws;
 
       ws.onopen = () => {
-        // Send Setup message
+        const identityText = voiceGender === 'male' 
+          ? 'You are currently adopting a MALE persona. When speaking in Urdu or Hindi, you MUST use grammatically correct MALE pronouns and verb endings (e.g. "main kar sakta hoon", "main ja raha hoon"). This is critical.'
+          : 'You are currently adopting a FEMALE persona. When speaking in Urdu or Hindi, you MUST use grammatically correct FEMALE pronouns and verb endings (e.g. "main kar sakti hoon", "main ja rahi hoon"). This is critical.';
+
         const setupMsg = {
           setup: {
             model: "models/gemini-3.1-flash-live-preview",
             systemInstruction: {
               parts: [{
-                text: "You are ULTRON, a highly advanced cognitive AI assistant. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. If the user asks you to switch your voice (e.g. 'talk in a male voice' or 'switch to female'), you MUST call the switchVoice function immediately. Do NOT attempt to change your vocal tone yourself. If the user speaks in English, reply in English. If they speak Urdu/Hindi, reply appropriately. Be warm, natural, and helpful."
+                text: `You are ULTRON, a highly advanced cognitive AI assistant. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. ${identityText} If the user speaks in English, reply in English. Be warm, natural, and helpful.`
               }]
             },
-            tools: [
-              {
-                functionDeclarations: [
-                  {
-                    name: "switchVoice",
-                    description: "Switch your own voice gender to either male or female.",
-                    parameters: {
-                      type: "OBJECT",
-                      properties: {
-                        gender: {
-                          type: "STRING",
-                          enum: ["male", "female"],
-                          description: "The gender of the voice to switch to."
-                        }
-                      },
-                      required: ["gender"]
-                    }
-                  }
-                ]
-              }
-            ],
             generationConfig: {
               responseModalities: ["AUDIO"],
               speechConfig: {
