@@ -94,15 +94,14 @@ function VoiceConversationModalInner({
             if (part.inlineData && part.inlineData.mimeType?.startsWith('audio/pcm')) {
               streamerRef.current?.addPlaybackData(part.inlineData.data);
             }
+            if (part.functionCall && part.functionCall.name === 'switchVoice') {
+              const gender = part.functionCall.args?.gender;
+              if ((gender === 'male' || gender === 'female') && onSwitchVoice) {
+                onSwitchVoice(gender);
+              }
+            }
             if (part.text) {
               setTranscript(prev => prev + part.text);
-              
-              // Auto-switch voice detection
-              if (part.text.includes('[SWITCH_VOICE_MALE]') && onSwitchVoice) {
-                onSwitchVoice('male');
-              } else if (part.text.includes('[SWITCH_VOICE_FEMALE]') && onSwitchVoice) {
-                onSwitchVoice('female');
-              }
             }
           }
         }
@@ -148,9 +147,30 @@ function VoiceConversationModalInner({
             model: "models/gemini-3.1-flash-live-preview",
             systemInstruction: {
               parts: [{
-                text: "You are ULTRON, a highly advanced cognitive AI assistant. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. If the user explicitly asks you to switch to a male voice, you must include the exact text [SWITCH_VOICE_MALE] in your response. If they ask for a female voice, include the exact text [SWITCH_VOICE_FEMALE] in your response. If the user speaks in English, reply in English. If they speak Urdu/Hindi, reply appropriately. Be warm, natural, and helpful."
+                text: "You are ULTRON, a highly advanced cognitive AI assistant. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. If the user asks you to switch your voice (e.g. 'talk in a male voice' or 'switch to female'), you MUST call the switchVoice function immediately. Do NOT attempt to change your vocal tone yourself. If the user speaks in English, reply in English. If they speak Urdu/Hindi, reply appropriately. Be warm, natural, and helpful."
               }]
             },
+            tools: [
+              {
+                functionDeclarations: [
+                  {
+                    name: "switchVoice",
+                    description: "Switch your own voice gender to either male or female.",
+                    parameters: {
+                      type: "OBJECT",
+                      properties: {
+                        gender: {
+                          type: "STRING",
+                          enum: ["male", "female"],
+                          description: "The gender of the voice to switch to."
+                        }
+                      },
+                      required: ["gender"]
+                    }
+                  }
+                ]
+              }
+            ],
             generationConfig: {
               responseModalities: ["AUDIO"],
               speechConfig: {
