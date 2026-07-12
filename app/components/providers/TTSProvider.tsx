@@ -63,10 +63,11 @@ const CLOUD_VOICES: TTSVoice[] = [
   { uri: 'ja', name: 'Japanese', lang: 'ja', voice: null },
 ];
 
-// Clean text for natural speech — strip punctuation marks so TTS doesn't read them
+// Clean text for natural speech — strip reasoning, markdown, code, and punctuation so TTS doesn't read them
 function cleanTextForSpeech(text: string): string {
   return text
     .replace(/\[VOICE:[^\]]+\]/gi, '')
+    .replace(/\[REASONING\][\s\S]*?\[\/REASONING\]/gi, '')
     .replace(/```[\s\S]*?```/g, '')
     .replace(/!\[.*?\]\(.*?\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')

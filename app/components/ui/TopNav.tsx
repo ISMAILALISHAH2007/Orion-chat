@@ -2,7 +2,7 @@
 import { useMode, useTheme } from '@/app/components/providers/ThemeProvider';
 import { useTTS } from '@/app/components/providers/TTSProvider';
 import { useState, useRef, useEffect } from 'react';
-import { Menu, ChevronDown, Check, Sun, Moon, Sparkles, Volume2, VolumeX } from 'lucide-react';
+import { Menu, ChevronDown, Check, Sun, Moon, Sparkles, Headphones } from 'lucide-react';
 
 const MODELS: { id: string; name: string; description: string; placeholder: string }[] = [
   {
@@ -199,31 +199,24 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
         )}
       </div>
 
-      {/* Right: AI Voice + Theme + Live Voice */}
-      <div className="flex items-center gap-0.5">
-        {/* AI Voice Toggle */}
+      {/* Right: Live Voice (real-time voice conversation) + Theme Toggle */}
+      <div className="flex items-center gap-1">
+        {/* Live Voice Button */}
         <button
-          onClick={handleAiVoiceToggle}
-          title={voiceConversationOpen ? 'Voice conversation active' : 'Start voice conversation'}
+          onClick={() => {
+            initAudioContext();
+            setVoiceConversationOpen(true);
+          }}
+          title={voiceConversationOpen ? 'Live voice active' : 'Start live voice conversation'}
           className={[
-            'gemini-icon-btn relative',
-            voiceConversationOpen ? 'text-accent voice-conv-active' : '',
+            'gemini-live-voice-btn flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider transition-all',
+            voiceConversationOpen ? 'active bg-accent text-accent-foreground shadow-lg shadow-accent/20' : '',
           ].join(' ')}
         >
-          {voiceConversationOpen && isSpeaking ? (
-            <div className="flex items-center gap-[1.5px]">
-              <span className="sound-bar h-2.5 w-[2px] rounded-full bg-accent" />
-              <span className="sound-bar h-3.5 w-[2px] rounded-full bg-accent" style={{ animationDelay: '0.15s' }} />
-              <span className="sound-bar h-2 w-[2px] rounded-full bg-accent" style={{ animationDelay: '0.3s' }} />
-              <span className="sound-bar h-3 w-[2px] rounded-full bg-accent" style={{ animationDelay: '0.1s' }} />
-            </div>
-          ) : voiceConversationOpen ? (
-            <div className="relative">
-              <Volume2 size={16} />
-              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-green-500 animate-ping" />
-            </div>
-          ) : (
-            <Volume2 size={16} />
+          <Headphones size={13} className={voiceConversationOpen ? 'animate-bounce' : ''} />
+          <span>LIVE</span>
+          {voiceConversationOpen && (
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-ping" />
           )}
         </button>
 
@@ -234,21 +227,6 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
           className="gemini-icon-btn"
         >
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-
-        {/* Live Voice */}
-        <button
-          onClick={handleLiveVoiceToggle}
-          title={liveVoiceMode ? 'Stop Live Voice' : 'Start Live Voice'}
-          className={[
-            'gemini-live-voice-btn',
-            liveVoiceMode ? 'active' : '',
-          ].join(' ')}
-        >
-          <span className={`${liveVoiceMode ? 'text-white' : 'text-muted'}`}>
-            {liveVoiceMode ? '●' : '○'}
-          </span>
-          <span className="hidden sm:inline">{liveVoiceMode ? 'LIVE' : 'Live'}</span>
         </button>
       </div>
     </header>

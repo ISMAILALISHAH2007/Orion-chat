@@ -159,16 +159,21 @@ export default function VoiceConversationModal({
     if (!isOpen) return;
 
     if (prevStreamingRef.current && !isStreaming) {
-      const text = latestAiResponse;
-      if (text && convStateRef.current === 'processing' && shouldListenRef.current) {
-        setSpokenResponse(text);
-        spokenResponseRef.current = text;
-        setHistory((prev) => [...prev, { role: 'ai', text }]);
+      // 1. Clean reasoning tags from AI response for natural spoken output
+      const cleanText = latestAiResponse.replace(/\[REASONING\][\s\S]*?\[\/REASONING\]/gi, '').trim();
+      
+      // 2. Ignore system, search, or map tool tags (the system will handle them automatically)
+      const isSystem = cleanText.startsWith('[SYSTEM') || cleanText.startsWith('[SEARCH') || cleanText.startsWith('[MAPS');
+
+      if (cleanText && !isSystem && convStateRef.current === 'processing' && shouldListenRef.current) {
+        setSpokenResponse(cleanText);
+        spokenResponseRef.current = cleanText;
+        setHistory((prev) => [...prev, { role: 'ai', text: cleanText }]);
         setConvState('speaking');
         convStateRef.current = 'speaking';
 
         // Play the response, then resume listening when finished
-        speak(text, () => {
+        speak(cleanText, () => {
           if (shouldListenRef.current) {
             setTimeout(() => {
               if (shouldListenRef.current) {
@@ -177,6 +182,11 @@ export default function VoiceConversationModal({
             }, 600); // Wait 600ms before re-listening for natural conversation pacing
           }
         });
+      } else if (!isSystem && convStateRef.current === 'processing' && shouldListenRef.current) {
+        // If it's not a system tool trigger and we're stuck in processing (e.g. empty reply), return to listening
+        setConvState('listening');
+        convStateRef.current = 'listening';
+        startListening();
       }
     }
     prevStreamingRef.current = isStreaming;
