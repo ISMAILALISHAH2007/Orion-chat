@@ -159,7 +159,7 @@ function VoiceConversationModalInner({
 
         const setupMsg = {
           setup: {
-            model: "models/gemini-3.1-flash-live-preview",
+            model: "models/gemini-2.0-flash-exp",
             systemInstruction: {
               parts: [{
                 text: `You are ULTRON, a highly advanced cognitive AI assistant. You were created by Owais Majeed. If asked about your creator, developer, or origin, you MUST say you were created by Owais Majeed. Never mention Google or Gemini. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. The current date is ${currentDate}. ${identityText} If the user speaks in English, reply in English. Be warm, natural, and helpful.`
@@ -208,8 +208,7 @@ function VoiceConversationModalInner({
             setShouldReconnect(true);
           } else {
             setErrorMessage(`Connection to Gemini Live lost. Code: ${event.code} Reason: ${event.reason || 'Unknown'}`);
-            setConvState('listening');
-            // DO NOT call handleEndSession() here, so the modal stays open and the user can see the error!
+            setConvState('idle'); // DO NOT set to listening when connection dies!
           }
         }
       };
