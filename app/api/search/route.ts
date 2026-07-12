@@ -159,33 +159,14 @@ export async function performSearch(query: string): Promise<string> {
   const trimmedQuery = query.trim();
 
   try {
-    // Try all sources in parallel with individual timeouts
-    const [ddgResults, instantResults, liteResults] = await Promise.all([
-      searchDuckDuckGoHTML(trimmedQuery),
-      searchDuckDuckGoInstant(trimmedQuery),
-      searchDuckDuckGoLite(trimmedQuery),
-    ]);
+    // Only use DDG Lite because HTML and Instant are heavily rate-limited and block requests, causing 8s delays
+    const liteResults = await searchDuckDuckGoLite(trimmedQuery);
 
-    // Merge: prefer HTML (richest), fallback to Instant, then Lite
-    let bestResults: SearchResult[];
-
-    if (ddgResults.length >= 3) {
-      bestResults = ddgResults.slice(0, 8);
-    } else if (instantResults.length > 0) {
-      bestResults = instantResults;
-    } else if (liteResults.length > 0) {
-      bestResults = liteResults;
+    if (liteResults.length > 0) {
+      return formatResults(liteResults);
     } else {
-      // Last resort: combine whatever we got
-      const combined = [...ddgResults, ...instantResults, ...liteResults];
-      if (combined.length > 0) {
-        bestResults = combined;
-      } else {
-        return `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`;
-      }
+      return `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`;
     }
-
-    return formatResults(bestResults);
   } catch (err) {
     // Global catch — never crash
     console.error('[Search] Unexpected error:', err);

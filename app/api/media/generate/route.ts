@@ -35,7 +35,7 @@ async function generateVideo(userId: string | undefined, prompt: string): Promis
 
   console.log(`[Media API] Magic Hour Job Created: ${jobId}. Polling...`);
 
-  const MAX_ITERATIONS = 30;
+  const MAX_ITERATIONS = 90;
   const POLLING_INTERVAL_MS = 4000;
   let videoUrl = null;
 
@@ -64,7 +64,7 @@ async function generateVideo(userId: string | undefined, prompt: string): Promis
     }
   }
 
-  if (!videoUrl) throw new Error('Video generation timed out after 120s');
+  if (!videoUrl) throw new Error('Video generation timed out after 360s');
 
   console.log(`[Media API] Downloading video from ${videoUrl}`);
   const videoRes = await fetch(videoUrl);
