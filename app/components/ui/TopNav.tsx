@@ -39,6 +39,8 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
   const { mode, setMode } = useMode();
   const { theme, toggleTheme } = useTheme();
   const {
+    liveVoiceMode,
+    setLiveVoiceMode,
     setAiVoiceEnabled,
     voiceConversationOpen,
     setVoiceConversationOpen,
