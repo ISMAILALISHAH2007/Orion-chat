@@ -337,10 +337,14 @@ body {
 
 @media (max-width: 640px) {
   .gemini-model-dropdown {
-    width: calc(100vw - 32px);
-    max-width: 320px;
-    left: 50%;
-    transform: translateX(-50%);
+    position: fixed;
+    top: 60px;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    max-width: none;
+    transform: none;
+    max-height: calc(100vh - 80px);
   }
 }
 

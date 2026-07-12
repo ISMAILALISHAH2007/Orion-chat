@@ -29,6 +29,7 @@ export default function VoiceConversationModal({
 
   const recognitionRef = useRef<any>(null);
   const prevStreamingRef = useRef(false);
+  const prevSpeakingRef = useRef(false);
   const lastTranscriptRef = useRef('');
   const spokenResponseRef = useRef('');
   const shouldListenRef = useRef(false);
@@ -154,43 +155,53 @@ export default function VoiceConversationModal({
     }
   }, []);
 
-  // ====== RESPONSE SPEAKING ======
+  // ====== STATE SYNCHRONIZATION & ANSWER PLAYBACK ======
+
   useEffect(() => {
     if (!isOpen) return;
 
-    if (prevStreamingRef.current && !isStreaming) {
-      // 1. Clean reasoning tags from AI response for natural spoken output
-      const cleanText = latestAiResponse.replace(/\[REASONING\][\s\S]*?\[\/REASONING\]/gi, '').trim();
+    if (isSpeaking) {
+      setConvState('speaking');
+      convStateRef.current = 'speaking';
       
-      // 2. Ignore system, search, or map tool tags (the system will handle them automatically)
-      const isSystem = cleanText.startsWith('[SYSTEM') || cleanText.startsWith('[SEARCH') || cleanText.startsWith('[MAPS');
-
-      if (cleanText && !isSystem && convStateRef.current === 'processing' && shouldListenRef.current) {
-        setSpokenResponse(cleanText);
-        spokenResponseRef.current = cleanText;
-        setHistory((prev) => [...prev, { role: 'ai', text: cleanText }]);
-        setConvState('speaking');
-        convStateRef.current = 'speaking';
-
-        // Play the response, then resume listening when finished
-        speak(cleanText, () => {
-          if (shouldListenRef.current) {
-            setTimeout(() => {
-              if (shouldListenRef.current) {
-                startListening();
-              }
-            }, 600); // Wait 600ms before re-listening for natural conversation pacing
-          }
-        });
-      } else if (!isSystem && convStateRef.current === 'processing' && shouldListenRef.current) {
-        // If it's not a system tool trigger and we're stuck in processing (e.g. empty reply), return to listening
+      // Clean and set spoken response text to display in real-time
+      if (latestAiResponse) {
+        const cleanText = latestAiResponse.replace(/\[REASONING\][\s\S]*?\[\/REASONING\]/gi, '').trim();
+        const isSystem = cleanText.startsWith('[SYSTEM') || cleanText.startsWith('[SEARCH') || cleanText.startsWith('[MAPS');
+        
+        if (!isSystem && cleanText !== spokenResponseRef.current) {
+          setSpokenResponse(cleanText);
+          spokenResponseRef.current = cleanText;
+          setHistory((prev) => {
+            // Avoid duplicates
+            const exists = prev.some(h => h.role === 'ai' && h.text === cleanText);
+            if (exists) return prev;
+            return [...prev, { role: 'ai', text: cleanText }];
+          });
+        }
+      }
+    } else if (isStreaming) {
+      setConvState('processing');
+      convStateRef.current = 'processing';
+    } else {
+      // Both isSpeaking and isStreaming are false -> transition back to listening if we were active
+      const wasActive = prevSpeakingRef.current || prevStreamingRef.current;
+      if (wasActive && convStateRef.current !== 'listening') {
         setConvState('listening');
         convStateRef.current = 'listening';
-        startListening();
+        
+        const restartTimer = setTimeout(() => {
+          if (shouldListenRef.current && convStateRef.current === 'listening') {
+            startListening();
+          }
+        }, 600); // 600ms pause for natural conversational pacing
+        return () => clearTimeout(restartTimer);
       }
     }
+
+    prevSpeakingRef.current = isSpeaking;
     prevStreamingRef.current = isStreaming;
-  }, [isStreaming, latestAiResponse, isOpen, speak, startListening]);
+  }, [isSpeaking, isStreaming, isOpen, latestAiResponse, startListening]);
 
   // ====== INTERRUPT ======
   const handleInterrupt = useCallback(() => {

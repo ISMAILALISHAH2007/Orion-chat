@@ -153,19 +153,22 @@ export default function ChatInterface() {
   const lastSpokenMessageRef = useRef('');
 
   useEffect(() => {
-    // Suppress normal auto-speaking when voice conversation is active (modal handles it)
-    if (voiceConversationOpen) {
-      prevStreamingRef.current = isStreaming;
-      return;
-    }
     if (prevStreamingRef.current && !isStreaming) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage && lastMessage.sender === 'ai' && !lastMessage.isHidden) {
         const text = lastMessage.text;
-        if (aiVoiceEnabled && text !== lastSpokenMessageRef.current && !text.startsWith('[SYSTEM') && !text.startsWith('[SEARCH') && !text.startsWith('[MAPS')) {
+        
+        // Clean reasoning tags for natural speech output
+        const cleanText = text.replace(/\[REASONING\][\s\S]*?\[\/REASONING\]/gi, '').trim();
+        const isSystem = cleanText.startsWith('[SYSTEM') || cleanText.startsWith('[SEARCH') || cleanText.startsWith('[MAPS');
+
+        // Speak if the normal AI voice settings are enabled OR if the Live Voice modal session is active
+        const shouldSpeak = aiVoiceEnabled || voiceConversationOpen;
+
+        if (shouldSpeak && cleanText && !isSystem && text !== lastSpokenMessageRef.current) {
           lastSpokenMessageRef.current = text;
           initAudioContext();
-          speak(text);
+          speak(cleanText);
         }
         const searchMatch = text.match(/\[SEARCH:\s*(?:"|')?([^"\]}]+)(?:"|')?\]/i);
         if (searchMatch) {
