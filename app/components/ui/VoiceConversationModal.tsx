@@ -185,9 +185,18 @@ function VoiceConversationModalInner({
       ws.onclose = (event) => {
         console.log("WebSocket closed", event.code, event.reason);
         if (sessionActiveRef.current) {
-          setErrorMessage(`Connection to Gemini Live lost. Code: ${event.code} Reason: ${event.reason || 'Unknown'}`);
-          setConvState('listening');
-          // DO NOT call handleEndSession() here, so the modal stays open and the user can see the error!
+          // 1008 indicates session duration limit exceeded (GoAway signal)
+          if (event.code === 1008) {
+            console.log("Session duration limit reached. Auto-reconnecting...");
+            stopAll();
+            setTimeout(() => {
+              startLiveSession();
+            }, 500);
+          } else {
+            setErrorMessage(`Connection to Gemini Live lost. Code: ${event.code} Reason: ${event.reason || 'Unknown'}`);
+            setConvState('listening');
+            // DO NOT call handleEndSession() here, so the modal stays open and the user can see the error!
+          }
         }
       };
 
