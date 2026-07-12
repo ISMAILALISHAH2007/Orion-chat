@@ -82,6 +82,9 @@ export class AudioStreamer {
       this.micStream = await navigator.mediaDevices.getUserMedia({ audio: {
         channelCount: 1,
         sampleRate: 16000,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
       }});
 
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({

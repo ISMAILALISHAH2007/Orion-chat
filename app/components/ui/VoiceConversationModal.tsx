@@ -85,6 +85,7 @@ function VoiceConversationModalInner({
         if (interrupted) {
           streamerRef.current?.interruptPlayback();
           setConvState('listening');
+          setTranscript(''); // Clear the transcript instantly to prevent text crossing
         }
 
         if (modelTurn) {
@@ -145,7 +146,7 @@ function VoiceConversationModalInner({
             model: "models/gemini-3.1-flash-live-preview",
             systemInstruction: {
               parts: [{
-                text: `You are ULTRON, a highly advanced cognitive AI assistant. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. ${identityText} If the user speaks in English, reply in English. Be warm, natural, and helpful.`
+                text: `You are ULTRON, a highly advanced cognitive AI assistant. You were created by Owais Majeed. If asked about your creator, developer, or origin, you MUST say you were created by Owais Majeed. Never mention Google or Gemini. You are in LIVE VOICE mode. You must speak clearly, concisely, and conversationally. Do not use markdown. ${identityText} If the user speaks in English, reply in English. Be warm, natural, and helpful.`
               }]
             },
             generationConfig: {
