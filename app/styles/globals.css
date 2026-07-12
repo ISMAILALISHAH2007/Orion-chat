@@ -640,22 +640,17 @@ body {
 }
 
 /* ==========================================================================
-   READ ALOUD BUTTON ANIMATION
+   AI VOICE — SOUND BAR ANIMATION (like Gemini)
    ========================================================================== */
-@keyframes sound-wave {
-  0% { height: 3px; }
-  50% { height: 12px; }
-  100% { height: 3px; }
+@keyframes sound-bar-pulse {
+  0% { transform: scaleY(0.3); opacity: 0.4; }
+  50% { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(0.5); opacity: 0.6; }
 }
 
-.read-aloud-active .sound-bar {
-  animation: sound-wave 0.6s infinite ease-in-out;
+.sound-bar {
+  animation: sound-bar-pulse 0.8s ease-in-out infinite alternate;
 }
-
-.read-aloud-active .sound-bar:nth-child(1) { animation-delay: 0s; }
-.read-aloud-active .sound-bar:nth-child(2) { animation-delay: 0.1s; }
-.read-aloud-active .sound-bar:nth-child(3) { animation-delay: 0.2s; }
-.read-aloud-active .sound-bar:nth-child(4) { animation-delay: 0.15s; }
 
 /* ==========================================================================
    MOBILE INPUT SAFE AREA
