@@ -1,6 +1,6 @@
 'use client';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Square, Volume2, Mic, Circle, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Square, Volume2, Mic, Circle, Loader2, AlertCircle } from 'lucide-react';
 import { useTTS } from '@/app/components/providers/TTSProvider';
 
 type ConvState = 'listening' | 'processing' | 'speaking';
@@ -25,18 +25,17 @@ export default function VoiceConversationModal({
   const [spokenResponse, setSpokenResponse] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [history, setHistory] = useState<Array<{ role: 'user' | 'ai'; text: string }>>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
   const prevStreamingRef = useRef(false);
-  const isSpeakingRef = useRef(false);
   const lastTranscriptRef = useRef('');
   const spokenResponseRef = useRef('');
   const shouldListenRef = useRef(false);
   const convStateRef = useRef<ConvState>('listening');
+  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Keep refs in sync
   const { speak, stopSpeaking, isSpeaking, initAudioContext, selectedVoiceUri } = useTTS();
-  const isSpeakingFromTts = useRef(false);
 
   // Map selectedVoiceUri to BCP-47 speech recognition language code
   const recognitionLanguage = (() => {
@@ -53,96 +52,34 @@ export default function VoiceConversationModal({
     return 'en-US';
   })();
 
-  // Track isSpeaking
-  useEffect(() => {
-    isSpeakingFromTts.current = isSpeaking;
-  }, [isSpeaking]);
-
   // ====== SPEECH RECOGNITION ======
-  const buildRecognition = useCallback(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return null;
+  const startListening = useCallback(async () => {
+    if (!shouldListenRef.current) return;
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = recognitionLanguage;
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-    return recognition;
-  }, [recognitionLanguage]);
-
-  const startListening = useCallback(() => {
     try {
+      // Clear any existing recognition sessions
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (_) {}
+        try { recognitionRef.current.abort(); } catch (_) {}
+        recognitionRef.current = null;
       }
-      const recognition = buildRecognition();
-      if (!recognition) return;
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+        restartTimeoutRef.current = null;
+      }
 
-      setConvState('listening');
-      convStateRef.current = 'listening';
-      shouldListenRef.current = true;
-      setInterimTranscript('');
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      
+      if (!SpeechRecognition) {
+        setErrorMessage('Speech recognition is not supported in this browser. Please try using Chrome, Safari, or Edge.');
+        return;
+      }
 
-      recognition.onresult = (event: any) => {
-        let final = '';
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript;
-          } else {
-            interim += event.results[i][0].transcript;
-          }
-        }
-        if (final) lastTranscriptRef.current += final + ' ';
-        const display = (lastTranscriptRef.current + interim).trim();
-        setInterimTranscript(interim);
-        if (display) setLastTranscript(display);
-      };
-
-      recognition.onerror = (event: any) => {
-        if (event.error === 'no-speech' || event.error === 'aborted') return;
-        console.error('Voice conv recognition error:', event.error);
-      };
-
-      recognition.onend = () => {
-        const finalText = lastTranscriptRef.current.trim();
-        lastTranscriptRef.current = '';
-        setInterimTranscript('');
-
-        if (finalText && shouldListenRef.current && convStateRef.current === 'listening') {
-          // User spoke — send message
-          setHistory((prev) => [...prev, { role: 'user', text: finalText }]);
-          setConvState('processing');
-          convStateRef.current = 'processing';
-          // Brief delay to show the transcript before processing
-          setTimeout(() => {
-            if (shouldListenRef.current) {
-              sendMessage(finalText);
-            }
-          }, 300);
-        } else if (shouldListenRef.current && convStateRef.current === 'listening') {
-          // No speech detected, restart listening
-          setTimeout(() => {
-            if (shouldListenRef.current && convStateRef.current === 'listening') {
-              startListeningViaBuild();
-            }
-          }, 300);
-        }
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err) {
-      console.error('Failed to start voice conv listening:', err);
-    }
-  }, [buildRecognition, sendMessage]);
-
-  const startListeningViaBuild = useCallback(() => {
-    try {
-      const recognition = buildRecognition();
-      if (!recognition) return;
+      const recognition = new SpeechRecognition();
+      recognition.lang = recognitionLanguage;
+      recognition.continuous = false; // continuous false works better on mobile for segmenting sentences
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
 
       setConvState('listening');
       convStateRef.current = 'listening';
@@ -165,7 +102,11 @@ export default function VoiceConversationModal({
       };
 
       recognition.onerror = (event: any) => {
-        if (event.error === 'no-speech' || event.error === 'aborted') return;
+        console.warn('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed') {
+          setErrorMessage('Microphone access denied. Please click the mic icon in your address bar and allow permission.');
+          shouldListenRef.current = false;
+        }
       };
 
       recognition.onend = () => {
@@ -174,18 +115,21 @@ export default function VoiceConversationModal({
         setInterimTranscript('');
 
         if (finalText && shouldListenRef.current && convStateRef.current === 'listening') {
+          // User spoke successfully
           setHistory((prev) => [...prev, { role: 'user', text: finalText }]);
           setConvState('processing');
           convStateRef.current = 'processing';
+          
           setTimeout(() => {
             if (shouldListenRef.current) {
               sendMessage(finalText);
             }
           }, 300);
         } else if (shouldListenRef.current && convStateRef.current === 'listening') {
-          setTimeout(() => {
+          // Restart listening if no speech was detected
+          restartTimeoutRef.current = setTimeout(() => {
             if (shouldListenRef.current && convStateRef.current === 'listening') {
-              startListeningViaBuild();
+              startListening();
             }
           }, 300);
         }
@@ -194,33 +138,26 @@ export default function VoiceConversationModal({
       recognitionRef.current = recognition;
       recognition.start();
     } catch (err) {
-      console.error('Failed to restart voice conv:', err);
+      console.error('Failed to start speech recognition:', err);
     }
-  }, [buildRecognition, sendMessage]);
+  }, [recognitionLanguage, sendMessage]);
 
   const stopListening = useCallback(() => {
     shouldListenRef.current = false;
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (_) {}
+      try { recognitionRef.current.abort(); } catch (_) {}
+      recognitionRef.current = null;
     }
   }, []);
-
-  // ====== HUMAN-LIKE VOICE SPEAKING ======
-  const speakNaturally = useCallback((text: string, onDone?: () => void) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      onDone?.();
-      return;
-    }
-
-    // Use the provider's speak for consistency but we control the flow
-    // The provider handles cleaning text and detecting language
-    speak(text, onDone);
-  }, [speak]);
 
   // ====== RESPONSE SPEAKING ======
   useEffect(() => {
     if (!isOpen) return;
-    // Detect when streaming finishes
+
     if (prevStreamingRef.current && !isStreaming) {
       const text = latestAiResponse;
       if (text && convStateRef.current === 'processing' && shouldListenRef.current) {
@@ -230,31 +167,32 @@ export default function VoiceConversationModal({
         setConvState('speaking');
         convStateRef.current = 'speaking';
 
-        initAudioContext();
-        // Speak the response naturally, then listen again
-        speakNaturally(text, () => {
-          // When speaking finishes, auto-listen again
+        // Play the response, then resume listening when finished
+        speak(text, () => {
           if (shouldListenRef.current) {
             setTimeout(() => {
               if (shouldListenRef.current) {
-                startListeningViaBuild();
+                startListening();
               }
-            }, 600); // Slightly longer pause before re-listening (human-like)
+            }, 600); // Wait 600ms before re-listening for natural conversation pacing
           }
         });
       }
     }
     prevStreamingRef.current = isStreaming;
-  }, [isStreaming, latestAiResponse, isOpen, initAudioContext, startListeningViaBuild, speakNaturally]);
+  }, [isStreaming, latestAiResponse, isOpen, speak, startListening]);
 
   // ====== INTERRUPT ======
   const handleInterrupt = useCallback(() => {
     stopSpeaking();
     setConvState('listening');
     convStateRef.current = 'listening';
-    // Start listening immediately
-    setTimeout(() => startListeningViaBuild(), 200);
-  }, [stopSpeaking, startListeningViaBuild]);
+    setTimeout(() => {
+      if (shouldListenRef.current) {
+        startListening();
+      }
+    }, 200);
+  }, [stopSpeaking, startListening]);
 
   // ====== END SESSION ======
   const handleEndSession = useCallback(() => {
@@ -278,34 +216,52 @@ export default function VoiceConversationModal({
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, handleEndSession]);
 
-  // ====== OPEN / CLOSE ======
+  // ====== INITIALIZATION ON OPEN ======
   useEffect(() => {
-    if (isOpen) {
-      setConvState('listening');
-      convStateRef.current = 'listening';
-      shouldListenRef.current = true;
-      setLastTranscript('');
-      setSpokenResponse('');
-      setInterimTranscript('');
-      setHistory([]);
-      lastTranscriptRef.current = '';
-      spokenResponseRef.current = '';
+    if (!isOpen) return;
 
-      // Start listening after a brief delay
-      const timer = setTimeout(() => startListening(), 600);
-      return () => {
-        clearTimeout(timer);
-        shouldListenRef.current = false;
-        stopListening();
-        stopSpeaking();
-      };
-    }
-  }, [isOpen, startListening, stopListening, stopSpeaking]);
+    setConvState('listening');
+    convStateRef.current = 'listening';
+    shouldListenRef.current = true;
+    setLastTranscript('');
+    setSpokenResponse('');
+    setInterimTranscript('');
+    setHistory([]);
+    setErrorMessage(null);
+    lastTranscriptRef.current = '';
+    spokenResponseRef.current = '';
+
+    // Initialize/unlock Web Audio context (important for Safari/iOS)
+    initAudioContext();
+
+    const requestPermissionAndListen = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop()); // close the stream tracks immediately
+        
+        if (shouldListenRef.current) {
+          startListening();
+        }
+      } catch (err) {
+        console.warn('Microphone access denied:', err);
+        setErrorMessage('Microphone access denied. Please click the camera/microphone icon in your browser address bar to allow mic access.');
+      }
+    };
+
+    // Wait a brief moment for modal transition to finish, then request permission and start
+    const startTimer = setTimeout(requestPermissionAndListen, 400);
+
+    return () => {
+      clearTimeout(startTimer);
+      shouldListenRef.current = false;
+      stopListening();
+      stopSpeaking();
+    };
+  }, [isOpen, startListening, stopListening, stopSpeaking, initAudioContext]);
 
   if (!isOpen) return null;
 
   const lastUserText = history.filter((h) => h.role === 'user').slice(-1)[0]?.text || '';
-  const lastAiText = history.filter((h) => h.role === 'ai').slice(-1)[0]?.text || '';
 
   return (
     <div className="voice-conv-overlay">
@@ -322,6 +278,17 @@ export default function VoiceConversationModal({
         >
           <X size={20} />
         </button>
+
+        {/* Error Message Display */}
+        {errorMessage && (
+          <div className="absolute top-16 left-6 right-6 z-20 flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200 animate-fade-in max-w-lg mx-auto">
+            <AlertCircle className="shrink-0 text-red-400 mt-0.5" size={18} />
+            <div className="flex-1 space-y-1">
+              <p className="font-semibold">Voice Mode Issue</p>
+              <p className="text-xs text-red-300/95 leading-relaxed">{errorMessage}</p>
+            </div>
+          </div>
+        )}
 
         {/* Status indicator */}
         <div className="voice-conv-status">
@@ -400,7 +367,7 @@ export default function VoiceConversationModal({
           )}
 
           {spokenResponse && (
-            <div className="voice-conv-transcript-item ai">
+            <div className="voice-conv-transcript-item ai animate-fade-in">
               <span className="voice-conv-label">ULTRON</span>
               <p className="voice-conv-text">{spokenResponse}</p>
             </div>

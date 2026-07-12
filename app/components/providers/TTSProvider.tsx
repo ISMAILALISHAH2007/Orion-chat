@@ -8,15 +8,45 @@ export interface TTSVoice {
   voice: SpeechSynthesisVoice | null;
 }
 
-function findVoiceForLang(lang: string): SpeechSynthesisVoice | null {
+function findVoiceForLang(lang: string, gender?: 'female' | 'male'): SpeechSynthesisVoice | null {
   if (typeof window === 'undefined' || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
-  const exact = voices.find(v => v.lang.toLowerCase().startsWith(lang.toLowerCase()));
-  if (exact) return exact;
-  const baseLang = lang.split('-')[0].toLowerCase();
-  const base = voices.find(v => v.lang.toLowerCase().startsWith(baseLang));
-  if (base) return base;
-  return voices.find(v => v.lang.startsWith('en')) || voices[0] || null;
+  const langLower = lang.toLowerCase();
+  
+  // Find matches for target lang
+  const exact = voices.filter(v => v.lang.toLowerCase().startsWith(langLower));
+  const baseLang = langLower.split('-')[0];
+  const fallback = exact.length > 0 ? exact : voices.filter(v => v.lang.toLowerCase().startsWith(baseLang));
+  
+  const candidates = fallback.length > 0 ? fallback : voices.filter(v => v.lang.toLowerCase().startsWith('en'));
+  const finalCandidates = candidates.length > 0 ? candidates : voices;
+  
+  if (gender) {
+    const isFemale = gender === 'female';
+    const femaleKeywords = ['female', 'zira', 'hazel', 'susan', 'karen', 'moira', 'tessa', 'veena', 'samantha', 'siri', 'elsa', 'serena', 'yating', 'ting-ting', 'sin-ji', 'google', 'natural'];
+    const maleKeywords = ['male', 'david', 'mark', 'george', 'ravi', 'microsoft david', 'daniel', 'premium'];
+    
+    const sorted = [...finalCandidates].sort((a, b) => {
+      const nameA = a.name.toLowerCase();
+      const nameB = b.name.toLowerCase();
+      
+      const matchA = isFemale 
+        ? (femaleKeywords.some(kw => nameA.includes(kw)) && !maleKeywords.some(kw => nameA.includes(kw)))
+        : (maleKeywords.some(kw => nameA.includes(kw)) && !femaleKeywords.some(kw => nameA.includes(kw)));
+        
+      const matchB = isFemale
+        ? (femaleKeywords.some(kw => nameB.includes(kw)) && !maleKeywords.some(kw => nameB.includes(kw)))
+        : (maleKeywords.some(kw => nameB.includes(kw)) && !femaleKeywords.some(kw => nameB.includes(kw)));
+        
+      if (matchA && !matchB) return -1;
+      if (!matchA && matchB) return 1;
+      return 0;
+    });
+    
+    return sorted[0] || null;
+  }
+  
+  return finalCandidates[0] || null;
 }
 
 const CLOUD_VOICES: TTSVoice[] = [
@@ -104,6 +134,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const [voiceConversationOpen, setVoiceConversationOpen] = useState(false);
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const onDoneRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -114,8 +145,27 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const initAudioContext = useCallback(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
+    if (typeof window === 'undefined') return;
+    
+    // 1. Cancel SpeechSynthesis
+    if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
+    }
+    
+    // 2. Play a short silent sound to unlock Safari / iOS audio engine
+    try {
+      const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (context.state === 'suspended') {
+        context.resume();
+      }
+      
+      const buffer = context.createBuffer(1, 1, 22050);
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(context.destination);
+      source.start(0);
+    } catch (e) {
+      console.warn('AudioContext unlock failed:', e);
     }
   }, []);
 
@@ -123,34 +173,30 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      } catch (_) {}
+      audioRef.current = null;
+    }
     utteranceRef.current = null;
     onDoneRef.current = null;
     setIsSpeaking(false);
   }, []);
 
-  const speak = useCallback((text: string, onDone?: () => void) => {
-    stopSpeaking();
-
+  // Browser local TTS fallback
+  const speakLocalFallback = useCallback((text: string, lang: string, onDone?: () => void) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) {
-      console.warn('SpeechSynthesis not available');
-      return;
-    }
-
-    const cleanText = cleanTextForSpeech(text);
-    if (!cleanText) {
       onDone?.();
       return;
     }
 
-    const detectedLang = detectLanguage(cleanText);
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    
-    utterance.lang = getVoiceCode(detectedLang);
-    
-    const voice = findVoiceForLang(utterance.lang);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = getVoiceCode(lang);
+    const voice = findVoiceForLang(utterance.lang, voiceGender);
     if (voice) utterance.voice = voice;
 
-    // Natural human-like speech settings
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
     utterance.volume = 1.0;
@@ -159,8 +205,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
     onDoneRef.current = onDone || null;
 
     const synthesis = window.speechSynthesis;
-
-    // Chrome workaround: prevent 15s speech cutoff — create interval BEFORE speak()
+    
     const checkInterval = setInterval(() => {
       if (!synthesis.speaking) {
         clearInterval(checkInterval);
@@ -170,7 +215,6 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       }
     }, 10000);
 
-    // Single onend handler that also cleans up the check interval
     utterance.onend = () => {
       clearInterval(checkInterval);
       setIsSpeaking(false);
@@ -180,30 +224,21 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       cb?.();
     };
 
-    utterance.onerror = (event) => {
+    utterance.onerror = () => {
       clearInterval(checkInterval);
-      console.warn('SpeechSynthesis error:', event.error);
       setIsSpeaking(false);
       utteranceRef.current = null;
       const cb = onDoneRef.current;
       onDoneRef.current = null;
-      
-      if (event.error === 'voice-unavailable' || event.error === 'language-unavailable') {
-        speakViaServer(cleanText, detectedLang, cb || undefined);
-      } else {
-        cb?.();
-      }
+      cb?.();
     };
 
     utterance.onstart = () => setIsSpeaking(true);
-
-    // Call speak() AFTER all handlers and interval are set up
     synthesis.speak(utterance);
+  }, [voiceGender]);
 
-  }, [stopSpeaking]);
-
-  // Server-side TTS fallback via API
-  const speakViaServer = async (text: string, lang: string, onDone?: () => void) => {
+  // Server-side Edge TTS (primary speaking method for high quality neural voices)
+  const speakViaServer = useCallback(async (text: string, lang: string, onDone?: () => void) => {
     try {
       const res = await fetch('/api/voice/tts', {
         method: 'POST',
@@ -215,25 +250,54 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       const audioBlob = await res.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
+      audioRef.current = audio;
       
       audio.onplay = () => setIsSpeaking(true);
+      
+      const cleanup = () => {
+        setIsSpeaking(false);
+        try { URL.revokeObjectURL(audioUrl); } catch (_) {}
+        if (audioRef.current === audio) {
+          audioRef.current = null;
+        }
+      };
+
       audio.onended = () => {
-        setIsSpeaking(false);
-        URL.revokeObjectURL(audioUrl);
+        cleanup();
         onDone?.();
       };
+      
       audio.onerror = () => {
-        setIsSpeaking(false);
-        URL.revokeObjectURL(audioUrl);
-        onDone?.();
+        cleanup();
+        console.warn('Audio playback error, falling back to local SpeechSynthesis');
+        speakLocalFallback(text, lang, onDone);
       };
+      
       await audio.play();
     } catch (err) {
-      console.warn('Server TTS fallback failed:', err);
-      setIsSpeaking(false);
-      onDone?.();
+      console.warn('Server TTS failed, calling local fallback:', err);
+      speakLocalFallback(text, lang, onDone);
     }
-  };
+  }, [voiceGender, speakLocalFallback]);
+
+  const speak = useCallback((text: string, onDone?: () => void) => {
+    stopSpeaking();
+
+    const cleanText = cleanTextForSpeech(text);
+    if (!cleanText) {
+      onDone?.();
+      return;
+    }
+
+    let targetLang = selectedVoiceUri;
+    const detectedLang = detectLanguage(cleanText);
+    if (detectedLang !== 'en') {
+      targetLang = detectedLang;
+    }
+
+    // Try high-quality server-side Edge Neural TTS first!
+    speakViaServer(cleanText, targetLang, onDone);
+  }, [selectedVoiceUri, stopSpeaking, speakViaServer]);
 
   return (
     <TTSContext.Provider value={{

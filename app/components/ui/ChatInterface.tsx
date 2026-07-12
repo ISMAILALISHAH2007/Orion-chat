@@ -25,6 +25,7 @@ import {
   FileArchive,
   File as FileIcon,
   Globe,
+  Headphones,
 } from 'lucide-react';
 import { useChat, type ChatAttachment } from '@/app/components/providers/ChatProvider';
 import CameraModal from './CameraModal';
@@ -509,6 +510,7 @@ export default function ChatInterface() {
               <button type="button" onClick={() => { setIsVideoMode(!isVideoMode); setIsImageMode(false); setIsSearchMode(false); }} className={['gemini-icon-btn', isVideoMode ? 'active' : ''].join(' ')} title="Video"><Video size={16} /></button>
               {isMobile && <button type="button" onClick={() => setShowCamera(true)} className="gemini-icon-btn" title="Camera"><Camera size={16} /></button>}
               <button type="button" onClick={handleMicClick} className={['gemini-icon-btn', micActive ? 'danger' : '', liveVoiceMode ? 'gemini-mic-live' : ''].join(' ')} title={micActive ? 'Stop recording' : 'Voice input'}>{micActive ? <MicOff size={16} /> : <Mic size={16} />}</button>
+              <button type="button" onClick={() => { initAudioContext(); setVoiceConversationOpen(true); }} className={['gemini-icon-btn', voiceConversationOpen ? 'active text-accent' : ''].join(' ')} title="Live Voice Conversation"><Headphones size={16} /></button>
             </div>
           </div>
         </div>

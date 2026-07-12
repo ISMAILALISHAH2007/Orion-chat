@@ -312,20 +312,35 @@ body {
   transform: translateX(-50%);
   margin-top: 4px;
   width: 280px;
+  max-height: 380px;
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: 6px;
   z-index: 50;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.gemini-model-dropdown::-webkit-scrollbar {
+  width: 5px;
+}
+.gemini-model-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+.gemini-model-dropdown::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--radius-full);
 }
 
 @media (max-width: 640px) {
   .gemini-model-dropdown {
-    left: 8px;
-    right: 8px;
-    transform: none;
-    width: auto;
+    width: calc(100vw - 32px);
+    max-width: 320px;
+    left: 50%;
+    transform: translateX(-50%);
   }
 }
 
