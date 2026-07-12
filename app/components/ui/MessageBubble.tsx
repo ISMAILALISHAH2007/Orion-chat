@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Sparkles, Volume2, VolumeX } from 'lucide-react';
+import { Sparkles, Volume2, VolumeX, ChevronDown, BrainCircuit } from 'lucide-react';
 import { parseMarkdown } from '@/app/lib/utils/markdown';
 import { generatePreviewHtml } from '@/app/lib/utils/preview';
 import { useTTS } from '@/app/components/providers/TTSProvider';
@@ -14,9 +14,26 @@ interface MessageBubbleProps {
   isStreaming?: boolean;
 }
 
+/**
+ * Parse [REASONING]...[/REASONING] blocks from AI text.
+ * Returns { mainText, reasoningText } or null if no reasoning tags.
+ */
+function parseReasoning(text: string): { mainText: string; reasoningText: string } | null {
+  const match = text.match(/\[REASONING\]([\s\S]*?)\[\/REASONING\]/);
+  if (!match) return null;
+  const reasoningText = match[1].trim();
+  const mainText = text.replace(/\[REASONING\][\s\S]*?\[\/REASONING\]/, '').trim();
+  return { mainText, reasoningText };
+}
+
 export default function MessageBubble({ sender, text, attachments, isStreaming }: MessageBubbleProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const { speak, stopSpeaking, isSpeaking, initAudioContext } = useTTS();
+  const [reasoningOpen, setReasoningOpen] = useState(false);
+
+  const reasoning = parseReasoning(text);
+  const displayText = reasoning ? reasoning.mainText : text;
+  const reasoningText = reasoning?.reasoningText;
 
   // Wire up copy + preview buttons in code blocks
   useEffect(() => {
@@ -54,12 +71,12 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
     });
 
     return () => cleanups.forEach((c) => c());
-  }, [text]);
+  }, [displayText]);
 
   const handleReadAloud = () => {
     initAudioContext();
     if (isSpeaking) stopSpeaking();
-    else speak(text);
+    else speak(displayText);
   };
 
   if (sender === 'user') {
@@ -87,15 +104,37 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
         <Sparkles size={14} className="text-accent" />
       </span>
       <div className="gemini-msg-content">
+        {/* Expandable Reasoning Section */}
+        {reasoningText && (
+          <div className="gemini-reasoning-section">
+            <button
+              type="button"
+              onClick={() => setReasoningOpen((o) => !o)}
+              className="gemini-reasoning-toggle"
+            >
+              <BrainCircuit size={14} className="shrink-0 text-gemini-purple" />
+              <span>Show reasoning</span>
+              <ChevronDown size={13} className={`ml-auto shrink-0 text-muted transition-transform ${reasoningOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {reasoningOpen && (
+              <div className="gemini-reasoning-content">
+                <div className="gemini-reasoning-text">{reasoningText}</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Main answer */}
         <div
           ref={contentRef}
           className="msg-content"
           dangerouslySetInnerHTML={{
-            __html: parseMarkdown(text) + (isStreaming
+            __html: parseMarkdown(displayText) + (isStreaming
               ? '<span class="ml-1 inline-block h-4 w-2 animate-pulse bg-accent align-middle shadow-[0_0_6px_var(--accent)] rounded-full"></span>'
               : '')
           }}
         />
+
         {!isStreaming && (
           <button
             onClick={handleReadAloud}

@@ -91,6 +91,8 @@ export default function Sidebar({
   const userEmail = session?.user?.email || '';
   const initial = (userName || 'U').charAt(0).toUpperCase();
 
+  const widthClass = collapsed ? 'md:w-[76px]' : 'md:w-72';
+
   return (
     <>
       {showAccountModal && <AccountSettingsModal onClose={() => setShowAccountModal(false)} />}
@@ -107,7 +109,7 @@ export default function Sidebar({
       <aside
         className={[
           'gemini-sidebar',
-          collapsed ? 'collapsed' : '',
+          widthClass,
           mobileOpen ? 'mobile-open' : '',
         ].join(' ')}
       >

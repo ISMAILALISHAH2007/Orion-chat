@@ -88,6 +88,8 @@ interface TTSContextType {
   initAudioContext: () => void;
   aiVoiceEnabled: boolean;
   setAiVoiceEnabled: (enabled: boolean) => void;
+  voiceConversationOpen: boolean;
+  setVoiceConversationOpen: (open: boolean) => void;
 }
 
 const TTSContext = createContext<TTSContextType | undefined>(undefined);
@@ -99,6 +101,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const [liveVoiceMode, setLiveVoiceMode] = useState(false);
   const [aiVoiceEnabled, setAiVoiceEnabled] = useState(false);
   const [voiceGender, setVoiceGender] = useState<'female' | 'male'>('female');
+  const [voiceConversationOpen, setVoiceConversationOpen] = useState(false);
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const onDoneRef = useRef<(() => void) | null>(null);
@@ -247,6 +250,8 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       initAudioContext,
       aiVoiceEnabled,
       setAiVoiceEnabled,
+      voiceConversationOpen,
+      setVoiceConversationOpen,
     }}>
       {children}
     </TTSContext.Provider>

@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 
 /**
- * Free AI Web Search
- * Uses googlethis (Google scraping, no API key needed) + fallback sources.
- * No Paid APIs required.
+ * Free AI Web Search — Resilient multi-source fallback
+ * Uses DuckDuckGo (primary) + fallback sources.
+ * No API keys required.
  */
-import { search } from 'googlethis';
 
 interface SearchResult {
   title: string;
@@ -22,65 +21,48 @@ function formatResults(results: SearchResult[]): string {
   ).join('\n\n---\n\n');
 }
 
-// === SOURCE 1 (PRIMARY): googlethis — free Google scraping, no API key ===
-async function searchGoogleThis(query: string): Promise<SearchResult[]> {
-  try {
-    const res = await search(query, {
-      page: 0,
-      safe: false,
-      additional_params: {
-        hl: 'en',
-        num: 8,
-      },
-    });
-
-    if (!res.results || res.results.length === 0) return [];
-
-    return res.results.slice(0, 8).map((r: any) => ({
-      title: r.title || '',
-      url: r.url || '',
-      snippet: r.description || '',
-    }));
-  } catch (err) {
-    console.warn('[Search] googlethis failed:', err instanceof Error ? err.message : err);
-    return [];
-  }
+function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { signal: controller.signal })
+    .finally(() => clearTimeout(timeout));
 }
 
-// === SOURCE 2: DuckDuckGo HTML (stable HTML scraping, no key needed) ===
+// === SOURCE 1: DuckDuckGo HTML (most reliable, no API key) ===
 async function searchDuckDuckGoHTML(query: string): Promise<SearchResult[]> {
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; ULTRON/1.0)',
-        'Accept': 'text/html',
-      },
-      signal: controller.signal,
-    });
+    const res = await fetchWithTimeout(url, 6000);
     if (!res.ok) return [];
-
     const html = await res.text();
     const results: SearchResult[] = [];
 
-    // DuckDuckGo HTML results are in <a class="result__a"> tags
-    const resultBlocks = html.split('<article class="result ">');
+    // DuckDuckGo HTML results — parse <a class="result__a"> with fallback patterns
+    const resultBlocks = html.split('<article class="result ');
     for (let i = 1; i < resultBlocks.length && i <= 8; i++) {
       const block = resultBlocks[i];
-      
-      const titleMatch = block.match(/<a[^>]*class="result__a"[^>]*>([\s\S]*?)<\/a>/);
-      const urlMatch = block.match(/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>/);
-      const snippetMatch = block.match(/<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
-      
+      if (!block) continue;
+
+      // Title
+      const titleMatch = block.match(/class="result__a"[^>]*>([\s\S]*?)<\/a>/);
+      // URL  
+      const urlMatch = block.match(/class="result__a"[^>]*href="([^"]+)"/);
+      // Snippet
+      const snippetMatch = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
+      // Alternative snippet
+      const altSnippet = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/span>/);
+
       if (titleMatch && urlMatch) {
         const title = titleMatch[1].replace(/<[^>]*>/g, '').trim();
-        const resultUrl = urlMatch[1].startsWith('http') ? urlMatch[1] : `https://duckduckgo.com${urlMatch[1]}`;
-        const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]*>/g, '').trim() : '';
-        
+        let resultUrl = urlMatch[1];
+        if (!resultUrl.startsWith('http')) {
+          resultUrl = `https://duckduckgo.com${resultUrl}`;
+        }
+        const snippet = snippetMatch
+          ? snippetMatch[1].replace(/<[^>]*>/g, '').trim()
+          : altSnippet
+            ? altSnippet[1].replace(/<[^>]*>/g, '').trim()
+            : '';
         if (title && resultUrl) {
           results.push({ title, url: resultUrl, snippet });
         }
@@ -88,74 +70,79 @@ async function searchDuckDuckGoHTML(query: string): Promise<SearchResult[]> {
     }
 
     return results;
-  } catch {
+  } catch (err) {
+    console.warn('[Search] DuckDuckGo HTML failed:', err instanceof Error ? err.message : 'Unknown');
     return [];
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
-// === SOURCE 3: DuckDuckGo Instant Answer API (quick facts) ===
+// === SOURCE 2: DuckDuckGo Instant Answer API (quick facts) ===
 async function searchDuckDuckGoInstant(query: string): Promise<SearchResult[]> {
   const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
-
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'ULTRON/1.0' },
-      signal: controller.signal,
-    });
+    const res = await fetchWithTimeout(url, 5000);
     if (!res.ok) return [];
-
     const data = await res.json();
     const results: SearchResult[] = [];
 
     if (data.AbstractText) {
-      results.push({
-        title: data.Heading || 'Summary',
-        url: data.AbstractURL || 'https://duckduckgo.com',
-        snippet: data.AbstractText,
-      });
+      results.push({ title: data.Heading || 'Summary', url: data.AbstractURL || 'https://duckduckgo.com', snippet: data.AbstractText });
     }
-
-    if (data.Answer && data.AnswerType !== '') {
-      results.push({
-        title: data.Heading || 'Answer',
-        url: data.AbstractURL || 'https://duckduckgo.com',
-        snippet: data.Answer,
-      });
+    if (data.Answer && data.AnswerType) {
+      results.push({ title: data.Heading || 'Answer', url: data.AbstractURL || 'https://duckduckgo.com', snippet: data.Answer });
     }
-
     if (data.RelatedTopics) {
-      for (const topic of (data.RelatedTopics || []).slice(0, 6)) {
+      for (const topic of (data.RelatedTopics || []).slice(0, 8)) {
         if (topic.Text && topic.FirstURL) {
-          results.push({
-            title: topic.Text.split(' - ')[0] || topic.Text,
-            url: topic.FirstURL,
-            snippet: topic.Text,
-          });
+          results.push({ title: topic.Text.split(' - ')[0], url: topic.FirstURL, snippet: topic.Text });
         }
         if (topic.Topics) {
           for (const sub of topic.Topics.slice(0, 3)) {
             if (sub.Text && sub.FirstURL) {
-              results.push({
-                title: sub.Text.split(' - ')[0] || sub.Text,
-                url: sub.FirstURL,
-                snippet: sub.Text,
-              });
+              results.push({ title: sub.Text.split(' - ')[0], url: sub.FirstURL, snippet: sub.Text });
             }
           }
         }
       }
     }
-
     return results;
-  } catch {
+  } catch (err) {
+    console.warn('[Search] DuckDuckGo Instant failed:', err instanceof Error ? err.message : 'Unknown');
     return [];
-  } finally {
-    clearTimeout(timeout);
+  }
+}
+
+// === SOURCE 3: DuckDuckGo Lite API (lightweight fallback) ===
+async function searchDuckDuckGoLite(query: string): Promise<SearchResult[]> {
+  const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+  try {
+    const res = await fetchWithTimeout(url, 6000);
+    if (!res.ok) return [];
+    const html = await res.text();
+    const results: SearchResult[] = [];
+
+    // Parse DDG Lite results — simpler HTML structure
+    const rows = html.split('<tr class="result">');
+    for (let i = 1; i < rows.length && i <= 8; i++) {
+      const row = rows[i];
+      if (!row) continue;
+
+      const linkMatch = row.match(/<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+      const snippetMatch = row.match(/<td class="result-snippet">([\s\S]*?)<\/td>/);
+
+      if (linkMatch) {
+        const url = linkMatch[1];
+        const title = linkMatch[2].replace(/<[^>]*>/g, '').trim();
+        const snippet = snippetMatch ? snippetMatch[1].replace(/<[^>]*>/g, '').trim() : '';
+        if (title && url) {
+          results.push({ title, url, snippet });
+        }
+      }
+    }
+    return results;
+  } catch (err) {
+    console.warn('[Search] DuckDuckGo Lite failed:', err instanceof Error ? err.message : 'Unknown');
+    return [];
   }
 }
 
@@ -168,32 +155,42 @@ export async function GET(req: Request) {
   }
 
   const trimmedQuery = query.trim();
-  
-  // Try all sources in parallel, pick the best results
-  const [googleResults, duckResults, instantResults] = await Promise.all([
-    searchGoogleThis(trimmedQuery),
-    searchDuckDuckGoHTML(trimmedQuery),
-    searchDuckDuckGoInstant(trimmedQuery),
-  ]);
 
-  // Merge results: prefer googlethis (best quality), fallback to DuckDuckGo
-  let bestResults: SearchResult[];
-  
-  if (googleResults.length > 0) {
-    console.log(`[Search] Using googlethis: ${googleResults.length} results`);
-    bestResults = googleResults;
-  } else if (duckResults.length > 0) {
-    console.log(`[Search] Using DuckDuckGo HTML: ${duckResults.length} results`);
-    bestResults = duckResults;
-  } else if (instantResults.length > 0) {
-    console.log(`[Search] Using DuckDuckGo Instant: ${instantResults.length} results`);
-    bestResults = instantResults;
-  } else {
-    console.warn(`[Search] All sources failed for: ${trimmedQuery.substring(0, 50)}`);
+  try {
+    // Try all sources in parallel with individual timeouts
+    const [ddgResults, instantResults, liteResults] = await Promise.all([
+      searchDuckDuckGoHTML(trimmedQuery),
+      searchDuckDuckGoInstant(trimmedQuery),
+      searchDuckDuckGoLite(trimmedQuery),
+    ]);
+
+    // Merge: prefer HTML (richest), fallback to Instant, then Lite
+    let bestResults: SearchResult[];
+
+    if (ddgResults.length >= 3) {
+      bestResults = ddgResults.slice(0, 8);
+    } else if (instantResults.length > 0) {
+      bestResults = instantResults;
+    } else if (liteResults.length > 0) {
+      bestResults = liteResults;
+    } else {
+      // Last resort: combine whatever we got
+      const combined = [...ddgResults, ...instantResults, ...liteResults];
+      if (combined.length > 0) {
+        bestResults = combined;
+      } else {
+        return NextResponse.json({
+          results: `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`
+        });
+      }
+    }
+
+    return NextResponse.json({ results: formatResults(bestResults) });
+  } catch (err) {
+    // Global catch — never crash
+    console.error('[Search] Unexpected error:', err);
     return NextResponse.json({
       results: `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`
     });
   }
-
-  return NextResponse.json({ results: formatResults(bestResults) });
 }

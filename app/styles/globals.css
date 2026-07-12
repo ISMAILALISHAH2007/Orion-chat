@@ -184,10 +184,6 @@ body {
   height: 100%;
 }
 
-.gemini-sidebar.collapsed {
-  width: 68px;
-}
-
 .gemini-sidebar-header {
   display: flex;
   align-items: center;
@@ -322,6 +318,15 @@ body {
   box-shadow: var(--shadow-lg);
   padding: 6px;
   z-index: 50;
+}
+
+@media (max-width: 640px) {
+  .gemini-model-dropdown {
+    left: 8px;
+    right: 8px;
+    transform: none;
+    width: auto;
+  }
 }
 
 .gemini-model-option {
@@ -700,33 +705,10 @@ body {
 }
 
 /* ==========================================================================
-   THINKING ANIMATION — Gemini-style pulse
+   THINKING ANIMATION — Gemini 2026 style (multi-color dots + gradient orb)
    ========================================================================== */
-.gemini-think-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
 
-.gemini-think-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: gemini-think-bounce 1.2s ease-in-out infinite;
-}
-
-.gemini-think-dot:nth-child(1) { animation-delay: -0.32s; }
-.gemini-think-dot:nth-child(2) { animation-delay: -0.16s; }
-.gemini-think-dot:nth-child(3) { animation-delay: 0s; }
-
-@keyframes gemini-think-bounce {
-  0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
-  40% { transform: scale(1.2); opacity: 1; }
-}
-
-/* Top thinking banner */
+/* Top thinking banner — pill with gradient orb + colored dots */
 .gemini-thinking-banner {
   position: fixed;
   top: 56px;
@@ -735,31 +717,133 @@ body {
   z-index: 50;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
-  padding: 8px 20px;
+  padding: 8px 18px;
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
   pointer-events: none;
 }
 
-.gemini-thinking-ring {
-  width: 10px;
-  height: 10px;
+@media (max-width: 640px) {
+  .gemini-thinking-banner {
+    top: 48px;
+    padding: 6px 14px;
+    gap: 8px;
+  }
+}
+
+/* Gemini gradient spinning orb — synced with dots animation */
+.gemini-thinking-orb {
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 12px var(--accent);
-  animation: think-orb-glow 1.2s ease-in-out infinite;
+  background: conic-gradient(
+    var(--gemini-blue),
+    var(--gemini-purple),
+    var(--gemini-pink),
+    var(--gemini-blue)
+  );
+  animation: gemini-orb-spin 1.4s linear infinite, gemini-orb-pulse 1.4s ease-in-out infinite;
+  position: relative;
+  flex-shrink: 0;
 }
 
-@keyframes think-orb-glow {
-  0%, 100% { opacity: 0.5; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.1); }
+.gemini-thinking-orb::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--surface);
 }
 
-/* Inline thinking dots */
+@keyframes gemini-orb-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes gemini-orb-pulse {
+  0%, 80%, 100% { opacity: 0.7; transform: scale(1); }
+  40% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Deep Think reasoning step animation — slower, more deliberate */
+.gemini-thinking-banner.deep-think {
+  padding: 10px 22px;
+  gap: 14px;
+  border-color: var(--gemini-purple);
+  box-shadow: 0 0 20px rgba(197, 138, 249, 0.15);
+}
+
+.gemini-thinking-banner.deep-think .gemini-thinking-orb {
+  animation-duration: 2.8s, 2.8s;
+}
+
+.gemini-thinking-banner.deep-think .gemini-think-dot {
+  animation-duration: 2.8s;
+}
+
+/* Reasoning phase label */
+.gemini-reasoning-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gemini-purple);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  animation: reasoning-fade 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes reasoning-fade {
+  0% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* Voice language separator in dropdown */
+.gemini-dropdown-separator {
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+  padding: 8px 12px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+/* Multi-color thinking dots — Blue, Purple, Pink like Gemini */
+.gemini-think-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gemini-think-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  animation: gemini-think-bounce 1.4s ease-in-out infinite;
+}
+
+.gemini-think-dot:nth-child(1) {
+  background: var(--gemini-blue);
+  animation-delay: -0.32s;
+}
+.gemini-think-dot:nth-child(2) {
+  background: var(--gemini-purple);
+  animation-delay: -0.16s;
+}
+.gemini-think-dot:nth-child(3) {
+  background: var(--gemini-pink);
+  animation-delay: 0s;
+}
+
+@keyframes gemini-think-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+  40% { transform: scale(1.2); opacity: 1; }
+}
+
+/* Inline thinking dots (within message area) */
 .gemini-inline-thinking {
   display: flex;
   align-items: center;
@@ -1149,6 +1233,383 @@ body {
 .fade-in-up { animation: fade-in-up 0.3s ease forwards; }
 
 /* ==========================================================================
+   REASONING PANEL — Expandable Deep Think section (Gemini 2026)
+   ========================================================================== */
+.gemini-reasoning-section {
+  margin-bottom: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(197, 138, 249, 0.2);
+  overflow: hidden;
+  animation: fade-in 0.3s ease forwards;
+}
+
+.gemini-reasoning-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  background: rgba(197, 138, 249, 0.06);
+  border: none;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.gemini-reasoning-toggle:hover {
+  background: rgba(197, 138, 249, 0.12);
+}
+
+.gemini-reasoning-content {
+  border-top: 1px solid rgba(197, 138, 249, 0.15);
+  animation: fade-in-down 0.25s ease forwards;
+}
+
+.gemini-reasoning-text {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+  font-style: italic;
+  background: rgba(197, 138, 249, 0.03);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.gemini-reasoning-text::before {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--gemini-purple);
+  margin-bottom: 8px;
+  opacity: 0.4;
+}
+
+/* ==========================================================================
+   FOOTER — Disclaimer
+   ========================================================================== */
+.gemini-footer {
+  text-align: center;
+  padding: 4px 16px 12px;
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+/* ==========================================================================
+   LIVE VOICE MIC ANIMATION
+   ========================================================================== */
+@keyframes live-mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(30, 142, 62, 0.5); }
+  50% { box-shadow: 0 0 0 12px rgba(30, 142, 62, 0); }
+}
+
+.gemini-mic-live {
+  background: #1e8e3e !important;
+  color: white !important;
+  animation: live-mic-pulse 1.5s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   VOICE CONVERSATION MODAL — Full-screen voice assistant UI
+   ========================================================================== */
+
+.voice-conv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background);
+  animation: fade-in 0.3s ease;
+}
+
+.voice-conv-bg {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 30%, rgba(138, 180, 248, 0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.voice-conv-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  width: 100%;
+  max-width: 600px;
+  padding: 24px;
+  height: 100%;
+}
+
+.voice-conv-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  z-index: 2;
+}
+
+.voice-conv-close:hover {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+
+/* Large animated orb */
+.voice-conv-orb {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.voice-conv-orb::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  opacity: 0.15;
+  animation: voice-orb-expand 2s ease-in-out infinite;
+}
+
+.voice-conv-orb.listening {
+  background: conic-gradient(var(--gemini-blue), var(--gemini-purple), var(--gemini-blue));
+  animation: voice-orb-spin 3s linear infinite;
+}
+
+.voice-conv-orb.listening::before {
+  background: var(--gemini-blue);
+}
+
+.voice-conv-orb.processing {
+  background: conic-gradient(var(--gemini-purple), var(--gemini-pink), var(--gemini-purple));
+  animation: voice-orb-spin 1.5s linear infinite;
+}
+
+.voice-conv-orb.processing::before {
+  background: var(--gemini-purple);
+}
+
+.voice-conv-orb.speaking {
+  background: conic-gradient(var(--gemini-green), var(--gemini-blue), var(--gemini-green));
+  animation: voice-orb-spin 2s linear infinite;
+}
+
+.voice-conv-orb.speaking::before {
+  background: var(--gemini-green);
+}
+
+.voice-conv-orb-inner {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--background);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes voice-orb-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes voice-orb-expand {
+  0%, 100% { transform: scale(1); opacity: 0.15; }
+  50% { transform: scale(1.3); opacity: 0.05; }
+}
+
+/* Sound wave bars */
+.voice-conv-waves {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+}
+
+.voice-wave {
+  width: 4px;
+  border-radius: 4px;
+  background: var(--accent);
+  animation: voice-wave-anim 1s ease-in-out infinite;
+}
+
+.voice-wave:nth-child(1) { height: 16px; animation-delay: 0s; }
+.voice-wave:nth-child(2) { height: 28px; animation-delay: 0.1s; }
+.voice-wave:nth-child(3) { height: 40px; animation-delay: 0.2s; }
+.voice-wave:nth-child(4) { height: 24px; animation-delay: 0.3s; }
+.voice-wave:nth-child(5) { height: 12px; animation-delay: 0.4s; }
+
+.voice-wave.speak {
+  background: var(--gemini-green);
+}
+
+@keyframes voice-wave-anim {
+  0%, 100% { transform: scaleY(0.5); opacity: 0.4; }
+  50% { transform: scaleY(1.2); opacity: 1; }
+}
+
+/* Status text */
+.voice-conv-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.voice-conv-status-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.3px;
+}
+
+/* Transcript area */
+.voice-conv-transcript-area {
+  width: 100%;
+  max-width: 480px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 16px 0;
+  scrollbar-width: none;
+}
+
+.voice-conv-transcript-area::-webkit-scrollbar { display: none; }
+
+.voice-conv-transcript-item {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  animation: fade-in-up 0.3s ease forwards;
+}
+
+.voice-conv-transcript-item.user { border-color: rgba(138, 180, 248, 0.2); }
+.voice-conv-transcript-item.user.sent { border-color: var(--accent); background: var(--accent-soft); }
+.voice-conv-transcript-item.ai { border-color: rgba(197, 138, 249, 0.25); }
+
+.voice-conv-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.voice-conv-text {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--foreground);
+  word-break: break-word;
+}
+
+.voice-conv-interim {
+  opacity: 0.4;
+}
+
+.voice-conv-turn-count {
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+/* Controls */
+.voice-conv-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.voice-conv-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--foreground);
+}
+
+.voice-conv-btn:hover {
+  background: var(--surface-2);
+}
+
+.voice-conv-btn.interrupt {
+  background: rgba(242, 139, 130, 0.12);
+  border-color: rgba(242, 139, 130, 0.3);
+  color: var(--danger);
+}
+
+.voice-conv-btn.interrupt:hover {
+  background: rgba(242, 139, 130, 0.2);
+}
+
+.voice-conv-btn.end {
+  background: var(--surface-2);
+}
+
+.voice-conv-btn.end:hover {
+  background: var(--surface-hover);
+}
+
+/* Active indicator on TopNav */
+.gemini-icon-btn.voice-conv-active {
+  background: rgba(30, 142, 62, 0.12);
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .voice-conv-orb {
+    width: 100px;
+    height: 100px;
+  }
+  .voice-conv-orb-inner {
+    width: 66px;
+    height: 66px;
+  }
+  .voice-conv-orb-inner svg { width: 24px; height: 24px; }
+  .voice-conv-content { padding: 16px; }
+  .voice-conv-transcript-item { padding: 10px 14px; }
+  .voice-conv-text { font-size: 14px; }
+}
+
+/* ==========================================================================
    MOBILE RESPONSIVE
    ========================================================================== */
 @media (max-width: 768px) {
@@ -1158,12 +1619,16 @@ body {
   
   .gemini-sidebar {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    bottom: 0;
     z-index: 50;
-    width: 100% !important;
+    width: 85vw !important;
+    max-width: 320px;
     border-radius: 0;
     transform: translateX(-100%);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+    box-shadow: var(--shadow-xl);
   }
   
   .gemini-sidebar.mobile-open {

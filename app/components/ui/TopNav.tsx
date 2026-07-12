@@ -43,9 +43,16 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
     setLiveVoiceMode,
     aiVoiceEnabled,
     setAiVoiceEnabled,
+    voiceConversationOpen,
+    setVoiceConversationOpen,
     isSpeaking,
     initAudioContext,
     stopSpeaking,
+    voices,
+    selectedVoiceUri,
+    setSelectedVoiceUri,
+    voiceGender,
+    setVoiceGender,
   } = useTTS();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -63,12 +70,15 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
   const current = MODELS.find((m) => m.id === mode) ?? MODELS[0];
 
   const handleAiVoiceToggle = () => {
-    initAudioContext();
-    if (aiVoiceEnabled) {
+    if (voiceConversationOpen) {
+      // This should be handled by the modal's End Session
       stopSpeaking();
+      setVoiceConversationOpen(false);
       setAiVoiceEnabled(false);
     } else {
+      initAudioContext();
       setAiVoiceEnabled(true);
+      setVoiceConversationOpen(true);
     }
   };
 
@@ -106,6 +116,7 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
         {/* Model Dropdown */}
         {open && (
           <div className="gemini-model-dropdown animate-scale-in">
+            {/* Models */}
             {MODELS.map((m) => {
               const active = m.id === mode;
               return (
@@ -130,6 +141,60 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
                 </button>
               );
             })}
+
+            {/* Voice Language Separator */}
+            <div className="gemini-dropdown-separator">Voice Language</div>
+            {voices.map((v) => {
+              const active = v.uri === selectedVoiceUri;
+              return (
+                <button
+                  key={v.uri}
+                  role="menuitemradio"
+                  aria-checked={active}
+                  onClick={() => {
+                    setSelectedVoiceUri(v.uri);
+                    setOpen(false);
+                  }}
+                  className={[
+                    'gemini-model-option',
+                    active ? 'active' : '',
+                  ].join(' ')}
+                >
+                  <div className="flex-1">
+                    <div className="gemini-model-option-name">{v.name}</div>
+                    <div className="gemini-model-option-desc">{v.lang}</div>
+                  </div>
+                  {active && <Check size={16} className="mt-0.5 shrink-0 text-accent" />}
+                </button>
+              );
+            })}
+
+            {/* Voice Gender Separator */}
+            <div className="gemini-dropdown-separator">Voice Gender</div>
+            {(['female', 'male'] as const).map((g) => {
+              const active = g === voiceGender;
+              return (
+                <button
+                  key={g}
+                  role="menuitemradio"
+                  aria-checked={active}
+                  onClick={() => {
+                    setVoiceGender(g);
+                    setOpen(false);
+                  }}
+                  className={[
+                    'gemini-model-option',
+                    active ? 'active' : '',
+                  ].join(' ')}
+                >
+                  <div className="flex-1">
+                    <div className="gemini-model-option-name">{g === 'female' ? 'Female' : 'Male'}</div>
+                    <div className="gemini-model-option-desc">{g === 'female' ? 'Natural feminine voice' : 'Natural masculine voice'}</div>
+                  </div>
+                  {active && <Check size={16} className="mt-0.5 shrink-0 text-accent" />}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>
@@ -139,21 +204,26 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
         {/* AI Voice Toggle */}
         <button
           onClick={handleAiVoiceToggle}
-          title={aiVoiceEnabled ? 'AI Voice is ON' : 'AI Voice is OFF'}
+          title={voiceConversationOpen ? 'Voice conversation active' : 'Start voice conversation'}
           className={[
             'gemini-icon-btn relative',
-            aiVoiceEnabled ? 'text-accent' : '',
+            voiceConversationOpen ? 'text-accent voice-conv-active' : '',
           ].join(' ')}
         >
-          {aiVoiceEnabled && isSpeaking ? (
+          {voiceConversationOpen && isSpeaking ? (
             <div className="flex items-center gap-[1.5px]">
               <span className="sound-bar h-2.5 w-[2px] rounded-full bg-accent" />
               <span className="sound-bar h-3.5 w-[2px] rounded-full bg-accent" style={{ animationDelay: '0.15s' }} />
               <span className="sound-bar h-2 w-[2px] rounded-full bg-accent" style={{ animationDelay: '0.3s' }} />
               <span className="sound-bar h-3 w-[2px] rounded-full bg-accent" style={{ animationDelay: '0.1s' }} />
             </div>
+          ) : voiceConversationOpen ? (
+            <div className="relative">
+              <Volume2 size={16} />
+              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-green-500 animate-ping" />
+            </div>
           ) : (
-            aiVoiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />
+            <Volume2 size={16} />
           )}
         </button>
 

@@ -436,6 +436,11 @@ When the SYSTEM MAPS RESULTS message arrives, you MUST follow these rules EXACTL
         '\n\n[DESIGN EXPERT MODE] You are a senior product designer. Respond with clear UI/UX concepts: short rationale, component breakdowns, layout notes, and concise lists. Use prose and tables — no code blocks unless asked.';
     }
 
+    if (mode === 'research') {
+      systemPrompt +=
+        '\n\n[DEEP THINK MODE] You are in deep reasoning mode. Think step-by-step. Before giving your final answer, output your internal reasoning process wrapped in [REASONING]...[/REASONING] tags. For example:\n\n[REASONING]First, I need to analyze the question carefully. The user is asking about...\n\nSecond, I consider the key factors...\n\nThird, drawing from my knowledge...[/REASONING]\n\nThen provide your final, well-structured answer after the closing tag. The reasoning tags help users understand your thought process. Make the reasoning thorough (3-6 sentences) and the final answer actionable.';
+    }
+
     if (memories.length > 0) {
       systemPrompt += `\n\nRelevant operator history/memories:\n${memories
         .map((m) => `- ${m}`)

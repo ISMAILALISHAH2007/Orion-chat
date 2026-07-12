@@ -24,9 +24,11 @@ import {
   FileSpreadsheet,
   FileArchive,
   File as FileIcon,
+  Globe,
 } from 'lucide-react';
 import { useChat, type ChatAttachment } from '@/app/components/providers/ChatProvider';
 import CameraModal from './CameraModal';
+import VoiceConversationModal from './VoiceConversationModal';
 import { useMode } from '@/app/components/providers/ThemeProvider';
 import { useVoice } from '@/app/components/hooks/useVoice';
 import { useTTS } from '@/app/components/providers/TTSProvider';
@@ -77,6 +79,7 @@ export default function ChatInterface() {
   const [showCamera, setShowCamera] = useState(false);
   const [isImageMode, setIsImageMode] = useState(false);
   const [isVideoMode, setIsVideoMode] = useState(false);
+  const [isSearchMode, setIsSearchMode] = useState(false);
   const [micActive, setMicActive] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [isMobile] = useState(() => {
@@ -85,7 +88,7 @@ export default function ChatInterface() {
   });
   const { messages, sendMessage, isStreaming, stop } = useChat();
   const { mode } = useMode();
-  const { liveVoiceMode, setLiveVoiceMode, speak, aiVoiceEnabled, initAudioContext } = useTTS();
+  const { liveVoiceMode, setLiveVoiceMode, speak, aiVoiceEnabled, initAudioContext, voiceConversationOpen, setVoiceConversationOpen } = useTTS();
   const { isRecording, startRecording, stopRecording, transcript, voiceError, setVoiceError, setContinuousMode } = useVoice({
     language: 'en',
     onSpeechEnd: (finalText) => {
@@ -118,6 +121,7 @@ export default function ChatInterface() {
   let placeholder = MODE_PLACEHOLDERS[mode as keyof typeof MODE_PLACEHOLDERS] ?? MODE_PLACEHOLDERS.casual;
   if (isImageMode) placeholder = "Describe the image you want to create...";
   if (isVideoMode) placeholder = "Describe the AI video you want to generate...";
+  if (isSearchMode) placeholder = "Ask anything to search the web...";
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -140,10 +144,19 @@ export default function ChatInterface() {
     prevStreamingRef.current = isStreaming;
   }, [isStreaming]);
 
+  // === LATEST AI RESPONSE FOR VOICE CONVERSATION MODE ===
+  const lastAiMsg = messages.filter(m => m.sender === 'ai' && !m.isHidden).slice(-1)[0];
+  const latestAiResponse = lastAiMsg?.text || '';
+
   // === AI VOICE SPEAKING + WEB SEARCH HANDLER ===
   const lastSpokenMessageRef = useRef('');
 
   useEffect(() => {
+    // Suppress normal auto-speaking when voice conversation is active (modal handles it)
+    if (voiceConversationOpen) {
+      prevStreamingRef.current = isStreaming;
+      return;
+    }
     if (prevStreamingRef.current && !isStreaming) {
       const lastMessage = messages[messages.length - 1];
       if (lastMessage && lastMessage.sender === 'ai' && !lastMessage.isHidden) {
@@ -181,7 +194,7 @@ export default function ChatInterface() {
       }
     }
     prevStreamingRef.current = isStreaming;
-  }, [isStreaming, messages, sendMessage, aiVoiceEnabled, speak, initAudioContext]);
+  }, [isStreaming, messages, sendMessage, aiVoiceEnabled, speak, initAudioContext, voiceConversationOpen]);
 
   // Live Voice mode
   useEffect(() => {
@@ -225,14 +238,17 @@ export default function ChatInterface() {
   const handleSend = () => {
     if ((!input.trim() && attachments.length === 0) || isStreaming) return;
     let finalInput = input;
-    if (isImageMode && !finalInput.startsWith('/img')) finalInput = `/img ${finalInput.trim()}`;
-    else if (isVideoMode && !finalInput.startsWith('/video')) finalInput = `/video ${finalInput.trim()}`;
+    if (isImageMode && !finalInput.startsWith('/img')) {
+      finalInput = `/img ${finalInput.trim()}`;
+    } else if (isVideoMode && !finalInput.startsWith('/video')) {
+      finalInput = `/video ${finalInput.trim()}`;
+    }
     const hasNonImageFiles = attachments.some(a => !a.mimeType.startsWith('image/'));
     if (hasNonImageFiles && !finalInput.trim()) finalInput = 'Please analyze the attached file(s).';
     setIsThinking(true);
     searchAttemptsRef.current = 0;
     sendMessage(finalInput, attachments);
-    setInput(''); setAttachments([]); setIsImageMode(false); setIsVideoMode(false);
+    setInput(''); setAttachments([]); setIsImageMode(false); setIsVideoMode(false); setIsSearchMode(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -330,6 +346,16 @@ export default function ChatInterface() {
   const handleCameraCapture = (dataUri: string) => { setAttachments(prev => [...prev, { url: dataUri, mimeType: 'image/jpeg', name: `camera-${Date.now()}.jpg` }]); setShowCamera(false); };
   const removeAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
 
+  const handleVoiceConvSend = useCallback((text: string) => {
+    setIsThinking(true);
+    searchAttemptsRef.current = 0;
+    sendMessage(text, undefined, { isHidden: false });
+  }, [sendMessage]);
+
+  const handleEndVoiceConv = useCallback(() => {
+    setVoiceConversationOpen(false);
+  }, [setVoiceConversationOpen]);
+
   const lastMessage = messages[messages.length - 1];
   const showInlineThinking = isStreaming && (!lastMessage || lastMessage.sender === 'user');
   const showThinkingIndicator = isThinking || showInlineThinking;
@@ -338,10 +364,17 @@ export default function ChatInterface() {
     <div className="gemini-chat-container" onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop}>
       {showCamera && <CameraModal onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />}
 
-      {/* === GEMINI-STYLE THINKING BANNER === */}
+      {/* === GEMINI 2026 THINKING BANNER (gradient orb + multi-color dots) === */}
       {showThinkingIndicator && (
-        <div className="gemini-thinking-banner animate-fade-in-down">
-          <div className="gemini-thinking-ring" />
+        <div className={[
+          'gemini-thinking-banner animate-fade-in-down',
+          mode === 'research' ? 'deep-think' : '',
+        ].join(' ')}>
+          {/* Gemini gradient spinning orb */}
+          <div className="gemini-thinking-orb" />
+          {/* Deep Think: show reasoning label */}
+          {mode === 'research' && <span className="gemini-reasoning-label">Reasoning</span>}
+          {/* Multi-color bouncing dots */}
           <div className="gemini-think-indicator">
             <span className="gemini-think-dot" />
             <span className="gemini-think-dot" />
@@ -471,16 +504,27 @@ export default function ChatInterface() {
             <div className="gemini-input-actions">
               <input type="file" ref={fileInputRef} onChange={handleFileChange} accept={ACCEPTED_FILE_TYPES} multiple className="hidden" />
               <button type="button" onClick={() => fileInputRef.current?.click()} className="gemini-icon-btn" title="Attach files"><Paperclip size={16} /></button>
-              <button type="button" onClick={() => { setIsImageMode(!isImageMode); setIsVideoMode(false); }} className={['gemini-icon-btn', isImageMode ? 'active' : ''].join(' ')} title="Image"><Wand2 size={16} /></button>
-              <button type="button" onClick={() => { setIsVideoMode(!isVideoMode); setIsImageMode(false); }} className={['gemini-icon-btn', isVideoMode ? 'active' : ''].join(' ')} title="Video"><Video size={16} /></button>
+              <button type="button" onClick={() => { setIsSearchMode(!isSearchMode); setIsImageMode(false); setIsVideoMode(false); }} className={['gemini-icon-btn', isSearchMode ? 'active text-accent' : ''].join(' ')} title="Web Search"><Globe size={16} /></button>
+              <button type="button" onClick={() => { setIsImageMode(!isImageMode); setIsVideoMode(false); setIsSearchMode(false); }} className={['gemini-icon-btn', isImageMode ? 'active' : ''].join(' ')} title="Image"><Wand2 size={16} /></button>
+              <button type="button" onClick={() => { setIsVideoMode(!isVideoMode); setIsImageMode(false); setIsSearchMode(false); }} className={['gemini-icon-btn', isVideoMode ? 'active' : ''].join(' ')} title="Video"><Video size={16} /></button>
               {isMobile && <button type="button" onClick={() => setShowCamera(true)} className="gemini-icon-btn" title="Camera"><Camera size={16} /></button>}
-              <button type="button" onClick={handleMicClick} className={['gemini-icon-btn', micActive ? 'danger' : ''].join(' ')} title={micActive ? 'Stop recording' : 'Voice input'}>{micActive ? <MicOff size={16} /> : <Mic size={16} />}</button>
-              <div className="flex-1" />
-              <span className="text-[10px] text-muted/60 pr-1 select-none">ULTRON can make mistakes</span>
+              <button type="button" onClick={handleMicClick} className={['gemini-icon-btn', micActive ? 'danger' : '', liveVoiceMode ? 'gemini-mic-live' : ''].join(' ')} title={micActive ? 'Stop recording' : 'Voice input'}>{micActive ? <MicOff size={16} /> : <Mic size={16} />}</button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* === FOOTER — Gemini-style disclaimer === */}
+      <div className="gemini-footer">ULTRON can make mistakes. Verify important information.</div>
+
+      {/* === VOICE CONVERSATION MODAL (full-screen) === */}
+      <VoiceConversationModal
+        isOpen={voiceConversationOpen}
+        onEndSession={handleEndVoiceConv}
+        sendMessage={handleVoiceConvSend}
+        isStreaming={isStreaming}
+        latestAiResponse={latestAiResponse}
+      />
 
       {/* Voice Error Modal */}
       {voiceError && (
