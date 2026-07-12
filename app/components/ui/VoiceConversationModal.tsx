@@ -11,6 +11,7 @@ interface VoiceConversationModalProps {
   sendMessage: (text: string) => void;
   isStreaming: boolean;
   latestAiResponse: string;
+  voiceGender?: 'male' | 'female';
 }
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -55,6 +56,7 @@ function VoiceConversationModalInner({
   sendMessage,
   isStreaming,
   latestAiResponse,
+  voiceGender = 'female',
 }: VoiceConversationModalProps) {
   const [convState, setConvState] = useState<ConvState>('listening');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -103,7 +105,7 @@ function VoiceConversationModalInner({
               speechConfig: {
                 voiceConfig: {
                   prebuiltVoiceConfig: {
-                    voiceName: "Aoede" // Female voice
+                    voiceName: voiceGender === 'male' ? "Puck" : "Aoede" // Puck = Male, Aoede = Female
                   }
                 }
               }

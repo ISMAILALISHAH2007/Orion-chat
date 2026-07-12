@@ -89,7 +89,7 @@ export default function ChatInterface() {
   });
   const { messages, sendMessage, isStreaming, stop } = useChat();
   const { mode } = useMode();
-  const { liveVoiceMode, setLiveVoiceMode, speak, aiVoiceEnabled, initAudioContext, voiceConversationOpen, setVoiceConversationOpen } = useTTS();
+  const { liveVoiceMode, setLiveVoiceMode, speak, aiVoiceEnabled, initAudioContext, voiceConversationOpen, setVoiceConversationOpen, voiceGender } = useTTS();
   const { isRecording, startRecording, stopRecording, transcript, voiceError, setVoiceError, setContinuousMode } = useVoice({
     language: 'en',
     onSpeechEnd: (finalText) => {
@@ -528,6 +528,7 @@ export default function ChatInterface() {
         sendMessage={handleVoiceConvSend}
         isStreaming={isStreaming}
         latestAiResponse={latestAiResponse}
+        voiceGender={voiceGender}
       />
 
       {/* Voice Error Modal */}
