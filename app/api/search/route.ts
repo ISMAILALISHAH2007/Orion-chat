@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-
+import * as cheerio from 'cheerio';
 /**
  * Free AI Web Search — Resilient multi-source fallback
  * Uses DuckDuckGo (primary) + fallback sources.
@@ -28,50 +28,26 @@ function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
     .finally(() => clearTimeout(timeout));
 }
 
-// === SOURCE 1: DuckDuckGo HTML (most reliable, no API key) ===
-async function searchDuckDuckGoHTML(query: string): Promise<SearchResult[]> {
-  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+// === SOURCE 1: Wikipedia API ===
+async function searchWikipedia(query: string): Promise<SearchResult[]> {
+  const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json&origin=*`;
   try {
-    const res = await fetchWithTimeout(url, 6000);
+    const res = await fetchWithTimeout(url, 4000);
     if (!res.ok) return [];
-    const html = await res.text();
+    const data = await res.json();
     const results: SearchResult[] = [];
-
-    // DuckDuckGo HTML results — parse <a class="result__a"> with fallback patterns
-    const resultBlocks = html.split('<article class="result ');
-    for (let i = 1; i < resultBlocks.length && i <= 8; i++) {
-      const block = resultBlocks[i];
-      if (!block) continue;
-
-      // Title
-      const titleMatch = block.match(/class="result__a"[^>]*>([\s\S]*?)<\/a>/);
-      // URL  
-      const urlMatch = block.match(/class="result__a"[^>]*href="([^"]+)"/);
-      // Snippet
-      const snippetMatch = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
-      // Alternative snippet
-      const altSnippet = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/span>/);
-
-      if (titleMatch && urlMatch) {
-        const title = titleMatch[1].replace(/<[^>]*>/g, '').trim();
-        let resultUrl = urlMatch[1];
-        if (!resultUrl.startsWith('http')) {
-          resultUrl = `https://duckduckgo.com${resultUrl}`;
-        }
-        const snippet = snippetMatch
-          ? snippetMatch[1].replace(/<[^>]*>/g, '').trim()
-          : altSnippet
-            ? altSnippet[1].replace(/<[^>]*>/g, '').trim()
-            : '';
-        if (title && resultUrl) {
-          results.push({ title, url: resultUrl, snippet });
-        }
+    if (data.query && data.query.search) {
+      for (const item of data.query.search.slice(0, 3)) {
+        results.push({
+          title: item.title + ' - Wikipedia',
+          url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, '_'))}`,
+          snippet: item.snippet.replace(/<[^>]*>/g, '').trim()
+        });
       }
     }
-
     return results;
   } catch (err) {
-    console.warn('[Search] DuckDuckGo HTML failed:', err instanceof Error ? err.message : 'Unknown');
+    console.warn('[Search] Wikipedia failed:', err instanceof Error ? err.message : 'Unknown');
     return [];
   }
 }
@@ -112,17 +88,16 @@ async function searchDuckDuckGoInstant(query: string): Promise<SearchResult[]> {
   }
 }
 
-// === SOURCE 3: DuckDuckGo Lite API (lightweight fallback) ===
-async function searchDuckDuckGoLite(query: string): Promise<SearchResult[]> {
-  const url = `https://lite.duckduckgo.com/lite/`;
+// === SOURCE 3: DuckDuckGo HTML API (POST method) ===
+async function searchDuckDuckGoHTML(query: string): Promise<SearchResult[]> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(url, {
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch('https://html.duckduckgo.com/html/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
       body: new URLSearchParams({ q: query }),
       signal: controller.signal
@@ -130,53 +105,114 @@ async function searchDuckDuckGoLite(query: string): Promise<SearchResult[]> {
     
     if (!res.ok) return [];
     const html = await res.text();
+    const $ = cheerio.load(html);
     const results: SearchResult[] = [];
 
-    // Parse DDG Lite results using order-independent regex
-    const linkMatches = [...html.matchAll(/<a[^>]*href=['"]([^'"]+)['"][^>]*class=['"]result-link['"][^>]*>([\s\S]*?)<\/a>|<a[^>]*class=['"]result-link['"][^>]*href=['"]([^'"]+)['"][^>]*>([\s\S]*?)<\/a>/gi)];
-    const snippetMatches = [...html.matchAll(/<td class=['"]result-snippet['"]>([\s\S]*?)<\/td>/gi)];
-
-    for (let i = 0; i < Math.min(linkMatches.length, 8); i++) {
-      const url = linkMatches[i][1] || linkMatches[i][3];
-      const title = (linkMatches[i][2] || linkMatches[i][4]).replace(/<[^>]*>/g, '').trim();
-      const snippet = snippetMatches[i] ? snippetMatches[i][1].replace(/<[^>]*>/g, '').trim() : '';
-      if (title && url) {
+    $('.result').each((i, el) => {
+      const title = $(el).find('.result__title a').text().trim();
+      const url = $(el).find('.result__url').attr('href')?.trim();
+      const snippet = $(el).find('.result__snippet').text().trim();
+      if (title && url && results.length < 8) {
         results.push({ title, url, snippet });
       }
-    }
+    });
     return results;
   } catch (err) {
-    console.warn('[Search] DuckDuckGo Lite failed:', err instanceof Error ? err.message : 'Unknown');
+    console.warn('[Search] DuckDuckGo HTML failed:', err instanceof Error ? err.message : 'Unknown');
     return [];
   }
 }
 
+// === SOURCE 4: Yahoo Search API (Ultimate Fallback) ===
+async function searchYahoo(query: string): Promise<SearchResult[]> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(`https://search.yahoo.com/search?p=${encodeURIComponent(query)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeout));
+    
+    if (!res.ok) return [];
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const results: SearchResult[] = [];
+
+    $('.compTitle').each((i, el) => {
+      const title = $(el).find('h3.title a').text().trim();
+      const url = $(el).find('h3.title a').attr('href')?.trim();
+      let snippet = $(el).next().find('.compText').text().trim();
+      if (!snippet) snippet = $(el).parent().find('.compText').text().trim();
+      
+      if (title && url && results.length < 8) {
+        results.push({ title, url, snippet });
+      }
+    });
+    return results;
+  } catch (err) {
+    console.warn('[Search] Yahoo Search failed:', err instanceof Error ? err.message : 'Unknown');
+    return [];
+  }
+}
+
+/**
+ * Perform a web search with multi-source fallback for high reliability.
+ */
 export async function performSearch(query: string): Promise<string> {
   if (!query || query.trim().length === 0) {
     return 'Please provide a search query.';
   }
 
   const trimmedQuery = query.trim();
-
+  console.log(`[Search] Initiating multi-source search for: "${trimmedQuery}"`);
+  
   try {
-    // Only use DDG Lite because HTML and Instant are heavily rate-limited and block requests, causing 8s delays
-    const liteResults = await searchDuckDuckGoLite(trimmedQuery);
-
-    if (liteResults.length > 0) {
-      return formatResults(liteResults);
-    } else {
-      return `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`;
+    // 1. Wikipedia (Factual/instant)
+    const wikiResults = await searchWikipedia(trimmedQuery);
+    if (wikiResults.length > 0) {
+      console.log(`[Search] Wikipedia found ${wikiResults.length} results.`);
+      return formatResults(wikiResults);
     }
+
+    // 2. DuckDuckGo Instant Answer
+    const instantResults = await searchDuckDuckGoInstant(trimmedQuery);
+    if (instantResults.length > 0) {
+      console.log(`[Search] DuckDuckGo Instant found ${instantResults.length} results.`);
+      return formatResults(instantResults);
+    }
+
+    // 3. DuckDuckGo HTML (POST)
+    const htmlResults = await searchDuckDuckGoHTML(trimmedQuery);
+    if (htmlResults.length > 0) {
+      console.log(`[Search] DuckDuckGo HTML found ${htmlResults.length} results.`);
+      return formatResults(htmlResults);
+    }
+
+    // 4. Yahoo Search (Ultimate Fallback)
+    const yahooResults = await searchYahoo(trimmedQuery);
+    if (yahooResults.length > 0) {
+      console.log(`[Search] Yahoo Search found ${yahooResults.length} results.`);
+      return formatResults(yahooResults);
+    }
+
+    return `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`;
   } catch (err) {
-    // Global catch — never crash
     console.error('[Search] Unexpected error:', err);
     return `I couldn't find current web results for "${trimmedQuery}". Please try a different search query or ask me from my existing knowledge.`;
   }
 }
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const query = searchParams.get('q');
-  const results = await performSearch(query || '');
-  return NextResponse.json({ results });
+export async function POST(req: Request) {
+  try {
+    const { query } = await req.json();
+    if (!query) return NextResponse.json({ error: 'Query is required' }, { status: 400 });
+
+    const results = await performSearch(query);
+    return NextResponse.json({ results });
+  } catch (err) {
+    console.error('[Search Route] Error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
