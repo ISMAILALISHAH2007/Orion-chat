@@ -57,6 +57,10 @@ export async function GET(req: Request) {
     });
 
     if (!statusRes.ok) {
+      if (statusRes.status >= 400 && statusRes.status < 500) {
+        return NextResponse.json({ error: `Job not found or invalid (${statusRes.status})` }, { status: 500 });
+      }
+      // Only retry on 5xx server errors
       return NextResponse.json({ status: 'processing' }, { status: 200 });
     }
 
