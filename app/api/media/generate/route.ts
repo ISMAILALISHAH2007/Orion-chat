@@ -131,6 +131,44 @@ export async function GET(req: Request) {
   }
 }
 
+async function generateHuggingFaceImage(prompt: string, userId?: string): Promise<string> {
+  const hfToken = process.env.HUGGINGFACE_API_KEY || '';
+  if (!hfToken) throw new Error('HUGGINGFACE_API_KEY missing');
+  
+  console.log(`[Media API] Starting Hugging Face image generation: "${prompt}"`);
+  
+  // Truncate to prevent token limits
+  const truncatedPrompt = prompt.length > 800 ? prompt.substring(0, 800) : prompt;
+  
+  const res = await fetch("https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${hfToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ inputs: truncatedPrompt })
+  });
+
+  if (!res.ok) {
+     const error = await res.text();
+     throw new Error(`Hugging Face API Error: ${error}`);
+  }
+
+  const arrayBuffer = await res.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const base64 = buffer.toString('base64');
+  const imageUrl = `data:image/jpeg;base64,${base64}`;
+
+  if (userId) {
+    await prisma.image.create({
+      data: { userId, prompt: truncatedPrompt, imageUrl },
+      select: { id: true }
+    });
+  }
+
+  return imageUrl;
+}
+
 async function generateImage(userId: string | undefined, prompt: string): Promise<string> {
   console.log(`[Media API] Using unlimited Pollinations.ai for image: "${prompt}"`);
   
@@ -138,18 +176,22 @@ async function generateImage(userId: string | undefined, prompt: string): Promis
   const truncatedPrompt = prompt.length > 600 ? prompt.substring(0, 600) : prompt;
   const encodedPrompt = encodeURIComponent(truncatedPrompt);
   const seed = Math.floor(Math.random() * 1000000);
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?nologo=true&seed=${seed}`;
+  const targetUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?nologo=true&seed=${seed}`;
   
-  // We don't fetch the arrayBuffer here anymore to prevent Vercel backend timeouts.
-  // The browser will load the image directly.
+  console.log(`[Media API] Fetching image from Pollinations server-side to bypass mobile blockers...`);
+  const response = await fetch(targetUrl);
+  if (!response.ok) throw new Error(`Pollinations AI failed: ${response.status}`);
+  
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const base64 = buffer.toString('base64');
+  const imageUrl = `data:image/jpeg;base64,${base64}`;
 
-  let recordId = '';
   if (userId) {
-    const record = await prisma.image.create({
-      data: { userId, prompt, imageUrl: imageUrl },
+    await prisma.image.create({
+      data: { userId, prompt: truncatedPrompt, imageUrl },
       select: { id: true }
     });
-    recordId = record.id;
   }
   return imageUrl; 
 }
@@ -233,8 +275,17 @@ export async function POST(req: Request) {
         return NextResponse.json({ jobId }, { status: 200 });
       }
     } else if (type === 'image') {
-      const finalUrl = await generateImage(userId, prompt);
-      
+      let finalUrl = '';
+      if (process.env.HUGGINGFACE_API_KEY) {
+        try {
+          finalUrl = await generateHuggingFaceImage(prompt, userId);
+        } catch (e: any) {
+          console.error("[Media API] Hugging Face Image failed, falling back to Pollinations:", e.message);
+          finalUrl = await generateImage(userId, prompt);
+        }
+      } else {
+        finalUrl = await generateImage(userId, prompt);
+      }
       if (sessionId !== 'current') {
         const searchTag = `[GENERATING_IMAGE: ${prompt}]`;
         const replacementTag = `[IMAGE: ${finalUrl}]`;
