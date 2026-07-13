@@ -480,7 +480,7 @@ export default function ChatInterface() {
                   e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
                 }}
                 onKeyDown={handleKeyDown} disabled={isStreaming} className="gemini-textarea" />
-              <div className="flex items-end pb-0.5 gap-1 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
                 <button type="button" onClick={handleMicClick} className={['gemini-icon-btn', micActive ? 'text-red-500 bg-red-500/10' : '', liveVoiceMode ? 'gemini-mic-live' : ''].join(' ')} title={micActive ? 'Stop recording' : 'Voice input'}>
                   {micActive ? (
                     <div className="flex items-center justify-center gap-[3px] h-full">

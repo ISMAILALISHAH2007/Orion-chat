@@ -110,6 +110,54 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
     }
   }, [displayText, isStreaming, sender, sessionId]);
 
+  const handleDownloadImage = async (urlToDownload?: string) => {
+    const targetUrl = typeof urlToDownload === 'string' ? urlToDownload : fullScreenImage;
+    if (!targetUrl) return;
+    try {
+      // Use proxy to avoid CORS when loading image into canvas
+      const response = await fetch(`/api/download?url=${encodeURIComponent(targetUrl)}`);
+      const blob = await response.blob();
+      
+      const img = new window.Image();
+      const objectUrl = URL.createObjectURL(blob);
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        ctx.drawImage(img, 0, 0);
+        
+        // Add "⚡ ULTRON AI" watermark
+        const fontSize = Math.max(20, Math.floor(img.width * 0.03));
+        ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        ctx.textAlign = 'right';
+        ctx.fillText('⚡ ULTRON AI', img.width - 20, img.height - 24);
+        
+        canvas.toBlob((watermarkedBlob) => {
+          if (!watermarkedBlob) return;
+          const downloadUrl = URL.createObjectURL(watermarkedBlob);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = 'ultron-generation.jpg';
+          a.click();
+          URL.revokeObjectURL(downloadUrl);
+          URL.revokeObjectURL(objectUrl);
+        }, 'image/jpeg', 0.95);
+      };
+      img.src = objectUrl;
+    } catch (e) {
+      console.error('Failed to download image:', e);
+      window.open(targetUrl, '_blank');
+    }
+  };
+
   // Wire up copy + preview buttons in code blocks
   useEffect(() => {
     const root = contentRef.current;
@@ -154,8 +202,26 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
       cleanups.push(() => img.removeEventListener('click', onClick));
     });
 
+    const downloadBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('.watermark-download-btn'));
+    downloadBtns.forEach((btn) => {
+      const onClick = (e: Event) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const url = btn.getAttribute('data-url');
+        if (url) {
+          const originalHtml = btn.innerHTML;
+          btn.innerHTML = '<span class="animate-pulse">...</span>';
+          handleDownloadImage(url).finally(() => {
+             btn.innerHTML = originalHtml;
+          });
+        }
+      };
+      btn.addEventListener('click', onClick);
+      cleanups.push(() => btn.removeEventListener('click', onClick));
+    });
+
     return () => cleanups.forEach((c) => c());
-  }, [displayText]);
+  }, [displayText, fullScreenImage]);
 
   const handleReadAloud = () => {
     initAudioContext();
@@ -181,53 +247,6 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
       </div>
     );
   }
-
-  const handleDownloadImage = async () => {
-    if (!fullScreenImage) return;
-    try {
-      // Use proxy to avoid CORS when loading image into canvas
-      const response = await fetch(`/api/download?url=${encodeURIComponent(fullScreenImage)}`);
-      const blob = await response.blob();
-      
-      const img = new window.Image();
-      const objectUrl = URL.createObjectURL(blob);
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        
-        ctx.drawImage(img, 0, 0);
-        
-        // Add "⚡ ULTRON AI" watermark
-        const fontSize = Math.max(20, Math.floor(img.width * 0.03));
-        ctx.font = `bold ${fontSize}px Arial, sans-serif`;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-        ctx.shadowBlur = 6;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        ctx.textAlign = 'right';
-        ctx.fillText('⚡ ULTRON AI', img.width - 20, img.height - 24);
-        
-        canvas.toBlob((watermarkedBlob) => {
-          if (!watermarkedBlob) return;
-          const downloadUrl = URL.createObjectURL(watermarkedBlob);
-          const a = document.createElement('a');
-          a.href = downloadUrl;
-          a.download = 'ultron-generation.jpg';
-          a.click();
-          URL.revokeObjectURL(downloadUrl);
-          URL.revokeObjectURL(objectUrl);
-        }, 'image/jpeg', 0.95);
-      };
-      img.src = objectUrl;
-    } catch (e) {
-      console.error('Failed to download image:', e);
-      window.open(fullScreenImage, '_blank');
-    }
-  };
 
   return (
     <div className="gemini-msg-ai">

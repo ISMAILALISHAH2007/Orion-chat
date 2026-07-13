@@ -134,7 +134,9 @@ export async function GET(req: Request) {
 async function generateImage(userId: string | undefined, prompt: string): Promise<string> {
   console.log(`[Media API] Using unlimited Pollinations.ai for image: "${prompt}"`);
   
-  const encodedPrompt = encodeURIComponent(prompt);
+  // Truncate prompt to prevent 414 URI Too Long errors from Pollinations or Cloudflare
+  const truncatedPrompt = prompt.length > 600 ? prompt.substring(0, 600) : prompt;
+  const encodedPrompt = encodeURIComponent(truncatedPrompt);
   const seed = Math.floor(Math.random() * 1000000);
   const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?nologo=true&seed=${seed}`;
   

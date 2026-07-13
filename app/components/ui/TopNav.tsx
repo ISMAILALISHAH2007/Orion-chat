@@ -83,15 +83,17 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
   return (
     <header className="gemini-topnav relative flex items-center justify-between px-4">
       {/* Left: mobile menu */}
-      <div className="flex items-center w-24">
+      <div className="flex items-center w-24 md:hidden">
         <button
           onClick={onOpenSidebar}
           aria-label="Open sidebar"
-          className="md:hidden gemini-icon-btn"
+          className="gemini-icon-btn"
         >
           <Menu size={18} />
         </button>
       </div>
+      {/* Spacer for desktop to maintain center balance */}
+      <div className="hidden md:block w-24"></div>
 
       {/* Center: model selector */}
       <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center z-10" ref={menuRef}>
