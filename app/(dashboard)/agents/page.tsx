@@ -104,17 +104,17 @@ export default function AgentsPage() {
           ) : (
             <div className="space-y-3">
               {agents.map((agent) => (
-                <div key={agent.id} className="gemini-card" style={{ borderLeft: '3px solid var(--accent)' }}>
-                  <div className="flex items-start justify-between gap-3">
+                <div key={agent.id} className="gemini-card p-6" style={{ borderLeft: '4px solid var(--accent)' }}>
+                  <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-foreground">{agent.name}</h3>
-                      {agent.description && <p className="text-xs text-muted mt-0.5">{agent.description}</p>}
+                      <h3 className="text-lg font-bold text-foreground">{agent.name}</h3>
+                      {agent.description && <p className="text-sm text-muted mt-1">{agent.description}</p>}
                     </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent shrink-0">
+                    <span className="text-xs font-semibold px-3 py-1 rounded-full bg-accent/10 text-accent shrink-0">
                       {agent.model.split('/').pop()}
                     </span>
                   </div>
-                  <div className="mt-2 text-xs text-muted bg-surface-2 rounded-lg p-2 max-h-16 overflow-y-auto font-mono">
+                  <div className="mt-4 text-sm text-muted bg-surface-2 rounded-xl p-4 max-h-32 overflow-y-auto font-mono leading-relaxed">
                     {agent.systemPrompt}
                   </div>
                 </div>

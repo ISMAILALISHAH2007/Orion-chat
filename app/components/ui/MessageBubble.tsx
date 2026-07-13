@@ -83,7 +83,7 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
       fetch('/api/media/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, type, sessionId })
+        body: JSON.stringify({ prompt, type, sessionId: sessionId || 'current' })
       })
         .then(res => res.json())
         .then(data => {

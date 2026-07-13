@@ -80,15 +80,15 @@ export default function NotesPage() {
               No memories saved yet. Add a note on the left.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 gap-4">
               {memories.map((mem) => (
-                <div key={mem.id} className="gemini-card relative group" style={{ borderLeft: '3px solid var(--gemini-purple)' }}>
-                  <p className="text-sm leading-relaxed pr-8">{mem.content}</p>
-                  <div className="flex items-center justify-between mt-3">
-                    <span className="text-[10px] text-muted">{new Date(mem.createdAt).toLocaleDateString()}</span>
+                <div key={mem.id} className="gemini-card p-6 relative group" style={{ borderLeft: '4px solid var(--gemini-purple)' }}>
+                  <p className="text-lg leading-relaxed pr-8">{mem.content}</p>
+                  <div className="flex items-center justify-between mt-4">
+                    <span className="text-xs font-semibold text-muted">{new Date(mem.createdAt).toLocaleDateString()}</span>
                     <button onClick={() => deleteMemory(mem.id)}
-                      className="gemini-icon-btn w-7 h-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 size={13} className="text-danger" />
+                      className="gemini-icon-btn w-9 h-9 opacity-0 group-hover:opacity-100 transition-opacity bg-danger/10 hover:bg-danger text-danger hover:text-white">
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>

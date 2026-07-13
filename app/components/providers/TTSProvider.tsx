@@ -271,33 +271,41 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       });
       if (!res.ok) throw new Error('Server TTS failed');
       
-      const audioBlob = await res.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
+      const arrayBuffer = await res.arrayBuffer();
       
-      audio.onplay = () => setIsSpeaking(true);
+      // Use Web Audio API instead of HTML5 Audio to bypass iOS/Safari autoplay blocks
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const context = new AudioCtx();
+      if (context.state === 'suspended') {
+        await context.resume();
+      }
+
+      const audioBuffer = await context.decodeAudioData(arrayBuffer);
+      const source = context.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(context.destination);
       
+      setIsSpeaking(true);
+
       const cleanup = () => {
         setIsSpeaking(false);
-        try { URL.revokeObjectURL(audioUrl); } catch (_) {}
-        if (audioRef.current === audio) {
-          audioRef.current = null;
-        }
       };
 
-      audio.onended = () => {
+      source.onended = () => {
         cleanup();
         onDone?.();
       };
       
-      audio.onerror = () => {
-        cleanup();
-        console.warn('Audio playback error, falling back to local SpeechSynthesis');
-        speakLocalFallback(text, lang, onDone);
-      };
-      
-      await audio.play();
+      // Attach to audioRef for stopping if needed
+      // (We mock HTMLAudioElement's pause method for the stopSpeaking function)
+      audioRef.current = {
+        pause: () => {
+          try { source.stop(); } catch (e) {}
+        },
+        src: ''
+      } as any;
+
+      source.start(0);
     } catch (err) {
       console.warn('Server TTS failed, calling local fallback:', err);
       speakLocalFallback(text, lang, onDone);

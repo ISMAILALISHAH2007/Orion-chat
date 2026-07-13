@@ -271,9 +271,9 @@ export default function ChatInterface() {
 
   // --- File processing with ZIP extraction ---
   const processFile = async (file: File): Promise<ChatAttachment | null> => {
-    const maxSize = 10 * 1024 * 1024;
+    const maxSize = 1500 * 1024 * 1024; // 1.5GB limit
     if (file.size > maxSize) {
-      setNotice(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max is 10MB.`);
+      setNotice(`File too large (${(file.size / 1024 / 1024 / 1024).toFixed(2)}GB). Max is 1.5GB.`);
       window.setTimeout(() => setNotice(null), 4000);
       return null;
     }
@@ -300,6 +300,10 @@ export default function ChatInterface() {
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
     if (ext === 'zip') {
       try {
+        if (file.size > 50 * 1024 * 1024) {
+          // For massive zip files (up to 1.5GB), skip JSZip extraction to prevent browser RAM crash
+          return { url: `data:text/plain;charset=utf-8,${encodeURIComponent(`📦 Large Archive Attached: ${file.name} (${(file.size/1024/1024).toFixed(1)} MB). Note: Due to size, contents are referenced but not fully extracted to text.`)}`, mimeType: 'text/plain', name: file.name };
+        }
         const arrayBuffer = await file.arrayBuffer();
         const zip = await JSZip.loadAsync(arrayBuffer);
         const extractedContents: string[] = []; let fileCount = 0;
@@ -320,7 +324,7 @@ export default function ChatInterface() {
       }
     }
     if (/^(rar|7z|tar|gz)$/i.test(ext)) {
-      return { url: `data:text/plain;charset=utf-8,${encodeURIComponent(`📦 Archive: ${file.name} (${(file.size/1024).toFixed(1)} KB) — cannot extract in-browser.`)}`, mimeType: 'text/plain', name: file.name };
+      return { url: `data:text/plain;charset=utf-8,${encodeURIComponent(`📦 Archive: ${file.name} (${(file.size/1024/1024).toFixed(1)} MB) — cannot extract in-browser.`)}`, mimeType: 'text/plain', name: file.name };
     }
     const reader = new FileReader();
     const content = await new Promise<string>(resolve => {
@@ -476,10 +480,14 @@ export default function ChatInterface() {
                   e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
                 }}
                 onKeyDown={handleKeyDown} disabled={isStreaming} className="gemini-textarea" />
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-end pb-0.5 gap-1 shrink-0">
                 <button type="button" onClick={handleMicClick} className={['gemini-icon-btn', micActive ? 'text-red-500 bg-red-500/10' : '', liveVoiceMode ? 'gemini-mic-live' : ''].join(' ')} title={micActive ? 'Stop recording' : 'Voice input'}>
                   {micActive ? (
-                    <div className="flex items-center gap-1"><Mic size={16} /><span className="text-[10px] font-bold animate-pulse text-red-500">(\)</span></div>
+                    <div className="flex items-center justify-center gap-[3px] h-full">
+                      <span className="w-[3px] h-[10px] bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0ms', animationDuration: '0.8s' }} />
+                      <span className="w-[3px] h-[16px] bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '150ms', animationDuration: '0.8s' }} />
+                      <span className="w-[3px] h-[12px] bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '300ms', animationDuration: '0.8s' }} />
+                    </div>
                   ) : <Mic size={16} />}
                 </button>
                 {isStreaming ? (

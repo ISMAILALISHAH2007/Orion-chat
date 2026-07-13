@@ -81,21 +81,20 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
   };
 
   return (
-    <header className="gemini-topnav">
+    <header className="gemini-topnav relative flex items-center justify-between px-4">
       {/* Left: mobile menu */}
-      <button
-        onClick={onOpenSidebar}
-        aria-label="Open sidebar"
-        className="md:hidden gemini-icon-btn"
-      >
-        <Menu size={18} />
-      </button>
-
-      {/* Spacer for mobile */}
-      <div className="md:hidden w-9" />
+      <div className="flex items-center w-24">
+        <button
+          onClick={onOpenSidebar}
+          aria-label="Open sidebar"
+          className="md:hidden gemini-icon-btn"
+        >
+          <Menu size={18} />
+        </button>
+      </div>
 
       {/* Center: model selector */}
-      <div className="relative flex items-center justify-center" ref={menuRef}>
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center z-10" ref={menuRef}>
         <button
           onClick={() => setOpen((o) => !o)}
           className="gemini-model-btn"
@@ -141,7 +140,7 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
       </div>
 
       {/* Right: Live Voice (real-time voice conversation) + Theme Toggle */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center justify-end w-24 gap-1">
         {/* Live Voice Button */}
         <button
           onClick={() => {
