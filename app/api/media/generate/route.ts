@@ -138,12 +138,8 @@ async function generateImage(userId: string | undefined, prompt: string): Promis
   const seed = Math.floor(Math.random() * 1000000);
   const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?nologo=true&seed=${seed}`;
   
-  const imageRes = await fetch(imageUrl);
-  if (!imageRes.ok) throw new Error('Failed to fetch image from Pollinations');
-  
-  const arrayBuffer = await imageRes.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  const base64 = buffer.toString('base64');
+  // We don't fetch the arrayBuffer here anymore to prevent Vercel backend timeouts.
+  // The browser will load the image directly.
 
   let recordId = '';
   if (userId) {
@@ -154,6 +150,42 @@ async function generateImage(userId: string | undefined, prompt: string): Promis
     recordId = record.id;
   }
   return imageUrl; 
+}
+
+async function generateHuggingFaceVideo(prompt: string, userId?: string): Promise<string> {
+  const hfToken = process.env.HUGGINGFACE_API_KEY || '';
+  if (!hfToken) throw new Error('HUGGINGFACE_API_KEY missing');
+  
+  console.log(`[Media API] Starting Hugging Face video generation: "${prompt}"`);
+  
+  // Use a reliable text-to-video model on HF
+  const res = await fetch("https://api-inference.huggingface.co/models/damo-vilab/text-to-video-ms-1.7b", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${hfToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ inputs: prompt })
+  });
+
+  if (!res.ok) {
+     const error = await res.text();
+     throw new Error(`Hugging Face API Error: ${error}`);
+  }
+
+  const arrayBuffer = await res.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const base64 = buffer.toString('base64');
+  const videoUrl = `data:video/mp4;base64,${base64}`;
+
+  if (userId) {
+    await prisma.video.create({
+      data: { userId, prompt, videoUrl: base64 },
+      select: { id: true }
+    });
+  }
+
+  return videoUrl;
 }
 
 export async function POST(req: Request) {
@@ -167,8 +199,37 @@ export async function POST(req: Request) {
     }
     
     if (type === 'video') {
-      const jobId = await startVideoJob(prompt);
-      return NextResponse.json({ jobId }, { status: 200 });
+      if (process.env.HUGGINGFACE_API_KEY) {
+        try {
+          const finalUrl = await generateHuggingFaceVideo(prompt, userId);
+          
+          if (sessionId !== 'current') {
+            const searchTag = `[GENERATING_VIDEO: ${prompt}]`;
+            const replacementTag = `[VIDEO: ${finalUrl}]`;
+
+            const msg = await prisma.message.findFirst({
+              where: { chatSessionId: sessionId, role: 'assistant', content: { contains: searchTag } },
+              orderBy: { createdAt: 'desc' }
+            });
+
+            if (msg) {
+              await prisma.message.update({
+                where: { id: msg.id },
+                data: { content: msg.content.replace(searchTag, replacementTag) }
+              });
+            }
+          }
+
+          return NextResponse.json({ url: finalUrl }, { status: 200 });
+        } catch (e: any) {
+          console.error("[Media API] Hugging Face failed, falling back to Magic Hour:", e.message);
+          const jobId = await startVideoJob(prompt);
+          return NextResponse.json({ jobId }, { status: 200 });
+        }
+      } else {
+        const jobId = await startVideoJob(prompt);
+        return NextResponse.json({ jobId }, { status: 200 });
+      }
     } else if (type === 'image') {
       const finalUrl = await generateImage(userId, prompt);
       

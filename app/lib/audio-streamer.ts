@@ -107,6 +107,11 @@ export class AudioStreamer {
 
       this.workletNode.port.onmessage = (e: MessageEvent) => {
         if (!this.isRecording) return;
+        
+        // ANTI-ECHO MUTE: If AI is currently speaking, completely drop mic packets.
+        // This guarantees the AI won't hear its own echo from the device speaker and cut itself off.
+        if (this.isPlaying) return;
+
         const arrayBuffer = e.data as ArrayBuffer;
         if (this.onAudioData) {
           const base64 = arrayBufferToBase64(arrayBuffer);

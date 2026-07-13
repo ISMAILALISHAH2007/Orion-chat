@@ -35,6 +35,7 @@ import { useVoice } from '@/app/components/hooks/useVoice';
 import { useTTS } from '@/app/components/providers/TTSProvider';
 import MessageBubble from './MessageBubble';
 import JSZip from 'jszip';
+import { IMAGE_INTENT_REGEX } from '@/app/lib/validation';
 
 const SUGGESTIONS = [
   { icon: PenLine, title: 'Help me write', prompt: 'Help me write a professional email to reschedule a meeting.' },
@@ -139,8 +140,9 @@ export default function ChatInterface() {
           setInput('');
           setTimeout(() => { sendMessage(finalText); }, 50);
         } else {
-          setInput((prev) => (prev ? prev + ' ' + finalText : finalText));
+          setInput('');
           setMicActive(false);
+          setTimeout(() => { sendMessage(finalText); }, 50);
         }
       }
     }
@@ -216,9 +218,8 @@ export default function ChatInterface() {
   const filteredCommands = SLASH_COMMANDS.filter(c => slashQuery ? c.cmd.startsWith(slashQuery) : true);
   const effectiveSlashOpen = slashOpen && input.startsWith('/') && filteredCommands.length > 0;
 
-  // Image intent notice
   const noticeText = (() => {
-    const imageIntent = mode === 'developer' && /(draw|generate|render|create).*(image|picture|illustration|photo|logo|icon)/i.test(input);
+    const imageIntent = IMAGE_INTENT_REGEX.test(input);
     if (imageIntent && input.trim()) return 'Image intent detected — routing to image generation.';
     if (input.startsWith('/img ')) return 'Slash command /img — generating image.';
     return null;
@@ -467,9 +468,20 @@ export default function ChatInterface() {
             {/* Input row */}
             <div className="gemini-input-row">
               <textarea ref={textareaRef} value={input} rows={1} placeholder={placeholder}
-                onChange={e => { const v = e.target.value; setInput(v); if (v.startsWith('/')) { if (!slashOpen) setSlashIndex(0); setSlashOpen(true); } else if (slashOpen) setSlashOpen(false); }}
+                onChange={e => { 
+                  const v = e.target.value; 
+                  setInput(v); 
+                  if (v.startsWith('/')) { if (!slashOpen) setSlashIndex(0); setSlashOpen(true); } else if (slashOpen) setSlashOpen(false); 
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+                }}
                 onKeyDown={handleKeyDown} disabled={isStreaming} className="gemini-textarea" />
               <div className="flex items-center gap-1 shrink-0">
+                <button type="button" onClick={handleMicClick} className={['gemini-icon-btn', micActive ? 'text-red-500 bg-red-500/10' : '', liveVoiceMode ? 'gemini-mic-live' : ''].join(' ')} title={micActive ? 'Stop recording' : 'Voice input'}>
+                  {micActive ? (
+                    <div className="flex items-center gap-1"><Mic size={16} /><span className="text-[10px] font-bold animate-pulse text-red-500">(\)</span></div>
+                  ) : <Mic size={16} />}
+                </button>
                 {isStreaming ? (
                   <button type="button" onClick={stop} className="gemini-stop-btn" title="Stop"><div className="h-3 w-3 rounded-[2px] bg-current" /></button>
                 ) : (
@@ -484,9 +496,7 @@ export default function ChatInterface() {
               <button type="button" onClick={() => fileInputRef.current?.click()} className="gemini-icon-btn" title="Attach files"><Paperclip size={16} /></button>
               <button type="button" onClick={() => { setIsSearchMode(!isSearchMode); setIsImageMode(false); setIsVideoMode(false); }} className={['gemini-icon-btn', isSearchMode ? 'active text-accent' : ''].join(' ')} title="Web Search"><Globe size={16} /></button>
               <button type="button" onClick={() => { setIsImageMode(!isImageMode); setIsVideoMode(false); setIsSearchMode(false); }} className={['gemini-icon-btn', isImageMode ? 'active' : ''].join(' ')} title="Image"><Wand2 size={16} /></button>
-              <button type="button" onClick={() => { setIsVideoMode(!isVideoMode); setIsImageMode(false); setIsSearchMode(false); }} className={['gemini-icon-btn', isVideoMode ? 'active' : ''].join(' ')} title="Video"><Video size={16} /></button>
               {isMobile && <button type="button" onClick={() => setShowCamera(true)} className="gemini-icon-btn" title="Camera"><Camera size={16} /></button>}
-              <button type="button" onClick={handleMicClick} className={['gemini-icon-btn', micActive ? 'danger' : '', liveVoiceMode ? 'gemini-mic-live' : ''].join(' ')} title={micActive ? 'Stop recording' : 'Voice input'}>{micActive ? <MicOff size={16} /> : <Mic size={16} />}</button>
             </div>
           </div>
         </div>

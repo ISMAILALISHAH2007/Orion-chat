@@ -284,6 +284,8 @@ body {
   padding: 0 8px;
   border-bottom: 1px solid var(--border);
   background: var(--background);
+  position: relative;
+  z-index: 40;
 }
 
 .gemini-model-btn {

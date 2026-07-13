@@ -179,14 +179,38 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       
       abortControllerRef.current = new AbortController();
 
+      const processAttachments = (msgText: string, atts: ChatAttachment[]) => {
+        let finalString = msgText || 'Attached file';
+        const finalImages: any[] = [];
+        
+        atts.forEach(att => {
+          if (att.mimeType.startsWith('image/')) {
+            finalImages.push({ type: 'image', image: att.url });
+          } else if (att.mimeType === 'text/plain' && att.url.startsWith('data:text/plain;')) {
+            try {
+              const textData = att.url.split(',').slice(1).join(',');
+              const decoded = decodeURIComponent(textData);
+              finalString += '\n\n' + decoded;
+            } catch (e) {
+              console.error('Failed to decode text attachment', e);
+            }
+          }
+        });
+
+        if (finalImages.length > 0) {
+          return [
+            { type: 'text', text: finalString },
+            ...finalImages
+          ];
+        }
+        return finalString;
+      };
+
       const payloadMessages = messages.map((m) => {
         if (m.sender === 'user' && m.attachments && m.attachments.length > 0) {
           return {
             role: 'user',
-            content: [
-              { type: 'text', text: m.text || 'Attached file' },
-              ...m.attachments.map(att => ({ type: 'image', image: att.url }))
-            ]
+            content: processAttachments(m.text, m.attachments)
           };
         }
         return {
@@ -198,10 +222,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (attachments && attachments.length > 0) {
         payloadMessages.push({
           role: 'user',
-          content: [
-            { type: 'text', text: text || 'Attached file' },
-            ...attachments.map(att => ({ type: 'image', image: att.url }))
-          ]
+          content: processAttachments(text, attachments)
         });
       } else {
         payloadMessages.push({ role: 'user', content: text });

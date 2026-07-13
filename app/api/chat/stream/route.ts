@@ -193,7 +193,9 @@ export async function POST(req: Request) {
     if (slash?.command !== 'code' && slash?.command !== 'design') {
         if (VIDEO_INTENT_REGEX.test(userContent)) {
             videoIntent = userContent.replace(/^\s*\/video\s*/i, '').trim() || userContent;
-        } else if (IMAGE_INTENT_REGEX.test(userContent)) {
+        } else if (!hasImages && IMAGE_INTENT_REGEX.test(userContent)) {
+            // We only auto-trigger image intent if NO images are attached.
+            // If images are attached, we want the Vision Model to process them for customization.
             imageIntent = userContent.replace(/^\s*\/img\s*/i, '').trim() || userContent;
         }
     }
@@ -246,6 +248,11 @@ IMPORTANT LANGUAGE RULES:
       systemPrompt += `
 - Since VOICE MODE IS ACTIVE: you are talking directly with the user via voice. Respond in a short, conversational, and direct manner (avoid long paragraphs, lists, or markdown formatting).
 - SCRIPTING CRITICAL RULE: When replying in Urdu, you MUST respond exclusively in Urdu script (Arabic script characters, e.g. "میں بالکل ٹھیک ہوں، آپ سنائیں کیا چل رہا ہے؟") so that the text-to-speech engine speaks it with the correct native pronunciation. When replying in Hindi, respond exclusively in Hindi script (Devanagari script characters, e.g. "मैं बिल्कुल ठीक हूँ, आप सुनाएँ क्या चल रहा है?"). Never write Romanized Urdu/Hindi in voice mode.`;
+    }
+
+    if (hasImages) {
+      systemPrompt += `
+- [IMAGE CUSTOMIZATION / VISION CAPABILITY]: The user has attached one or more images. If the user asks you to "edit", "customize", or "recreate" the attached image, you must output a highly detailed description of the newly desired image, wrapped in a special tag: [GENERATING_IMAGE: your detailed description here]. This will trigger our image generation engine to create the new image based on your description.`;
     }
 
     systemPrompt += `
@@ -307,6 +314,25 @@ CRITICAL INSTRUCTION:
             }
           } catch (e) {
             console.error('Failed to generate title', e);
+          }
+        }
+
+        // --- Memory Self-Training (Web Search) ---
+        if (userId && searchResults && searchResults !== 'Search unavailable.' && searchResults.length > 50) {
+          try {
+            const memoryExtraction = await generateText({
+              model: getDefaultModelForMode('casual'),
+              system: 'You are a data extractor. Extract 1 core factual statement from the search results that answers the user\'s prompt. Output ONLY the fact (max 1 sentence). If nothing is worth remembering, output exactly: NONE',
+              prompt: `User asked: ${userContent}\n\nSearch Results:\n${searchResults}\n\nAI Answered:\n${text}`
+            });
+            const fact = memoryExtraction.text.trim();
+            if (fact && fact !== 'NONE') {
+               await prisma.memory.create({
+                 data: { userId, content: `Learned from Web Search: ${fact}` }
+               });
+            }
+          } catch(e) {
+            console.error('Failed to extract memory', e);
           }
         }
       },

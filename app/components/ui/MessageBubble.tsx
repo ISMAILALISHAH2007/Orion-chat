@@ -90,10 +90,10 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
           if (data.jobId) {
             pollJob(data.jobId);
           } else if (data.url) {
-            const newTag = `[IMAGE: ${data.url}]`;
+            const newTag = type === 'video' ? `[VIDEO: ${data.url}]` : `[IMAGE: ${data.url}]`;
             setLocalTextOverride(displayText.replace(tagToReplace, newTag));
             if (Notification.permission === 'granted') {
-              new Notification("Ultron", { body: `Your image is ready!` });
+              new Notification("Ultron", { body: `Your ${type} is ready!` });
             }
             try {
               const audio = new Audio('/sounds/notify.mp3');
@@ -182,6 +182,53 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
     );
   }
 
+  const handleDownloadImage = async () => {
+    if (!fullScreenImage) return;
+    try {
+      // Use proxy to avoid CORS when loading image into canvas
+      const response = await fetch(`/api/download?url=${encodeURIComponent(fullScreenImage)}`);
+      const blob = await response.blob();
+      
+      const img = new window.Image();
+      const objectUrl = URL.createObjectURL(blob);
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        ctx.drawImage(img, 0, 0);
+        
+        // Add "⚡ ULTRON AI" watermark
+        const fontSize = Math.max(20, Math.floor(img.width * 0.03));
+        ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+        ctx.shadowBlur = 6;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        ctx.textAlign = 'right';
+        ctx.fillText('⚡ ULTRON AI', img.width - 20, img.height - 24);
+        
+        canvas.toBlob((watermarkedBlob) => {
+          if (!watermarkedBlob) return;
+          const downloadUrl = URL.createObjectURL(watermarkedBlob);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = 'ultron-generation.jpg';
+          a.click();
+          URL.revokeObjectURL(downloadUrl);
+          URL.revokeObjectURL(objectUrl);
+        }, 'image/jpeg', 0.95);
+      };
+      img.src = objectUrl;
+    } catch (e) {
+      console.error('Failed to download image:', e);
+      window.open(fullScreenImage, '_blank');
+    }
+  };
+
   return (
     <div className="gemini-msg-ai">
       <span className="gemini-msg-avatar">
@@ -240,10 +287,10 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
           <button className="absolute top-4 sm:top-8 right-4 sm:right-8 text-white hover:text-accent bg-black/50 p-2 sm:p-3 rounded-full transition" onClick={() => setFullScreenImage(null)}>
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
-          <a href={fullScreenImage} download="generated-image.jpg" target="_blank" onClick={(e) => e.stopPropagation()} className="absolute bottom-6 sm:bottom-10 right-6 sm:right-10 bg-accent text-black font-bold px-6 py-3 rounded-full hover:bg-accent/90 hover:scale-105 active:scale-95 transition shadow-[0_0_20px_rgba(var(--accent),0.3)] flex items-center gap-2">
+          <button onClick={(e) => { e.stopPropagation(); handleDownloadImage(); }} className="absolute bottom-6 sm:bottom-10 right-6 sm:right-10 bg-accent text-black font-bold px-6 py-3 rounded-full hover:bg-accent/90 hover:scale-105 active:scale-95 transition shadow-[0_0_20px_rgba(var(--accent),0.3)] flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             Download
-          </a>
+          </button>
         </div>
       )}
     </div>

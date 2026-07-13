@@ -50,7 +50,7 @@ export default function NotesPage() {
         <p className="subpage-description">Save information ULTRON can reference across conversations</p>
       </div>
 
-      <div className="gemini-grid" style={{ gridTemplateColumns: '380px 1fr', maxWidth: '1000px' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 max-w-5xl">
         {/* Save form */}
         <div className="gemini-card">
           <h2 className="gemini-card-title">Save a note</h2>

@@ -54,7 +54,7 @@ export default function AgentsPage() {
         <p className="subpage-description">Create and manage custom AI agents</p>
       </div>
 
-      <div className="gemini-grid" style={{ gridTemplateColumns: '400px 1fr', maxWidth: '1000px' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6 max-w-5xl">
         {/* Create form */}
         <div className="gemini-card">
           <h2 className="gemini-card-title">New Gem</h2>

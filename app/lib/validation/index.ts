@@ -19,9 +19,9 @@ export const slashCommandSchema = z.object({
   prompt: z.string(),
 });
 
-/** Detect image-generation intent in plain English (used in Developer mode). */
+/** Detect image-generation intent in plain English. */
 export const IMAGE_INTENT_REGEX =
-  /^\s*(\/img\b)|(\b(draw|generate|render|create|make)\b.{0,40}\b(image|picture|illustration|photo|logo|icon|artwork|wallpaper|avatar)\b)/i;
+  /^\s*(\/img\b)|(\b(draw|generate|render|create|make|build)\b.{0,60}\b(image|picture|illustration|photo|logo|icon|artwork|wallpaper|avatar|img|pic|art)\b)/i;
 
 /** Detect video-generation intent. */
 export const VIDEO_INTENT_REGEX =

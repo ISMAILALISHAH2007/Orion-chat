@@ -25,7 +25,7 @@ export default function CameraModal({ onCapture, onClose }: CameraModalProps) {
 
     try {
       const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: mode }
+        video: { facingMode: mode, width: { ideal: 4096 }, height: { ideal: 2160 } }
       });
       streamRef.current = newStream;
       if (videoRef.current) {
