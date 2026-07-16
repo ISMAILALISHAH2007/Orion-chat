@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   try {
     const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`, {
       headers: {
-        'User-Agent': 'ULTRON-AI/1.0',
+        'User-Agent': 'ORION-AI/1.0',
         'Accept-Language': 'en-US,en;q=0.9',
       },
       next: { revalidate: 3600 }

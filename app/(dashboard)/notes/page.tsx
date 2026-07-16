@@ -47,7 +47,7 @@ export default function NotesPage() {
     <div className="dashboard-subpage">
       <div className="subpage-header">
         <h1 className="subpage-title">Notes & Memory</h1>
-        <p className="subpage-description">Save information ULTRON can reference across conversations</p>
+        <p className="subpage-description">Save information ORION can reference across conversations</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 max-w-5xl">

@@ -171,7 +171,7 @@ export async function checkPollinationsHealth(timeoutMs = 5000): Promise<boolean
   try {
     const res = await fetch('https://image.pollinations.ai/models', {
       signal: controller.signal,
-      headers: { 'User-Agent': 'ULTRON/1.0' },
+      headers: { 'User-Agent': 'ORION/1.0' },
     });
     return res.ok;
   } catch {

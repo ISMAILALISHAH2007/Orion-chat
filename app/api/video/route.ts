@@ -19,7 +19,7 @@ export async function GET(req: Request) {
     headers.set('Cache-Control', 'public, max-age=31536000, immutable');
     
     if (download) {
-      headers.set('Content-Disposition', `attachment; filename="ultron-video-${id}.mp4"`);
+      headers.set('Content-Disposition', `attachment; filename="orion-video-${id}.mp4"`);
     }
 
     return new NextResponse(buffer, { headers });

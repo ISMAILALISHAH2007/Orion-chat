@@ -12,7 +12,7 @@ export function escapeScriptTags(code: string): string {
 
 export function generatePreviewHtml(code: string, lang: string): string {
   const language = lang.toLowerCase();
-  const title = `ULTRON Code Preview — ${language}`;
+  const title = `ORION Code Preview — ${language}`;
 
   if (['html', 'jsx', 'tsx'].includes(language)) {
     return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title><style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif}*{box-sizing:border-box}</style></head><body>${code}</body></html>`;
@@ -25,7 +25,7 @@ export function generatePreviewHtml(code: string, lang: string): string {
   }
 
   if (['css', 'svg'].includes(language)) {
-    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title><style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}.preview-box{background:#fff;border-radius:16px;padding:40px;max-width:800px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}${decoded}</style></head><body><div class="preview-box"><div style="text-align:center;color:#64748b;font-size:14px">CSS Preview</div><div style="margin-top:20px;padding:20px;border:2px dashed #e2e8f0;border-radius:12px;text-align:center;color:#334155"><h1 style="margin:0 0 8px">Hello, ULTRON!</h1><p>Your CSS styles applied above</p><button style="padding:10px 24px;border:none;border-radius:8px;font-weight:600;cursor:pointer;background:#4f46e5;color:#fff">Styled Button</button></div></div></body></html>`;
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title><style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}.preview-box{background:#fff;border-radius:16px;padding:40px;max-width:800px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}${decoded}</style></head><body><div class="preview-box"><div style="text-align:center;color:#64748b;font-size:14px">CSS Preview</div><div style="margin-top:20px;padding:20px;border:2px dashed #e2e8f0;border-radius:12px;text-align:center;color:#334155"><h1 style="margin:0 0 8px">Hello, ORION!</h1><p>Your CSS styles applied above</p><button style="padding:10px 24px;border:none;border-radius:8px;font-weight:600;cursor:pointer;background:#4f46e5;color:#fff">Styled Button</button></div></div></body></html>`;;
   }
 
   // Fallback: show formatted code (TypeScript, TSX, or other)

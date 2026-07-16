@@ -25,7 +25,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Initialize from localStorage so SSR + first client paint match.
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === 'undefined') return 'dark';
-    const saved = localStorage.getItem('ultron-theme') as Theme | null;
+    const saved = localStorage.getItem('orion-theme') as Theme | null;
     return saved === 'light' || saved === 'dark' ? saved : 'dark';
   });
 
@@ -34,7 +34,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
     root.classList.toggle('dark', theme === 'dark');
     try {
-      localStorage.setItem('ultron-theme', theme);
+      localStorage.setItem('orion-theme', theme);
     } catch {}
   }, [theme]);
 

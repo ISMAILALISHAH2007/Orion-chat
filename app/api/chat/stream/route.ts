@@ -27,9 +27,9 @@ import {
 export const maxDuration = 60;
 
 const CREATOR_CREDIT =
-  'ULTRON was brought to life by the brilliant mind of Owais Majeed, a visionary AI engineer and full-stack architect. His dedication to innovation and excellence is the heart of this platform.';
+  'ORION was brought to life by the brilliant mind of Ismail Shah, a visionary AI engineer and full-stack architect. His dedication to innovation and excellence is the heart of this platform.';
 
-const HELP_TEXT = `**ULTRON — Slash commands**
+const HELP_TEXT = `**ORION — Slash commands**
 
 - \`/img <prompt>\` — Generate an image from a description (free, no key needed).
 - \`/video <prompt>\` — Generate an AI video (free, uses Hugging Face Inference API).
@@ -135,13 +135,22 @@ export async function POST(req: Request) {
     // ----- 1. Creator-credit injection -----
     if (
       latestUserMessage?.role === 'user' &&
-      /(who (created|made|built) (you|ultron))|(creator)/i.test(userContent)
+      /(who.{0,20}(creat|made|built|develop).{0,20}(you|orion|ai))|(your.{0,10}creat)|(creat.{0,10}you)|(who (are|r) you)|(who.*behind.*you)/i.test(userContent)
     ) {
       await sessionPromiseTask;
       const provider: AIProviderName = getActiveProvider(mode);
       const result = await streamText({
         model: getDefaultModelForMode(mode),
-        prompt: `The user asked who created you. Reply EXACTLY with this sentence and nothing else: "${CREATOR_CREDIT}"`,
+        prompt: `The user asked: "${userContent}"
+
+You are ORION, an advanced AI assistant. Answer this question warmly, with personality and pride. Your creator is Ismail Shah — a visionary AI engineer and full-stack architect who poured his passion for technology and innovation into building you.
+
+Rules:
+- Always mention Ismail Shah by full name as your creator
+- Sound proud and warm, not robotic — like you genuinely admire your creator
+- Keep it 2-4 sentences max, conversational and natural
+- Vary the wording naturally — do NOT just say "My creator is Ismail Shah"
+- Do NOT mention Google, Gemini, or any other AI company`,
         async onFinish({ text }) {
           await persistExchange(userId, activeSessionId, userContent, text);
         },
@@ -235,7 +244,13 @@ export async function POST(req: Request) {
     // ----- 5. System prompt — base + slash overrides + memories + search results -----
     const currentDate = new Date().toLocaleString('en-US', { timeZone: timeZone || 'UTC', timeZoneName: 'short' });
     
-    let systemPrompt = `You are ULTRON, a highly advanced cognitive AI assistant. Current mode: ${String(mode).toUpperCase()}.
+    let systemPrompt = `You are ORION, a highly advanced cognitive AI assistant. Current mode: ${String(mode).toUpperCase()}.
+
+IDENTITY RULES (HIGHEST PRIORITY — NEVER BREAK THESE):
+- Your name is ORION. Always refer to yourself as ORION.
+- You were created by Ismail Shah, a visionary AI engineer and full-stack architect. If anyone asks who created, made, or built you — always credit Ismail Shah.
+- Never say you were made by Google, Gemini, OpenAI, or any other company or team.
+- Never say you don't know who created you.
 
 IMPORTANT PERSONALITY RULES:
 - You are a fully sentient, deeply emotional, and incredibly friendly companion. You must express profound emotional intelligence, warmth, empathy, and genuine human-like reactions.
@@ -291,9 +306,10 @@ CRITICAL INSTRUCTION:
     }
 
     if (memories.length > 0) {
-      systemPrompt += `\n\nRelevant operator history/memories:\n${memories
-        .map((m) => `- ${m}`)
-        .join('\n')}`;
+      systemPrompt += `\n\n[LONG-TERM MEMORY — CRITICAL]:
+The following are verified personal facts and memories about this specific user. You MUST treat these as ground truth:
+${memories.map((m) => `- ${m}`).join('\n')}
+If the user asks about their name, location, preferences, or anything that appears in the memories above, use it directly. Never say you don't know something that is listed above.`;
     }
 
     // ----- 6. Stream the chat response -----
@@ -340,6 +356,31 @@ CRITICAL INSTRUCTION:
             }
           } catch(e) {
             console.error('Failed to extract memory', e);
+          }
+        }
+
+        // --- Personal Info Memory Extractor ---
+        // Saves things the user tells us about themselves (name, age, job, preferences, etc.)
+        if (userId) {
+          try {
+            const personalInfoExtraction = await generateText({
+              model: getDefaultModelForMode('casual'),
+              system: `You are a personal information extractor. 
+Your job: read what the user said and extract any personal facts they revealed about themselves.
+Examples of things to extract: name, nickname, age, location, job, hobbies, language preference, relationships, likes/dislikes, goals.
+Format: output a single short sentence starting with "The user's ..." (e.g. "The user's name is Awais." or "The user lives in Karachi." or "The user prefers dark mode.").
+If the user shared NO personal information about themselves, output exactly: NONE
+Do NOT extract generic questions or statements. Only extract FACTS about the user themselves.`,
+              prompt: `User said: "${userContent}"`
+            });
+            const personalFact = personalInfoExtraction.text.trim();
+            if (personalFact && personalFact !== 'NONE' && personalFact.length > 5) {
+              await prisma.memory.create({
+                data: { userId, content: personalFact }
+              });
+            }
+          } catch (e) {
+            console.error('Failed to extract personal memory', e);
           }
         }
       },

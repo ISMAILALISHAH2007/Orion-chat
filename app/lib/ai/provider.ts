@@ -44,7 +44,7 @@ const openrouter = openrouterApiKey
   ? createOpenRouter({
       apiKey: openrouterApiKey,
       baseURL: process.env.OPENROUTER_BASE_URL,
-      appName: 'ULTRON',
+      appName: 'ORION',
       appUrl: process.env.NEXTAUTH_URL ?? 'http://localhost:8000',
       fetch: (url, init) => fetchWithTimeout(url, init, 3000), // Fail fast
     })

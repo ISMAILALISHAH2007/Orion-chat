@@ -10,6 +10,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
                  process.env.NVIDIA_API_KEY_3 ||
                  process.env.NVIDIA_API_KEY_4 ||
                  process.env.NVIDIA_API_KEY_5 ||
+                 process.env.NVIDIA_API_KEY ||
                  '';
   if (!apiKey) {
     console.warn('No NVIDIA API key found for embedding generation.');
@@ -85,7 +86,7 @@ export async function storeMemory(userId: string, content: string) {
   }
 }
 
-export async function retrieveRelevantMemories(userId: string, query: string, limit = 3): Promise<string[]> {
+export async function retrieveRelevantMemories(userId: string, query: string, limit = 8): Promise<string[]> {
   try {
     const embedding = await generateEmbedding(query);
     const vectorString = `[${embedding.join(',')}]`;

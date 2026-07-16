@@ -11,7 +11,7 @@ function getGsap(): GsapGlobal | null {
   return null;
 }
 
-export const UltronAnimations = {
+export const OrionAnimations = {
   boot() {
     const gsap = getGsap();
     if (!gsap) return;

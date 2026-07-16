@@ -308,12 +308,12 @@ body {
 }
 
 .gemini-model-dropdown {
-  position: absolute;
-  top: 100%;
+  position: fixed;
+  top: 54px;
   left: 50%;
   transform: translateX(-50%);
-  margin-top: 4px;
   width: 280px;
+  max-width: calc(100vw - 24px);
   max-height: 380px;
   overflow-y: auto;
   background: var(--surface);
@@ -321,7 +321,7 @@ body {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: 6px;
-  z-index: 50;
+  z-index: 9999;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
@@ -1712,4 +1712,30 @@ body {
   .gemini-icon-btn { width: 32px; height: 32px; }
   .gemini-send-btn { width: 32px; height: 32px; }
   .gemini-stop-btn { width: 32px; height: 32px; }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.canvas-tab-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 6px;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+.canvas-tab-btn.active {
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }

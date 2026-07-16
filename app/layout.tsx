@@ -12,9 +12,9 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains' });
 
 export const metadata: Metadata = {
-  title: 'ULTRON — AI Assistant',
+  title: 'ORION — AI Assistant',
   description: 'A premium conversational AI workspace with memory, agents, and voice.',
-  keywords: ['AI', 'assistant', 'chatbot', 'ULTRON', 'conversation', 'productivity'],
+  keywords: ['AI', 'assistant', 'chatbot', 'ORION', 'conversation', 'productivity'],
   manifest: '/manifest.json',
 };
 

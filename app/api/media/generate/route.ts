@@ -16,7 +16,7 @@ async function startVideoJob(prompt: string): Promise<string> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ 
-      name: "Ultron Video Generation",
+      name: "Orion Video Generation",
       style: { prompt },
       end_seconds: 5,
       aspect_ratio: "16:9"

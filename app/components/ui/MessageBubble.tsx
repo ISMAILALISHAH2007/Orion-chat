@@ -13,6 +13,7 @@ interface MessageBubbleProps {
   mode?: string;
   attachments?: { url: string; mimeType: string; name: string }[];
   isStreaming?: boolean;
+  onPreviewCode?: (code: string, lang: string) => void;
 }
 
 /**
@@ -27,7 +28,7 @@ function parseReasoning(text: string): { mainText: string; reasoningText: string
   return { mainText, reasoningText };
 }
 
-export default function MessageBubble({ sender, text, attachments, isStreaming }: MessageBubbleProps) {
+export default function MessageBubble({ sender, text, attachments, isStreaming, onPreviewCode }: MessageBubbleProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const { speak, stopSpeaking, isSpeaking, initAudioContext } = useTTS();
   const [reasoningOpen, setReasoningOpen] = useState(false);
@@ -65,7 +66,7 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
             const newTag = `[VIDEO: ${data.url}]`;
             setLocalTextOverride(displayText.replace(tagToReplace, newTag));
             if (Notification.permission === 'granted') {
-              new Notification("Ultron", { body: `Your video is ready!` });
+              new Notification("Orion", { body: `Your video is ready!` });
             }
             try {
               const audio = new Audio('/sounds/notify.mp3');
@@ -93,7 +94,7 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
             const newTag = type === 'video' ? `[VIDEO: ${data.url}]` : `[IMAGE: ${data.url}]`;
             setLocalTextOverride(displayText.replace(tagToReplace, newTag));
             if (Notification.permission === 'granted') {
-              new Notification("Ultron", { body: `Your ${type} is ready!` });
+              new Notification("Orion", { body: `Your ${type} is ready!` });
             }
             try {
               const audio = new Audio('/sounds/notify.mp3');
@@ -129,7 +130,7 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
         
         ctx.drawImage(img, 0, 0);
         
-        // Add "⚡ ULTRON AI" watermark
+        // Add "⚡ ORION AI" watermark
         const fontSize = Math.max(20, Math.floor(img.width * 0.03));
         ctx.font = `bold ${fontSize}px Arial, sans-serif`;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
@@ -138,14 +139,14 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
         ctx.shadowOffsetX = 2;
         ctx.shadowOffsetY = 2;
         ctx.textAlign = 'right';
-        ctx.fillText('⚡ ULTRON AI', img.width - 20, img.height - 24);
+        ctx.fillText('⚡ ORION AI', img.width - 20, img.height - 24);
         
         canvas.toBlob((watermarkedBlob) => {
           if (!watermarkedBlob) return;
           const downloadUrl = URL.createObjectURL(watermarkedBlob);
           const a = document.createElement('a');
           a.href = downloadUrl;
-          a.download = 'ultron-generation.jpg';
+          a.download = 'orion-generation.jpg';
           a.click();
           URL.revokeObjectURL(downloadUrl);
           URL.revokeObjectURL(objectUrl);
@@ -179,15 +180,23 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
     });
 
     const previewButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('.code-preview'));
+    console.log('[MessageBubble] Found preview buttons count:', previewButtons.length, 'onPreviewCode is defined:', !!onPreviewCode);
     previewButtons.forEach((btn) => {
       const onClick = () => {
+        console.log('[MessageBubble] Preview clicked! lang:', btn.getAttribute('data-lang'));
         const lang = btn.getAttribute('data-lang') || 'text';
         const rawCode = btn.getAttribute('data-code') || '';
         const decoded = rawCode.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-        const win = window.open('', '_blank', 'width=900,height=700');
-        if (!win) return;
-        win.document.write(generatePreviewHtml(decoded, lang));
-        win.document.close();
+        if (onPreviewCode) {
+          console.log('[MessageBubble] Invoking onPreviewCode callback...');
+          onPreviewCode(decoded, lang);
+        } else {
+          console.log('[MessageBubble] No onPreviewCode callback, falling back to window.open...');
+          const win = window.open('', '_blank', 'width=900,height=700');
+          if (!win) return;
+          win.document.write(generatePreviewHtml(decoded, lang));
+          win.document.close();
+        }
       };
       btn.addEventListener('click', onClick);
       cleanups.push(() => btn.removeEventListener('click', onClick));
@@ -221,7 +230,7 @@ export default function MessageBubble({ sender, text, attachments, isStreaming }
     });
 
     return () => cleanups.forEach((c) => c());
-  }, [displayText, fullScreenImage]);
+  }, [displayText, fullScreenImage, onPreviewCode, isStreaming]);
 
   const handleReadAloud = () => {
     initAudioContext();

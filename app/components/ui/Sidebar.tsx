@@ -21,7 +21,6 @@ import { useChat, type ChatSessionItem } from '@/app/components/providers/ChatPr
 
 const NAV_ITEMS = [
   { href: '/', label: 'Chat', icon: MessageSquare },
-  { href: '/agents', label: 'Gems', icon: Bot },
   { href: '/notes', label: 'Notes', icon: NotebookPen },
 ];
 
@@ -116,10 +115,10 @@ export default function Sidebar({
         {/* Header */}
         <div className="gemini-sidebar-header">
           {!collapsed && (
-            <span className="gemini-sidebar-brand">ULTRON</span>
+            <span className="gemini-sidebar-brand">ORION</span>
           )}
           {collapsed && (
-            <span className="gemini-sidebar-brand text-lg mx-auto">U</span>
+            <span className="gemini-sidebar-brand text-lg mx-auto">O</span>
           )}
           <div className="flex items-center gap-1">
             <button

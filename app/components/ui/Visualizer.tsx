@@ -16,7 +16,7 @@ export default function Visualizer() {
     <div className="visualizer-container">
       <canvas id="webgl-canvas" ref={canvasRef}></canvas>
       <div className="orb-overlay">
-        <div className="orb-text-state">ULTRON ONLINE</div>
+        <div className="orb-text-state">ORION ONLINE</div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ultron-cache-v1';
+const CACHE_NAME = 'orion-cache-v2';
 
 // Minimum required files to cache for installability
 const URLS_TO_CACHE = [

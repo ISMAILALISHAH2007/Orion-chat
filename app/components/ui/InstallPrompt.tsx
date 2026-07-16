@@ -56,7 +56,7 @@ export default function InstallPrompt() {
       // On Android Chrome, if no install prompt, guide to use browser menu
       if (isAndroid) {
         alert(
-          '📱 To install ULTRON on your Android device:\n\n' +
+          '📱 To install ORION on your Android device:\n\n' +
           '1. Tap the ⋮ (three dots) menu in your browser\n' +
           '2. Select "Install app" or "Add to Home screen"\n' +
           '3. Follow the on-screen instructions\n\n' +
@@ -64,7 +64,7 @@ export default function InstallPrompt() {
         );
       } else {
         alert(
-          '📱 To install ULTRON:\n\n' +
+          '📱 To install ORION:\n\n' +
           '• On iPhone/iPad: Tap the Share icon (📤) → "Add to Home Screen"\n' +
           '• On Android: Tap the browser menu (⋮) → "Install App" or "Add to Home Screen"\n' +
           '• On Desktop: Look for the install icon (➕) in the address bar'
@@ -100,7 +100,7 @@ export default function InstallPrompt() {
           <DownloadCloud size={20} />
         </div>
         <div className="flex flex-col">
-          <span className="text-[15px] font-semibold text-foreground">Install ULTRON</span>
+          <span className="text-[15px] font-semibold text-foreground">Install ORION</span>
           <span className="text-[13px] text-muted">{isAndroid ? 'Add to home screen' : 'Install PWA for best experience'}</span>
         </div>
       </div>

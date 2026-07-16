@@ -26,6 +26,7 @@ import {
   File as FileIcon,
   Globe,
   Headphones,
+  Download,
 } from 'lucide-react';
 import { useChat, type ChatAttachment } from '@/app/components/providers/ChatProvider';
 import CameraModal from './CameraModal';
@@ -36,6 +37,7 @@ import { useTTS } from '@/app/components/providers/TTSProvider';
 import MessageBubble from './MessageBubble';
 import JSZip from 'jszip';
 import { IMAGE_INTENT_REGEX } from '@/app/lib/validation';
+import { generatePreviewHtml } from '@/app/lib/utils/preview';
 
 const SUGGESTIONS = [
   { icon: PenLine, title: 'Help me write', prompt: 'Help me write a professional email to reschedule a meeting.' },
@@ -125,6 +127,22 @@ export default function ChatInterface() {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [micActive, setMicActive] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [previewCode, setPreviewCode] = useState<string | null>(null);
+  const [previewLang, setPreviewLang] = useState<string>('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState<'preview' | 'code'>('preview');
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
+  const handleDownloadPreview = () => {
+    if (!previewCode) return;
+    const blob = new Blob([previewCode], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `artifact.${previewLang === 'svg' ? 'svg' : (previewLang === 'html' ? 'html' : 'txt')}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   const [isMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -367,195 +385,310 @@ export default function ChatInterface() {
     setVoiceConversationOpen(false);
   }, [setVoiceConversationOpen]);
 
-
+  const handlePreviewCode = useCallback((code: string, lang: string) => {
+    console.log('[ChatInterface] handlePreviewCode triggered! Code length:', code.length, 'Lang:', lang);
+    setPreviewCode(code);
+    setPreviewLang(lang);
+    setPreviewOpen(true);
+    setPreviewMode('preview');
+  }, []);
 
   return (
-    <div className="gemini-chat-container" onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragOver={handleDragOver} onDrop={handleDrop}>
-      {showCamera && <CameraModal onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />}
+    <div className="flex flex-1 w-full h-full min-w-0 overflow-hidden relative">
+      <div 
+        className="gemini-chat-container" 
+        style={{
+          maxWidth: previewOpen && !isFullScreen ? '50%' : '100%',
+          display: previewOpen && isFullScreen ? 'none' : 'flex',
+          transition: 'max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
+        onDragEnter={handleDragEnter} 
+        onDragLeave={handleDragLeave} 
+        onDragOver={handleDragOver} 
+        onDrop={handleDrop}
+      >
+        {showCamera && <CameraModal onCapture={handleCameraCapture} onClose={() => setShowCamera(false)} />}
 
-
-
-      {/* === DRAG & DROP OVERLAY === */}
-      {dragOver && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm animate-fade-in">
-          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-accent bg-surface/80 px-8 py-10 shadow-xl">
-            <Paperclip size={36} className="text-accent animate-bounce" />
-            <p className="text-sm font-semibold text-foreground">Drop files here</p>
-            <p className="text-xs text-muted">PDFs, images, documents, code files</p>
-          </div>
-        </div>
-      )}
-
-      {/* === CONVERSATION WINDOW === */}
-      <div className="gemini-messages-scroll">
-        <div className="gemini-messages-inner">
-          {isEmpty ? (
-            <div className="gemini-empty-state">
-              <h1 className="gemini-greeting gemini-gradient-text">
-                Hello, {userName !== 'there' ? userName : 'Commander'}
-              </h1>
-              <p className="gemini-subtitle">How can I help you today?</p>
-              <div className="gemini-suggestion-grid">
-                {SUGGESTIONS.map(({ icon: Icon, title, prompt }) => (
-                  <button key={title} onClick={() => { setInput(prompt); textareaRef.current?.focus(); }} className="gemini-suggestion-chip">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-accent"><Icon size={15} /></span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-foreground">{title}</span>
-                      <span className="mt-0.5 block text-xs text-muted line-clamp-2">{prompt}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
+        {/* === DRAG & DROP OVERLAY === */}
+        {dragOver && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm animate-fade-in">
+            <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-accent bg-surface/80 px-8 py-10 shadow-xl">
+              <Paperclip size={36} className="text-accent animate-bounce" />
+              <p className="text-sm font-semibold text-foreground">Drop files here</p>
+              <p className="text-xs text-muted">PDFs, images, documents, code files</p>
             </div>
-          ) : (
-            <>
-              {messages.filter(m => !m.isHidden).map((msg, idx, arr) => (
-                <MessageBubble key={idx} sender={msg.sender} text={msg.text} mode={msg.mode} attachments={msg.attachments}
-                  isStreaming={isStreaming && idx === arr.length - 1 && msg.sender === 'ai'} />
-              ))}
-              {isResearching && <ThinkingAnimation isSearch={isSearchQuery(messages.filter(m => m.sender === 'user').slice(-1)[0]?.text || '')} />}
-              <div ref={messagesEndRef} />
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* === INPUT AREA === */}
-      <div className="gemini-input-wrapper mobile-input-safe">
-        {/* Notice */}
-        {(noticeText ?? notice) && (
-          <div className="mb-2 text-center">
-            <span className="inline-block px-4 py-1.5 rounded-full bg-accent/10 text-xs text-accent border border-accent/20 animate-fade-in">{noticeText ?? notice}</span>
           </div>
         )}
 
-        <div ref={slashRef} className="relative">
-          {/* Slash Commands Dropdown */}
-          {effectiveSlashOpen && (
-            <div className="absolute bottom-full left-0 right-0 z-40 mb-2 overflow-hidden rounded-xl border border-border bg-surface p-1.5 shadow-lg animate-scale-in">
-              {filteredCommands.map((c, i) => {
-                const Icon = c.icon;
-                return (
-                  <button key={c.cmd} role="option" aria-selected={i === slashIndex}
-                    onMouseEnter={() => setSlashIndex(i)} onClick={() => applyCommand(c.cmd)}
-                    className={['flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors', i === slashIndex ? 'bg-surface-2' : 'hover:bg-surface-2'].join(' ')}>
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface-2 text-accent"><Icon size={15} /></span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-foreground">/{c.cmd}</span>
-                      <span className="block text-xs text-muted">{c.desc}</span>
-                    </span>
-                  </button>
-                );
-              })}
-              <div className="border-t border-border px-3 py-1.5 text-[10px] text-muted">↑↓ navigate · Enter select · Esc dismiss</div>
+        {/* === CONVERSATION WINDOW === */}
+        <div className="gemini-messages-scroll">
+          <div className="gemini-messages-inner">
+            {isEmpty ? (
+              <div className="gemini-empty-state">
+                <h1 className="gemini-greeting gemini-gradient-text">
+                  Hello, {userName !== 'there' ? userName : 'Commander'}
+                </h1>
+                <p className="gemini-subtitle">How can I help you today?</p>
+                <div className="gemini-suggestion-grid">
+                  {SUGGESTIONS.map(({ icon: Icon, title, prompt }) => (
+                    <button key={title} onClick={() => { setInput(prompt); textareaRef.current?.focus(); }} className="gemini-suggestion-chip">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-accent"><Icon size={15} /></span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground">{title}</span>
+                        <span className="mt-0.5 block text-xs text-muted line-clamp-2">{prompt}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                {messages.filter(m => !m.isHidden).map((msg, idx, arr) => (
+                  <MessageBubble key={idx} sender={msg.sender} text={msg.text} mode={msg.mode} attachments={msg.attachments}
+                    isStreaming={isStreaming && idx === arr.length - 1 && msg.sender === 'ai'}
+                    onPreviewCode={handlePreviewCode} />
+                ))}
+                {isResearching && <ThinkingAnimation isSearch={isSearchQuery(messages.filter(m => m.sender === 'user').slice(-1)[0]?.text || '')} />}
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* === INPUT AREA === */}
+        <div className="gemini-input-wrapper mobile-input-safe">
+          {/* Notice */}
+          {(noticeText ?? notice) && (
+            <div className="mb-2 text-center">
+              <span className="inline-block px-4 py-1.5 rounded-full bg-accent/10 text-xs text-accent border border-accent/20 animate-fade-in">{noticeText ?? notice}</span>
             </div>
           )}
 
-          <div className="gemini-input-container">
-            {/* Attachments preview */}
-            {attachments.length > 0 && (
-              <div className="gemini-attachment-preview">
-                {attachments.map((att, idx) => {
-                  const { Icon: FileTypeIcon, color } = getFileIcon(att.mimeType, att.name);
-                  const isImage = att.mimeType.startsWith('image/');
+          <div ref={slashRef} className="relative">
+            {/* Slash Commands Dropdown */}
+            {effectiveSlashOpen && (
+              <div className="absolute bottom-full left-0 right-0 z-40 mb-2 overflow-hidden rounded-xl border border-border bg-surface p-1.5 shadow-lg animate-scale-in">
+                {filteredCommands.map((c, i) => {
+                  const Icon = c.icon;
                   return (
-                    <div key={idx} className="gemini-attachment-item">
-                      {isImage ? <Image src={att.url} alt={att.name} fill className="object-cover" unoptimized />
-                        : <div className="flex h-full w-full items-center justify-center" style={{ color }}><FileTypeIcon size={18} /></div>}
-                      <button type="button" onClick={() => removeAttachment(idx)} className="gemini-attachment-remove"><X size={10} /></button>
-                    </div>
+                    <button key={c.cmd} role="option" aria-selected={i === slashIndex}
+                      onMouseEnter={() => setSlashIndex(i)} onClick={() => applyCommand(c.cmd)}
+                      className={['flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors', i === slashIndex ? 'bg-surface-2' : 'hover:bg-surface-2'].join(' ')}>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface-2 text-accent"><Icon size={15} /></span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-foreground">/{c.cmd}</span>
+                        <span className="block text-xs text-muted">{c.desc}</span>
+                      </span>
+                    </button>
                   );
                 })}
+                <div className="border-t border-border px-3 py-1.5 text-[10px] text-muted">↑↓ navigate · Enter select · Esc dismiss</div>
               </div>
             )}
 
-            {/* Input row */}
-            <div className="gemini-input-row">
-              <textarea ref={textareaRef} value={input} rows={1} placeholder={placeholder}
-                onChange={e => { 
-                  const v = e.target.value; 
-                  setInput(v); 
-                  if (v.startsWith('/')) { if (!slashOpen) setSlashIndex(0); setSlashOpen(true); } else if (slashOpen) setSlashOpen(false); 
-                  e.target.style.height = 'auto';
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
-                }}
-                onKeyDown={handleKeyDown} disabled={isStreaming} className="gemini-textarea" />
-              <div className="flex items-center gap-1 shrink-0">
-                <button type="button" onClick={handleMicClick} className={['gemini-icon-btn', micActive ? 'text-red-500 bg-red-500/10' : '', liveVoiceMode ? 'gemini-mic-live' : ''].join(' ')} title={micActive ? 'Stop recording' : 'Voice input'}>
-                  {micActive ? (
-                    <div className="flex items-center justify-center gap-[3px] h-full">
-                      <span className="w-[3px] h-[10px] bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0ms', animationDuration: '0.8s' }} />
-                      <span className="w-[3px] h-[16px] bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '150ms', animationDuration: '0.8s' }} />
-                      <span className="w-[3px] h-[12px] bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '300ms', animationDuration: '0.8s' }} />
-                    </div>
-                  ) : <Mic size={16} />}
-                </button>
-                {isStreaming ? (
-                  <button type="button" onClick={stop} className="gemini-stop-btn" title="Stop"><div className="h-3 w-3 rounded-[2px] bg-current" /></button>
-                ) : (
-                  <button type="button" onClick={handleSend} disabled={!input.trim() && attachments.length === 0} className="gemini-send-btn" title="Send"><ArrowUp size={16} /></button>
-                )}
-              </div>
-            </div>
+            <div className="gemini-input-container">
+              {/* Attachments preview */}
+              {attachments.length > 0 && (
+                <div className="gemini-attachment-preview">
+                  {attachments.map((att, idx) => {
+                    const { Icon: FileTypeIcon, color } = getFileIcon(att.mimeType, att.name);
+                    const isImage = att.mimeType.startsWith('image/');
+                    return (
+                      <div key={idx} className="gemini-attachment-item">
+                        {isImage ? <Image src={att.url} alt={att.name} fill className="object-cover" unoptimized />
+                          : <div className="flex h-full w-full items-center justify-center" style={{ color }}><FileTypeIcon size={18} /></div>}
+                        <button type="button" onClick={() => removeAttachment(idx)} className="gemini-attachment-remove"><X size={10} /></button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-            {/* Action buttons */}
-            <div className="gemini-input-actions">
-              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept={ACCEPTED_FILE_TYPES} multiple className="hidden" />
-              <button type="button" onClick={() => fileInputRef.current?.click()} className="gemini-icon-btn" title="Attach files"><Paperclip size={16} /></button>
-              <button type="button" onClick={() => { setIsSearchMode(!isSearchMode); setIsImageMode(false); setIsVideoMode(false); }} className={['gemini-icon-btn', isSearchMode ? 'active text-accent' : ''].join(' ')} title="Web Search"><Globe size={16} /></button>
-              <button type="button" onClick={() => { setIsImageMode(!isImageMode); setIsVideoMode(false); setIsSearchMode(false); }} className={['gemini-icon-btn', isImageMode ? 'active' : ''].join(' ')} title="Image"><Wand2 size={16} /></button>
-              {isMobile && <button type="button" onClick={() => setShowCamera(true)} className="gemini-icon-btn" title="Camera"><Camera size={16} /></button>}
+              {/* Input row */}
+              <div className="gemini-input-row">
+                <textarea ref={textareaRef} value={input} rows={1} placeholder={placeholder}
+                  onChange={e => { 
+                    const v = e.target.value; 
+                    setInput(v); 
+                    if (v.startsWith('/')) { if (!slashOpen) setSlashIndex(0); setSlashOpen(true); } else if (slashOpen) setSlashOpen(false); 
+                    e.target.style.height = 'auto';
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+                  }}
+                  onKeyDown={handleKeyDown} disabled={isStreaming} className="gemini-textarea" />
+                <div className="flex items-center gap-1 shrink-0">
+                  <button type="button" onClick={handleMicClick} className={['gemini-icon-btn', micActive ? 'text-red-500 bg-red-500/10' : '', liveVoiceMode ? 'gemini-mic-live' : ''].join(' ')} title={micActive ? 'Stop recording' : 'Voice input'}>
+                    {micActive ? (
+                      <div className="flex items-center justify-center gap-[3px] h-full">
+                        <span className="w-[3px] h-[10px] bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0ms', animationDuration: '0.8s' }} />
+                        <span className="w-[3px] h-[16px] bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '150ms', animationDuration: '0.8s' }} />
+                        <span className="w-[3px] h-[12px] bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '300ms', animationDuration: '0.8s' }} />
+                      </div>
+                    ) : <Mic size={16} />}
+                  </button>
+                  {isStreaming ? (
+                    <button type="button" onClick={stop} className="gemini-stop-btn" title="Stop"><div className="h-3 w-3 rounded-[2px] bg-current" /></button>
+                  ) : (
+                    <button type="button" onClick={handleSend} disabled={!input.trim() && attachments.length === 0} className="gemini-send-btn" title="Send"><ArrowUp size={16} /></button>
+                  )}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="gemini-input-actions">
+                <input type="file" ref={fileInputRef} onChange={handleFileChange} accept={ACCEPTED_FILE_TYPES} multiple className="hidden" />
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="gemini-icon-btn" title="Attach files"><Paperclip size={16} /></button>
+                <button type="button" onClick={() => { setIsSearchMode(!isSearchMode); setIsImageMode(false); setIsVideoMode(false); }} className={['gemini-icon-btn', isSearchMode ? 'active text-accent' : ''].join(' ')} title="Web Search"><Globe size={16} /></button>
+                <button type="button" onClick={() => { setIsImageMode(!isImageMode); setIsVideoMode(false); setIsSearchMode(false); }} className={['gemini-icon-btn', isImageMode ? 'active' : ''].join(' ')} title="Image"><Wand2 size={16} /></button>
+                {isMobile && <button type="button" onClick={() => setShowCamera(true)} className="gemini-icon-btn" title="Camera"><Camera size={16} /></button>}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* === FOOTER — Gemini-style disclaimer === */}
-      <div className="gemini-footer">ULTRON can make mistakes. Verify important information.</div>
+        {/* === FOOTER — Gemini-style disclaimer === */}
+        <div className="gemini-footer">ORION can make mistakes. Verify important information.</div>
 
-      {/* === VOICE CONVERSATION MODAL (full-screen) === */}
-      <VoiceConversationModal
-        isOpen={voiceConversationOpen}
-        onEndSession={handleEndVoiceConv}
-        sendMessage={handleVoiceConvSend}
-        isStreaming={isStreaming}
-        latestAiResponse={latestAiResponse}
-        voiceGender={voiceGender}
-        onSwitchVoice={setVoiceGender}
-      />
+        {/* === VOICE CONVERSATION MODAL (full-screen) === */}
+        <VoiceConversationModal
+          isOpen={voiceConversationOpen}
+          onEndSession={handleEndVoiceConv}
+          sendMessage={handleVoiceConvSend}
+          isStreaming={isStreaming}
+          latestAiResponse={latestAiResponse}
+          voiceGender={voiceGender}
+          onSwitchVoice={setVoiceGender}
+        />
 
-      {/* Voice Error Modal */}
-      {voiceError && (
-        <div className="gemini-modal-overlay">
-          <div className="gemini-modal">
-            <div className="gemini-modal-header">
-              <h3 className="gemini-modal-title">Microphone Access Required</h3>
-              <button onClick={() => setVoiceError(null)} className="gemini-icon-btn"><X size={16} /></button>
-            </div>
-            <div className="gemini-modal-body space-y-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger/10 text-danger"><Mic size={20} /></span>
-                <div>
-                  <p className="text-sm text-muted">We need microphone permissions for voice input.</p>
-                  <div className="mt-3 rounded-lg bg-surface-2 p-3 text-xs space-y-2">
-                    {voiceError.includes('Settings') ? (
-                      <>
-                        <p className="font-semibold text-danger">iPhone/Safari:</p>
-                        <ol className="list-decimal list-inside space-y-1 text-muted"><li>Open <strong>Settings</strong> app</li><li>Privacy & Security &gt; Speech Recognition</li><li>Toggle Safari <strong>ON</strong></li><li>Reload page</li></ol>
-                      </>
-                    ) : (
-                      <>
-                        <p className="font-semibold text-danger">Enable Microphone:</p>
-                        <ol className="list-decimal list-inside space-y-1 text-muted"><li>Tap address bar settings icon</li><li>Change to <strong>Allow</strong></li><li>Reload page</li></ol>
-                      </>
-                    )}
+        {/* Voice Error Modal */}
+        {voiceError && (
+          <div className="gemini-modal-overlay">
+            <div className="gemini-modal">
+              <div className="gemini-modal-header">
+                <h3 className="gemini-modal-title">Microphone Access Required</h3>
+                <button onClick={() => setVoiceError(null)} className="gemini-icon-btn"><X size={16} /></button>
+              </div>
+              <div className="gemini-modal-body space-y-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger/10 text-danger"><Mic size={20} /></span>
+                  <div>
+                    <p className="text-sm text-muted">We need microphone permissions for voice input.</p>
+                    <div className="mt-3 rounded-lg bg-surface-2 p-3 text-xs space-y-2">
+                      {voiceError.includes('Settings') ? (
+                        <>
+                          <p className="font-semibold text-danger">iPhone/Safari:</p>
+                          <ol className="list-decimal list-inside space-y-1 text-muted"><li>Open <strong>Settings</strong> app</li><li>Privacy & Security &gt; Speech Recognition</li><li>Toggle Safari <strong>ON</strong></li><li>Reload page</li></ol>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-semibold text-danger">Enable Microphone:</p>
+                          <ol className="list-decimal list-inside space-y-1 text-muted"><li>Tap address bar settings icon</li><li>Change to <strong>Allow</strong></li><li>Reload page</li></ol>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
+              <div className="gemini-modal-footer flex justify-end">
+                <button onClick={() => setVoiceError(null)} className="auth-button" style={{ width: 'auto', padding: '8px 20px' }}>Got it</button>
+              </div>
             </div>
-            <div className="gemini-modal-footer flex justify-end">
-              <button onClick={() => setVoiceError(null)} className="auth-button" style={{ width: 'auto', padding: '8px 20px' }}>Got it</button>
+          </div>
+        )}
+      </div>
+
+      {/* === RIGHT: ORION CANVAS SIDEBAR (Live Code Sandbox) === */}
+      {previewOpen && (
+        <div 
+          className="fixed md:static inset-0 md:inset-auto h-full border-l border-border bg-surface flex flex-col z-[100] animate-slide-in-right shadow-2xl md:shadow-none"
+          style={{
+            width: isFullScreen ? '100%' : '50%',
+            transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface-2 shrink-0">
+            <div className="flex items-center gap-2">
+              <Sparkles size={16} className="text-accent" />
+              <span className="text-sm font-semibold text-foreground">ORION Canvas</span>
+              <span className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full capitalize font-medium">{previewLang}</span>
             </div>
+
+            <div className="flex items-center gap-3">
+              {/* Tab Selector */}
+              <div className="flex bg-background rounded-lg p-0.5 border border-border">
+                <button
+                  onClick={() => setPreviewMode('preview')}
+                  className={['canvas-tab-btn', previewMode === 'preview' ? 'active' : ''].join(' ')}
+                >
+                  Preview
+                </button>
+                <button
+                  onClick={() => setPreviewMode('code')}
+                  className={['canvas-tab-btn', previewMode === 'code' ? 'active' : ''].join(' ')}
+                >
+                  Code
+                </button>
+              </div>
+
+              {/* Fullscreen Toggle */}
+              <button
+                onClick={() => setIsFullScreen(!isFullScreen)}
+                className="p-1.5 hover:bg-surface-2 rounded-lg text-muted hover:text-foreground transition-colors hidden md:block"
+                title={isFullScreen ? 'Split Screen' : 'Fullscreen'}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  {isFullScreen ? (
+                    <>
+                      <path d="M4 14h6v6" />
+                      <path d="M20 10h-6V4" />
+                      <path d="M14 10l7-7" />
+                      <path d="M10 14l-7 7" />
+                    </>
+                  ) : (
+                    <>
+                      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                    </>
+                  )}
+                </svg>
+              </button>
+
+              {/* Download */}
+              <button
+                onClick={handleDownloadPreview}
+                className="p-1.5 hover:bg-surface-2 rounded-lg text-muted hover:text-foreground transition-colors"
+                title="Download file"
+              >
+                <Download size={16} />
+              </button>
+
+              {/* Close */}
+              <button
+                onClick={() => setPreviewOpen(false)}
+                className="p-1.5 hover:bg-surface-2 rounded-lg text-muted hover:text-foreground transition-colors"
+                title="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 min-h-0 overflow-hidden relative bg-slate-950">
+            {previewMode === 'preview' ? (
+              <iframe
+                srcDoc={generatePreviewHtml(previewCode || '', previewLang)}
+                title="Orion Canvas Live Sandbox"
+                className="w-full h-full border-none bg-white"
+                sandbox="allow-scripts allow-modals allow-same-origin"
+              />
+            ) : (
+              <pre className="p-4 text-xs font-mono text-slate-300 overflow-auto h-full w-full whitespace-pre-wrap select-text">
+                <code>{previewCode}</code>
+              </pre>
+            )}
           </div>
         </div>
       )}
