@@ -55,7 +55,7 @@ export async function performSearch(query: string): Promise<string> {
       let resultString = '';
       if (data.answer) resultString += `[AI Answer]\n${data.answer}\n\n`;
       if (data.results && data.results.length > 0) {
-        resultString += data.results.map((r: any, i: number) => `[Result ${i + 1}]\nTitle: ${r.title}\nURL: ${r.url}\nSnippet: ${r.content}`).join('\n\n---\n\n');
+        resultString += data.results.map((r: { title: string; url: string; content: string }, i: number) => `[Result ${i + 1}]\nTitle: ${r.title}\nURL: ${r.url}\nSnippet: ${r.content}`).join('\n\n---\n\n');
       }
       return resultString || `I couldn't find current web results for "${query}".`;
     }
@@ -90,8 +90,7 @@ export async function performSearch(query: string): Promise<string> {
     
     // Include the top organic search results
     if (data.organic && data.organic.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      resultString += data.organic.slice(0, 5).map((r: any, i: number) => 
+      resultString += data.organic.slice(0, 5).map((r: { title: string; link: string; snippet: string }, i: number) => 
         `[Result ${i + 1}]\nTitle: ${r.title}\nURL: ${r.link}\nSnippet: ${r.snippet}`
       ).join('\n\n---\n\n');
     }

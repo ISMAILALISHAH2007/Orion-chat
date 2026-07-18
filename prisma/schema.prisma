@@ -67,9 +67,12 @@ model ChatSession {
   userId    String
   title     String?
   mode      String   @default("casual") // casual, developer, research, professional
+  pinned    Boolean  @default(false)
+  folderId  String?
   messages  Message[]
   
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder    Folder?  @relation(fields: [folderId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -89,6 +92,8 @@ model Memory {
   id        String   @id @default(cuid())
   userId    String
   content   String   @db.Text
+  category  String   @default("General")
+  tags      String   @default("")
   embedding Unsupported("vector(1536)")?
   
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -110,18 +115,19 @@ model Agent {
 }
 
 model Folder {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String
-  parentId  String?
+  id           String        @id @default(cuid())
+  userId       String
+  name         String
+  parentId     String?
   
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent    Folder?  @relation("Subfolders", fields: [parentId], references: [id])
-  children  Folder[] @relation("Subfolders")
-  documents Document[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent       Folder?       @relation("Subfolders", fields: [parentId], references: [id])
+  children     Folder[]      @relation("Subfolders")
+  documents    Document[]
+  chatSessions ChatSession[]
   
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
 
 model Document {

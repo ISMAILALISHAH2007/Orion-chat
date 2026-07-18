@@ -5,6 +5,7 @@ import { AuthProvider } from '@/app/components/providers/AuthProvider';
 import { ThemeProvider } from '@/app/components/providers/ThemeProvider';
 import { TTSProvider } from '@/app/components/providers/TTSProvider';
 import InstallPrompt from '@/app/components/ui/InstallPrompt';
+import SplashLoader from '@/app/components/ui/SplashLoader';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' });
@@ -16,6 +17,29 @@ export const metadata: Metadata = {
   description: 'A premium conversational AI workspace with memory, agents, and voice.',
   keywords: ['AI', 'assistant', 'chatbot', 'ORION', 'conversation', 'productivity'],
   manifest: '/manifest.json',
+  openGraph: {
+    title: 'ORION — AI Assistant',
+    description: 'A premium conversational AI workspace with memory, agents, and voice.',
+    url: 'https://orion-chat-three.vercel.app',
+    siteName: 'ORION',
+    images: [
+      {
+        url: 'https://orion-chat-three.vercel.app/icon-512x512.png',
+        width: 512,
+        height: 512,
+        alt: 'ORION Cognitive Assistant',
+      },
+    ],
+    locale: 'en_US',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ORION — AI Assistant',
+    description: 'A premium conversational AI workspace with memory, agents, and voice.',
+    images: ['https://orion-chat-three.vercel.app/icon-512x512.png'],
+    creator: '@ismailshah',
+  },
 };
 
 export const viewport: Viewport = {
@@ -38,9 +62,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
           <ThemeProvider>
             <TTSProvider>
-              <InstallPrompt />
-              {children}
-              <SpeedInsights />
+              <SplashLoader>
+                <InstallPrompt />
+                {children}
+                <SpeedInsights />
+              </SplashLoader>
             </TTSProvider>
           </ThemeProvider>
         </AuthProvider>

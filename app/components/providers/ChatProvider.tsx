@@ -11,6 +11,8 @@ export type ChatSessionItem = {
   title: string;
   mode: string;
   updatedAt: string;
+  pinned?: boolean;
+  folderId?: string | null;
 };
 
 export type ChatAttachment = {
@@ -40,7 +42,12 @@ interface ChatContextType {
   startNewSession: () => void;
   loadSession: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
-  sendMessage: (textOrEvent?: string | React.FormEvent, attachments?: ChatAttachment[], options?: { isHidden?: boolean }) => Promise<void>;
+  renameSession: (id: string, title: string) => Promise<void>;
+  togglePinSession: (id: string) => Promise<void>;
+  moveSessionToFolder: (id: string, folderId: string | null) => Promise<void>;
+  sendMessage: (textOrEvent?: string | React.FormEvent, attachments?: ChatAttachment[], options?: { isHidden?: boolean; search?: boolean }) => Promise<void>;
+  regenerate: (index: number) => Promise<void>;
+  editAndResend: (index: number, text: string) => Promise<void>;
   fetchSessionsList: () => Promise<void>;
   stop: () => void;
 }
@@ -161,8 +168,73 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [sessionId, startNewSession]
   );
 
+  const renameSession = useCallback(
+    async (id: string, title: string) => {
+      try {
+        const res = await fetch(`/api/chat/history?sessionId=${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title }),
+        });
+        if (res.ok) {
+          setSessionsList((prev) =>
+            prev.map((s) => (s.id === id ? { ...s, title } : s))
+          );
+        }
+      } catch (err) {
+        console.error('Failed to rename session:', err);
+      }
+    },
+    []
+  );
+
+  const togglePinSession = useCallback(
+    async (id: string) => {
+      const item = sessionsList.find((s) => s.id === id);
+      if (!item) return;
+      const targetPinned = !item.pinned;
+      try {
+        const res = await fetch(`/api/chat/history?sessionId=${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pinned: targetPinned }),
+        });
+        if (res.ok) {
+          setSessionsList((prev) =>
+            prev.map((s) => (s.id === id ? { ...s, pinned: targetPinned } : s))
+          );
+        }
+      } catch (err) {
+        console.error('Failed to pin/unpin session:', err);
+      }
+    },
+    [sessionsList]
+  );
+
+  const moveSessionToFolder = useCallback(
+    async (id: string, folderId: string | null) => {
+      try {
+        const res = await fetch(`/api/chat/history?sessionId=${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderId }),
+        });
+        if (res.ok) {
+          setSessionsList((prev) =>
+            prev.map((s) => (s.id === id ? { ...s, folderId } : s))
+          );
+        }
+      } catch (err) {
+        console.error('Failed to move session to folder:', err);
+      }
+    },
+    []
+  );
+
+
+
   const sendMessage = useCallback(
-    async (textOrEvent?: string | React.FormEvent, attachments: ChatAttachment[] = [], options?: { isHidden?: boolean }) => {
+    async (textOrEvent?: string | React.FormEvent, attachments: ChatAttachment[] = [], options?: { isHidden?: boolean; search?: boolean }) => {
       if (textOrEvent && typeof textOrEvent === 'object' && 'preventDefault' in textOrEvent) {
         textOrEvent.preventDefault();
       }
@@ -181,7 +253,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       const processAttachments = (msgText: string, atts: ChatAttachment[]) => {
         let finalString = msgText || 'Attached file';
-        const finalImages: any[] = [];
+        const finalImages: { type: string; image: string }[] = [];
         
         atts.forEach(att => {
           if (att.mimeType.startsWith('image/')) {
@@ -240,6 +312,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             voiceLang: selectedVoiceUri,
             voiceGender: voiceGender,
             isVoiceMode: voiceConversationOpen,
+            search: options?.search,
           }),
           signal: abortControllerRef.current.signal,
         });
@@ -317,6 +390,29 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [messages, isStreaming, input, mode, sessionId, fetchSessionsList, setSessionId, selectedVoiceUri, voiceGender]
   );
 
+  const regenerate = useCallback(
+    async (index: number) => {
+      let userMsgIndex = index - 1;
+      while (userMsgIndex >= 0 && messages[userMsgIndex].sender !== 'user') {
+        userMsgIndex--;
+      }
+      if (userMsgIndex === -1) return;
+      const text = messages[userMsgIndex].text;
+      const attachments = messages[userMsgIndex].attachments || [];
+      setMessages((prev) => prev.slice(0, userMsgIndex));
+      await sendMessage(text, attachments);
+    },
+    [messages, sendMessage]
+  );
+
+  const editAndResend = useCallback(
+    async (index: number, newText: string) => {
+      setMessages((prev) => prev.slice(0, index));
+      await sendMessage(newText);
+    },
+    [sendMessage]
+  );
+
   return (
     <ChatContext.Provider
       value={{
@@ -331,7 +427,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         startNewSession,
         loadSession,
         deleteSession,
+        renameSession,
+        togglePinSession,
+        moveSessionToFolder,
         sendMessage,
+        regenerate,
+        editAndResend,
         fetchSessionsList,
         stop,
       }}

@@ -20,5 +20,28 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Chat",
+      "short_name": "New Chat",
+      "description": "Start a new conversation session",
+      "url": "/",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Voice Mode",
+      "short_name": "Voice",
+      "description": "Launch ORION voice assistant directly",
+      "url": "/?voice=true",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Saved Notes",
+      "short_name": "Notes",
+      "description": "View and edit saved memories",
+      "url": "/notes",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    }
   ]
 }

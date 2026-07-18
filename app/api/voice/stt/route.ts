@@ -38,11 +38,12 @@ export async function POST(req: Request) {
 
     const transcription = result.response.text().trim();
     return NextResponse.json({ text: transcription });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('STT Error details:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ 
       error: 'Failed to transcribe audio', 
-      details: error?.message || String(error)
+      details: errMsg
     }, { status: 500 });
   }
 }

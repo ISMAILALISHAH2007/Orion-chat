@@ -10,12 +10,12 @@ interface BeforeInstallPromptEvent extends Event {
 export default function InstallPrompt() {
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
-  const [isAndroid, setIsAndroid] = useState(false);
+  const [isAndroid, setIsAndroid] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return /Android/i.test(navigator.userAgent);
+  });
 
   useEffect(() => {
-    // Detect if Android
-    setIsAndroid(/Android/i.test(navigator.userAgent));
-
     // Register Service Worker for PWA if supported
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

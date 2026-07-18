@@ -37,11 +37,25 @@ class PCMRecorderProcessor extends AudioWorkletProcessor {
       for (let i = 0; i < channelData.length; i++) {
         this.buffer[this.head++] = channelData[i];
         if (this.head >= this.bufferSize) {
-          // Convert to PCM 16-bit
+          // Calculate Root Mean Square (RMS) volume of the chunk
+          let sum = 0;
+          for (let k = 0; k < this.bufferSize; k++) {
+            sum += this.buffer[k] * this.buffer[k];
+          }
+          const rms = Math.sqrt(sum / this.bufferSize);
+
+          // Noise Gate: if volume is below 0.008 (hum/noise), send absolute silence (zeros)
+          // This forces Gemini's VAD to register silence instantly and respond immediately.
+          const isSilent = rms < 0.008;
+
           const pcm16 = new Int16Array(this.bufferSize);
           for (let j = 0; j < this.bufferSize; j++) {
-            let s = Math.max(-1, Math.min(1, this.buffer[j]));
-            pcm16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            if (isSilent) {
+              pcm16[j] = 0;
+            } else {
+              let s = Math.max(-1, Math.min(1, this.buffer[j]));
+              pcm16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
           }
           this.port.postMessage(pcm16.buffer, [pcm16.buffer]);
           this.head = 0;
@@ -67,6 +81,7 @@ export class AudioStreamer {
   private nextPlayTime = 0;
   private isPlaying = false;
   private scheduledSources: AudioBufferSourceNode[] = [];
+  private playTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {}
 
@@ -79,15 +94,15 @@ export class AudioStreamer {
     this.isRecording = true;
 
     try {
+      // Capture mic at native rate (no sampleRate constraint) to avoid hardware driver freezes
       this.micStream = await navigator.mediaDevices.getUserMedia({ audio: {
         channelCount: 1,
-        sampleRate: 16000,
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
       }});
 
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+      this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
         sampleRate: 16000,
       });
 
@@ -146,11 +161,20 @@ export class AudioStreamer {
       this.audioContext.close();
       this.audioContext = null;
     }
+    if (this.playTimeoutId) {
+      clearTimeout(this.playTimeoutId);
+      this.playTimeoutId = null;
+    }
   }
 
   // Gemini returns audio at 24000 Hz, PCM 16-bit
   public addPlaybackData(base64Pcm: string) {
     if (!this.audioContext) return;
+    
+    if (this.playTimeoutId) {
+      clearTimeout(this.playTimeoutId);
+      this.playTimeoutId = null;
+    }
     this.isPlaying = true;
 
     const arrayBuffer = base64ToArrayBuffer(base64Pcm);
@@ -181,12 +205,20 @@ export class AudioStreamer {
     source.onended = () => {
       this.scheduledSources = this.scheduledSources.filter(s => s !== source);
       if (this.audioContext && this.audioContext.currentTime >= this.nextPlayTime - 0.1) {
-        this.isPlaying = false;
+        if (this.playTimeoutId) clearTimeout(this.playTimeoutId);
+        this.playTimeoutId = setTimeout(() => {
+          this.isPlaying = false;
+          this.playTimeoutId = null;
+        }, 500);
       }
     };
   }
 
   public interruptPlayback() {
+    if (this.playTimeoutId) {
+      clearTimeout(this.playTimeoutId);
+      this.playTimeoutId = null;
+    }
     if (!this.audioContext) return;
     this.scheduledSources.forEach(source => {
       try { source.stop(); } catch(e) {}

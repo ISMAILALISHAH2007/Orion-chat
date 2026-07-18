@@ -205,22 +205,14 @@ function VoiceConversationModalInner({
       ws.onclose = (event) => {
         console.log("WebSocket closed", event.code, event.reason);
         if (sessionActiveRef.current) {
-          // 1008 indicates session duration limit exceeded (GoAway signal)
-          if (event.code === 1008) {
-            console.log("Session duration limit reached. Auto-reconnecting...");
-            stopAll();
-            setShouldReconnect(true);
-          } else {
-            setErrorMessage(`Connection to Gemini Live lost. Code: ${event.code} Reason: ${event.reason || 'Unknown'}`);
-            setConvState('idle'); // DO NOT set to listening when connection dies!
-          }
+          console.log("Session active. Auto-reconnecting...");
+          stopAll();
+          setShouldReconnect(true);
         }
       };
 
       ws.onerror = (e) => {
         console.error("WebSocket Error", e);
-        setErrorMessage('WebSocket connection error. See console for details.');
-        setConvState('listening');
       };
 
       // 4. Start Microphone and Stream to WebSocket

@@ -125,9 +125,10 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({ status: 'processing' }, { status: 200 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Media API Polling Error]:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    const errMsg = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }
 
@@ -265,8 +266,9 @@ export async function POST(req: Request) {
           }
 
           return NextResponse.json({ url: finalUrl }, { status: 200 });
-        } catch (e: any) {
-          console.error("[Media API] Hugging Face failed, falling back to Magic Hour:", e.message);
+        } catch (e: unknown) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          console.error("[Media API] Hugging Face failed, falling back to Magic Hour:", errMsg);
           const jobId = await startVideoJob(prompt);
           return NextResponse.json({ jobId }, { status: 200 });
         }
@@ -279,8 +281,9 @@ export async function POST(req: Request) {
       if (process.env.HUGGINGFACE_API_KEY) {
         try {
           finalUrl = await generateHuggingFaceImage(prompt, userId);
-        } catch (e: any) {
-          console.error("[Media API] Hugging Face Image failed, falling back to Pollinations:", e.message);
+        } catch (e: unknown) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          console.error("[Media API] Hugging Face Image failed, falling back to Pollinations:", errMsg);
           finalUrl = await generateImage(userId, prompt);
         }
       } else {
@@ -308,8 +311,9 @@ export async function POST(req: Request) {
     } else {
       return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Media API] Error:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    const errMsg = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }

@@ -158,7 +158,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
   const [voiceConversationOpen, setVoiceConversationOpen] = useState(false);
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioRef = useRef<{ pause: () => void; src: string } | null>(null);
   const onDoneRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -178,7 +178,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
     
     // 2. Play a short silent sound to unlock Safari / iOS audio engine
     try {
-      const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const context = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       if (context.state === 'suspended') {
         context.resume();
       }
@@ -274,7 +274,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
       const arrayBuffer = await res.arrayBuffer();
       
       // Use Web Audio API instead of HTML5 Audio to bypass iOS/Safari autoplay blocks
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const context = new AudioCtx();
       if (context.state === 'suspended') {
         await context.resume();
@@ -303,7 +303,7 @@ export function TTSProvider({ children }: { children: React.ReactNode }) {
           try { source.stop(); } catch (e) {}
         },
         src: ''
-      } as any;
+      };
 
       source.start(0);
     } catch (err) {

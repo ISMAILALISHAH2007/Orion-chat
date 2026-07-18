@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { createContext, useContext, useState, useEffect } from 'react';
 
-type Theme = 'light' | 'dark';
+type Theme = 'light' | 'dark' | 'oled';
 
 const ModeContext = createContext<{
   mode: string;
@@ -26,13 +26,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window === 'undefined') return 'dark';
     const saved = localStorage.getItem('orion-theme') as Theme | null;
-    return saved === 'light' || saved === 'dark' ? saved : 'dark';
+    return saved === 'light' || saved === 'dark' || saved === 'oled' ? saved : 'dark';
   });
 
   // Apply theme to <html> and persist it.
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.toggle('dark', theme === 'dark');
+    root.classList.remove('light', 'dark', 'oled');
+    if (theme === 'light') {
+      root.classList.add('light');
+    } else if (theme === 'dark') {
+      root.classList.add('dark');
+    } else if (theme === 'oled') {
+      root.classList.add('oled');
+    }
     try {
       localStorage.setItem('orion-theme', theme);
     } catch {}

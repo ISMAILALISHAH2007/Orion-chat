@@ -35,6 +35,7 @@ import { useMode } from '@/app/components/providers/ThemeProvider';
 import { useVoice } from '@/app/components/hooks/useVoice';
 import { useTTS } from '@/app/components/providers/TTSProvider';
 import MessageBubble from './MessageBubble';
+import OrionOrb from './OrionOrb';
 import JSZip from 'jszip';
 import { IMAGE_INTENT_REGEX } from '@/app/lib/validation';
 import { generatePreviewHtml } from '@/app/lib/utils/preview';
@@ -96,19 +97,20 @@ function ThinkingAnimation({ isSearch }: { isSearch?: boolean }) {
   const text = isSearch ? 'Searching the live web...' : stages[stage];
 
   return (
-    <div className="flex items-center gap-3 mt-4 mb-2 p-3 bg-surface border border-border/50 rounded-2xl w-max shadow-sm animate-in fade-in slide-in-from-bottom-2">
+    <div className="flex items-center gap-3 mt-4 mb-2 p-3 bg-surface border border-border/50 rounded-2xl w-max shadow-md animate-in fade-in slide-in-from-bottom-2">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/10 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/20 via-purple-500/20 to-accent/20 animate-spin-slow" />
         {isSearch ? <Globe size={16} className="text-accent relative z-10 animate-pulse" /> : <Sparkles size={16} className="text-accent relative z-10" />}
       </span>
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium bg-gradient-to-r from-blue-500 via-purple-500 to-accent bg-clip-text text-transparent animate-pulse">
+      <div className="flex items-center gap-3.5">
+        <span className="text-xs font-semibold tracking-wide text-muted uppercase">
           {text}
         </span>
-        <div className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: '300ms' }} />
+        <div className="flex items-end gap-1.5 h-3">
+          <span className="w-0.5 rounded-full bg-blue-500 animate-pulse h-full" style={{ animationDuration: '0.6s', animationDelay: '0ms' }} />
+          <span className="w-0.5 rounded-full bg-purple-500 animate-pulse h-3/4" style={{ animationDuration: '0.8s', animationDelay: '150ms' }} />
+          <span className="w-0.5 rounded-full bg-pink-500 animate-pulse h-1/2" style={{ animationDuration: '0.7s', animationDelay: '300ms' }} />
+          <span className="w-0.5 rounded-full bg-accent animate-pulse h-full" style={{ animationDuration: '0.9s', animationDelay: '450ms' }} />
         </div>
       </div>
     </div>
@@ -251,6 +253,16 @@ export default function ChatInterface() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('voice') === 'true') {
+        initAudioContext();
+        setVoiceConversationOpen(true);
+      }
+    }
+  }, [initAudioContext, setVoiceConversationOpen]);
+
   const applyCommand = (cmd: string) => {
     setInput(`/${cmd} `);
     setSlashOpen(false);
@@ -273,7 +285,7 @@ export default function ChatInterface() {
     const hasNonImageFiles = attachments.some(a => !a.mimeType.startsWith('image/'));
     if (hasNonImageFiles && !finalInput.trim()) finalInput = 'Please analyze the attached file(s).';
     searchAttemptsRef.current = 0;
-    sendMessage(finalInput, attachments);
+    sendMessage(finalInput, attachments, { search: isSearchMode });
     setInput(''); setAttachments([]); setIsImageMode(false); setIsVideoMode(false); setIsSearchMode(false);
   };
 
@@ -424,12 +436,12 @@ export default function ChatInterface() {
         <div className="gemini-messages-scroll">
           <div className="gemini-messages-inner">
             {isEmpty ? (
-              <div className="gemini-empty-state">
-                <h1 className="gemini-greeting gemini-gradient-text">
+              <div className="gemini-empty-state flex flex-col items-center justify-center pt-16 pb-6">
+                <h1 className="gemini-greeting gemini-gradient-text text-center">
                   Hello, {userName !== 'there' ? userName : 'Commander'}
                 </h1>
-                <p className="gemini-subtitle">How can I help you today?</p>
-                <div className="gemini-suggestion-grid">
+                <p className="gemini-subtitle text-center mt-2 text-sm text-muted">How can I help you today?</p>
+                <div className="gemini-suggestion-grid mt-10">
                   {SUGGESTIONS.map(({ icon: Icon, title, prompt }) => (
                     <button key={title} onClick={() => { setInput(prompt); textareaRef.current?.focus(); }} className="gemini-suggestion-chip">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-accent"><Icon size={15} /></span>
@@ -444,7 +456,7 @@ export default function ChatInterface() {
             ) : (
               <>
                 {messages.filter(m => !m.isHidden).map((msg, idx, arr) => (
-                  <MessageBubble key={idx} sender={msg.sender} text={msg.text} mode={msg.mode} attachments={msg.attachments}
+                  <MessageBubble key={idx} index={messages.indexOf(msg)} sender={msg.sender} text={msg.text} mode={msg.mode} attachments={msg.attachments}
                     isStreaming={isStreaming && idx === arr.length - 1 && msg.sender === 'ai'}
                     onPreviewCode={handlePreviewCode} />
                 ))}

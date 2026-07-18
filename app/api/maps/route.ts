@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ results: `No location found for "${query}".` });
     }
 
-    const formattedResults = data.map((item: any, i: number) => 
+    const formattedResults = data.map((item: { display_name: string; type: string; lat: string; lon: string }, i: number) => 
       `${i + 1}. ${item.display_name} (Type: ${item.type}, Lat: ${item.lat}, Lon: ${item.lon})`
     ).join('\n');
 

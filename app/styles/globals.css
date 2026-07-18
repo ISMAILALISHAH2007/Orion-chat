@@ -79,6 +79,30 @@
   --gemini-yellow: #fdd663;
 }
 
+/* ----- OLED Pitch-Black theme — Nebula Neon style ----- */
+.oled {
+  --background: #000000;
+  --surface: #0a0a0b;
+  --surface-2: #141417;
+  --surface-hover: #1d1d22;
+  --foreground: #f3f4f6;
+  --muted: #8e9196;
+  --accent: #d946ef;
+  --accent-hover: #e879f9;
+  --accent-foreground: #000000;
+  --accent-soft: rgba(217, 70, 239, 0.14);
+  --border: #222225;
+  --border-strong: #333338;
+  --input: #000000;
+  --danger: #f87171;
+
+  --gemini-blue: #a855f7;
+  --gemini-purple: #d946ef;
+  --gemini-pink: #f43f5e;
+  --gemini-green: #34d399;
+  --gemini-yellow: #fbbf24;
+}
+
 /* ----- Tailwind theme token mapping ----- */
 @theme inline {
   --color-background: var(--background);
@@ -1739,3 +1763,20 @@ body {
   color: var(--text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
+
+@keyframes progressBar {
+  0% {
+    width: 0%;
+  }
+  50% {
+    width: 70%;
+  }
+  100% {
+    width: 100%;
+  }
+}
+
+.animate-progress-bar {
+  animation: progressBar 3s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+

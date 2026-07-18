@@ -3,6 +3,8 @@ const CACHE_NAME = 'orion-cache-v2';
 // Minimum required files to cache for installability
 const URLS_TO_CACHE = [
   '/',
+  '/notes',
+  '/settings',
   '/manifest.json',
   '/icon-192x192.png',
   '/icon-512x512.png'

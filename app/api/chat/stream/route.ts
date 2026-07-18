@@ -81,7 +81,7 @@ export async function POST(req: Request) {
       return new NextResponse('Rate limit exceeded', { status: 429 });
     }
 
-    const { messages, mode, sessionId, timeZone, voiceLang, voiceGender, isVoiceMode } = await req.json();
+    const { messages, mode, sessionId, timeZone, voiceLang, voiceGender, isVoiceMode, search } = await req.json();
 
     if (!messages || messages.length === 0) {
       return new NextResponse('Messages are required', { status: 400 });
@@ -230,10 +230,12 @@ Rules:
     }
 
     // ----- 4. Long-term memory retrieval & Web Search -----
-    const searchPromise = performSearch(userContent).catch(err => {
-      console.warn('Pre-search failed:', err);
-      return 'Search unavailable.';
-    });
+    const searchPromise = search
+      ? performSearch(userContent).catch(err => {
+          console.warn('Pre-search failed:', err);
+          return 'Search unavailable.';
+        })
+      : Promise.resolve('Search disabled.');
 
     const [, memories, searchResults] = await Promise.all([
       sessionPromiseTask,

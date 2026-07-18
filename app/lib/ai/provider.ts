@@ -8,7 +8,7 @@ export type AIProviderName = 'openrouter' | 'gemini' | 'nvidia';
 const DEFAULT_MODELS: Record<ChatMode, string> = {
   casual: 'meta/llama-3.1-70b-instruct',
   developer: 'gemini-3.1-flash-lite',
-  research: 'meta/llama-3.1-8b-instruct',
+  research: 'deepseek/deepseek-r1',
   professional: 'google/lyria-3-pro-preview',
 };
 
@@ -65,29 +65,28 @@ const nvidia = process.env.NVIDIA_API_KEY
   : null;
 
 function resolveProvider(mode: ChatMode): AIProviderName {
-  if (mode === 'professional' && nvidia) return 'nvidia';
-  if (mode === 'developer' && google) return 'gemini';
-  
-  // High-tier workloads go to NVIDIA
-  if ((mode === 'research' || mode === 'casual') && nvidia) return 'nvidia';
-  
   if (google) return 'gemini';
   if (openrouter) return 'openrouter';
+  if (nvidia) return 'nvidia';
   return 'openrouter';
 }
 
 function getModelId(mode: ChatMode, provider: AIProviderName): string {
-  if (provider === 'gemini') return process.env.MODEL_DEVELOPER || 'gemini-3.1-flash-lite';
+  if (provider === 'gemini') {
+    if (mode === 'research') return 'gemini-2.5-pro';
+    return process.env.MODEL_DEVELOPER || 'gemini-3.1-flash-lite';
+  }
   
   if (provider === 'openrouter') {
     if (mode === 'professional') return process.env.MODEL_PROFESSIONAL || 'google/lyria-3-pro-preview';
-    if (mode === 'research') return process.env.MODEL_RESEARCH || 'meta/llama-3.1-70b-instruct';
+    if (mode === 'research') return process.env.MODEL_RESEARCH || 'deepseek/deepseek-r1';
     return process.env.MODEL_CASUAL || 'meta/llama-3.1-8b-instruct';
   }
   
   if (provider === 'nvidia') {
     if (mode === 'casual') return 'meta/llama-3.1-8b-instruct';
     if (mode === 'professional') return 'meta/llama-3.1-70b-instruct';
+    if (mode === 'research') return 'deepseek-ai/deepseek-r1';
     return 'meta/llama-3.1-8b-instruct';
   }
   

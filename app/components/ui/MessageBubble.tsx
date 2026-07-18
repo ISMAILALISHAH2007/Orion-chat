@@ -1,13 +1,26 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Sparkles, Volume2, VolumeX, ChevronDown, BrainCircuit } from 'lucide-react';
+import { 
+  Sparkles, 
+  Volume2, 
+  VolumeX, 
+  ChevronDown, 
+  BrainCircuit,
+  Copy,
+  Check,
+  RefreshCw,
+  ThumbsUp,
+  ThumbsDown,
+  Edit2
+} from 'lucide-react';
 import { parseMarkdown } from '@/app/lib/utils/markdown';
 import { generatePreviewHtml } from '@/app/lib/utils/preview';
 import { useTTS } from '@/app/components/providers/TTSProvider';
 import { useChat } from '@/app/components/providers/ChatProvider';
 
 interface MessageBubbleProps {
+  index: number;
   sender: 'user' | 'ai';
   text: string;
   mode?: string;
@@ -16,10 +29,6 @@ interface MessageBubbleProps {
   onPreviewCode?: (code: string, lang: string) => void;
 }
 
-/**
- * Parse [REASONING]...[/REASONING] blocks from AI text.
- * Returns { mainText, reasoningText } or null if no reasoning tags.
- */
 function parseReasoning(text: string): { mainText: string; reasoningText: string } | null {
   const match = text.match(/\[REASONING\]([\s\S]*?)\[\/REASONING\]/);
   if (!match) return null;
@@ -28,15 +37,31 @@ function parseReasoning(text: string): { mainText: string; reasoningText: string
   return { mainText, reasoningText };
 }
 
-export default function MessageBubble({ sender, text, attachments, isStreaming, onPreviewCode }: MessageBubbleProps) {
+export default function MessageBubble({ 
+  index,
+  sender, 
+  text, 
+  attachments, 
+  isStreaming, 
+  onPreviewCode 
+}: MessageBubbleProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const { speak, stopSpeaking, isSpeaking, initAudioContext } = useTTS();
   const [reasoningOpen, setReasoningOpen] = useState(false);
-  const { sessionId } = useChat();
+  const { sessionId, regenerate, editAndResend } = useChat();
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
 
+  // Overrides & Feedback states
   const [localTextOverride, setLocalTextOverride] = useState<string | null>(null);
   const mediaGeneratingRef = useRef(false);
+  
+  // Copying & Feedback toggles
+  const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
+
+  // User editing states
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(text);
 
   const rawText = localTextOverride ?? text;
   const reasoning = parseReasoning(rawText);
@@ -77,7 +102,7 @@ export default function MessageBubble({ sender, text, attachments, isStreaming, 
             setLocalTextOverride(displayText.replace(tagToReplace, `⚠️ **Failed to generate video**: ${data.error || 'Unknown error'}`));
           }
         } catch (e) {
-          setTimeout(() => pollJob(jobId), 4000); // Retry on network blips during polling
+          setTimeout(() => pollJob(jobId), 4000);
         }
       };
 
@@ -115,7 +140,6 @@ export default function MessageBubble({ sender, text, attachments, isStreaming, 
     const targetUrl = typeof urlToDownload === 'string' ? urlToDownload : fullScreenImage;
     if (!targetUrl) return;
     try {
-      // Use proxy to avoid CORS when loading image into canvas
       const response = await fetch(`/api/download?url=${encodeURIComponent(targetUrl)}`);
       const blob = await response.blob();
       
@@ -129,8 +153,6 @@ export default function MessageBubble({ sender, text, attachments, isStreaming, 
         if (!ctx) return;
         
         ctx.drawImage(img, 0, 0);
-        
-        // Add "⚡ ORION AI" watermark
         const fontSize = Math.max(20, Math.floor(img.width * 0.03));
         ctx.font = `bold ${fontSize}px Arial, sans-serif`;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
@@ -159,7 +181,6 @@ export default function MessageBubble({ sender, text, attachments, isStreaming, 
     }
   };
 
-  // Wire up copy + preview buttons in code blocks
   useEffect(() => {
     const root = contentRef.current;
     if (!root) return;
@@ -180,18 +201,14 @@ export default function MessageBubble({ sender, text, attachments, isStreaming, 
     });
 
     const previewButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('.code-preview'));
-    console.log('[MessageBubble] Found preview buttons count:', previewButtons.length, 'onPreviewCode is defined:', !!onPreviewCode);
     previewButtons.forEach((btn) => {
       const onClick = () => {
-        console.log('[MessageBubble] Preview clicked! lang:', btn.getAttribute('data-lang'));
         const lang = btn.getAttribute('data-lang') || 'text';
         const rawCode = btn.getAttribute('data-code') || '';
         const decoded = rawCode.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
         if (onPreviewCode) {
-          console.log('[MessageBubble] Invoking onPreviewCode callback...');
           onPreviewCode(decoded, lang);
         } else {
-          console.log('[MessageBubble] No onPreviewCode callback, falling back to window.open...');
           const win = window.open('', '_blank', 'width=900,height=700');
           if (!win) return;
           win.document.write(generatePreviewHtml(decoded, lang));
@@ -238,28 +255,84 @@ export default function MessageBubble({ sender, text, attachments, isStreaming, 
     else speak(displayText);
   };
 
+  const handleCopyText = () => {
+    navigator.clipboard?.writeText(displayText).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleEditResend = () => {
+    if (!editValue.trim() || editValue.trim() === text) {
+      setIsEditing(false);
+      return;
+    }
+    editAndResend(index, editValue.trim());
+    setIsEditing(false);
+  };
+
   if (sender === 'user') {
     return (
-      <div className="gemini-msg-user">
-        <div className="gemini-msg-user-bubble">
-          {text}
-          {attachments && attachments.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {attachments.map((att, idx) => (
-                <div key={idx} className="relative h-20 w-20 sm:h-28 sm:w-28 overflow-hidden rounded-xl border border-border shadow-sm transition-transform hover:scale-105 cursor-pointer">
-                  <Image src={att.url} alt={att.name} fill className="object-cover" unoptimized />
-                </div>
-              ))}
+      <div className="gemini-msg-user group relative">
+        {isEditing ? (
+          <div className="w-full max-w-2xl ml-auto bg-surface-2 border border-border/80 rounded-2xl p-3 flex flex-col gap-2">
+            <textarea
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              className="w-full bg-transparent resize-y outline-none text-sm text-foreground pr-2"
+              rows={3}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 text-xs">
+              <button
+                onClick={() => setIsEditing(false)}
+                className="px-3 py-1.5 border border-border rounded-xl text-muted hover:text-foreground hover:bg-surface-3 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditResend}
+                className="px-3 py-1.5 bg-accent text-accent-foreground font-semibold rounded-xl hover:opacity-90 transition"
+              >
+                Send
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="relative max-w-[85%] sm:max-w-[75%] w-fit min-w-[30px] flex-shrink-0">
+            <div className="gemini-msg-user-bubble">
+              {text}
+              {attachments && attachments.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {attachments.map((att, idx) => (
+                    <div key={idx} className="relative h-20 w-20 sm:h-28 sm:w-28 overflow-hidden rounded-xl border border-border shadow-sm transition-transform hover:scale-105 cursor-pointer">
+                      <Image src={att.url} alt={att.name} fill className="object-cover" unoptimized />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* Inline editing button on hover */}
+            <button
+              onClick={() => {
+                setEditValue(text);
+                setIsEditing(true);
+              }}
+              title="Edit & Resend"
+              className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 rounded-full border border-border bg-surface-1 text-muted opacity-0 group-hover:opacity-100 hover:text-foreground hover:scale-105 active:scale-95 transition-all shadow-sm"
+            >
+              <Edit2 size={11} />
+            </button>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="gemini-msg-ai">
-      <span className="gemini-msg-avatar">
+    <div className="gemini-msg-ai relative group">
+      <span className="gemini-msg-avatar flex items-center justify-center">
         <Sparkles size={14} className="text-accent" />
       </span>
       <div className="gemini-msg-content">
@@ -294,18 +367,62 @@ export default function MessageBubble({ sender, text, attachments, isStreaming, 
           }}
         />
 
+        {/* AI Message Actions Bar */}
         {!isStreaming && (
-          <button
-            onClick={handleReadAloud}
-            className="mt-2 flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all hover:bg-surface-2 active:scale-95 border border-border/50 text-muted hover:text-foreground"
-            title={isSpeaking ? 'Stop reading' : 'Read aloud'}
-          >
-            {isSpeaking ? (
-              <><VolumeX size={12} /><span>Stop</span></>
-            ) : (
-              <><Volume2 size={12} /><span>Read aloud</span></>
-            )}
-          </button>
+          <div className="flex items-center gap-1.5 mt-3 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
+            {/* Copy button */}
+            <button
+              onClick={handleCopyText}
+              title="Copy response"
+              className="p-2 border border-border/50 rounded-full hover:bg-surface-2 transition hover:text-foreground text-muted"
+            >
+              {copied ? <Check size={12} className="text-accent" /> : <Copy size={12} />}
+            </button>
+
+            {/* Read aloud button */}
+            <button
+              onClick={handleReadAloud}
+              title={isSpeaking ? 'Stop speaking' : 'Read aloud'}
+              className="p-2 border border-border/50 rounded-full hover:bg-surface-2 transition hover:text-foreground text-muted"
+            >
+              {isSpeaking ? <VolumeX size={12} className="text-accent animate-pulse" /> : <Volume2 size={12} />}
+            </button>
+
+            {/* Regenerate button */}
+            <button
+              onClick={() => regenerate(index)}
+              title="Regenerate answer"
+              className="p-2 border border-border/50 rounded-full hover:bg-surface-2 transition hover:text-foreground text-muted"
+            >
+              <RefreshCw size={12} />
+            </button>
+
+            <span className="h-4 w-px bg-border/80 mx-1" />
+
+            {/* Thumbs up */}
+            <button
+              onClick={() => setFeedback(feedback === 'up' ? null : 'up')}
+              title="Good response"
+              className={[
+                'p-2 border border-border/50 rounded-full hover:bg-surface-2 transition-all',
+                feedback === 'up' ? 'text-accent border-accent/40 bg-accent/5' : 'text-muted hover:text-foreground'
+              ].join(' ')}
+            >
+              <ThumbsUp size={12} className={feedback === 'up' ? 'fill-accent' : ''} />
+            </button>
+
+            {/* Thumbs down */}
+            <button
+              onClick={() => setFeedback(feedback === 'down' ? null : 'down')}
+              title="Bad response"
+              className={[
+                'p-2 border border-border/50 rounded-full hover:bg-surface-2 transition-all',
+                feedback === 'down' ? 'text-danger border-danger/40 bg-danger/5' : 'text-muted hover:text-foreground'
+              ].join(' ')}
+            >
+              <ThumbsDown size={12} className={feedback === 'down' ? 'fill-danger' : ''} />
+            </button>
+          </div>
         )}
       </div>
       

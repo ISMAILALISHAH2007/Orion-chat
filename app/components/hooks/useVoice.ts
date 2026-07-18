@@ -1,5 +1,35 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
+interface ISpeechRecognition {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: (event: ISpeechRecognitionEvent) => void;
+  onerror: (event: ISpeechRecognitionErrorEvent) => void;
+  onend: () => void;
+}
+
+interface ISpeechRecognitionEvent {
+  resultIndex: number;
+  results: {
+    length: number;
+    [key: number]: {
+      isFinal: boolean;
+      [key: number]: {
+        transcript: string;
+      };
+    };
+  };
+}
+
+interface ISpeechRecognitionErrorEvent {
+  error: string;
+}
+
 export function useVoice(options?: { 
   language?: string; 
   onSpeechEnd?: (text: string) => void;
@@ -9,10 +39,11 @@ export function useVoice(options?: {
   const [transcript, setTranscript] = useState('');
   const [voiceError, setVoiceError] = useState<string | null>(null);
   
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const optionsRef = useRef(options);
   const finalTranscriptRef = useRef('');
   const shouldRestartRef = useRef(false);
+  const startRecordingViaBuildRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     optionsRef.current = options;
@@ -20,7 +51,7 @@ export function useVoice(options?: {
 
   // Core recognition setup - builds a SpeechRecognition instance with all handlers
   const buildRecognition = useCallback((resetState: boolean) => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = (window as unknown as { SpeechRecognition?: new () => ISpeechRecognition; webkitSpeechRecognition?: new () => ISpeechRecognition }).SpeechRecognition || (window as unknown as { SpeechRecognition?: new () => ISpeechRecognition; webkitSpeechRecognition?: new () => ISpeechRecognition }).webkitSpeechRecognition;
     if (!SpeechRecognition) return null;
     
     // Map language to BCP-47 code
@@ -44,6 +75,58 @@ export function useVoice(options?: {
     return recognition;
   }, []);
 
+  // Internal start for auto-restart (shorter, skips error state reset)
+  const startRecordingViaBuild = useCallback(() => {
+    try {
+      const recognition = buildRecognition(false);
+      if (!recognition) return;
+
+      finalTranscriptRef.current = '';
+      setIsRecording(true);
+
+      recognition.onresult = (event: ISpeechRecognitionEvent) => {
+        let interimTranscript = '';
+        let finalSegment = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalSegment += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        if (finalSegment) finalTranscriptRef.current += finalSegment + ' ';
+        setTranscript((finalTranscriptRef.current + interimTranscript).trim());
+      };
+
+      recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
+        if (event.error === 'no-speech' || event.error === 'aborted') return;
+        console.error('Recognition error:', event.error);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+        const finalText = finalTranscriptRef.current.trim();
+        if (finalText) {
+          setTimeout(() => optionsRef.current?.onSpeechEnd?.(finalText), 100);
+        }
+        if (shouldRestartRef.current) {
+          setTimeout(() => { if (shouldRestartRef.current) startRecordingViaBuildRef.current?.(); }, 400);
+        }
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      console.error('Failed to restart recording:', err);
+      setIsRecording(false);
+    }
+  }, [buildRecognition]);
+
+  // Keep ref up to date
+  useEffect(() => {
+    startRecordingViaBuildRef.current = startRecordingViaBuild;
+  }, [startRecordingViaBuild]);
+
   const startRecording = useCallback(() => {
     try {
       if (recognitionRef.current) {
@@ -61,7 +144,7 @@ export function useVoice(options?: {
       setVoiceError(null);
       setIsRecording(true);
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event: ISpeechRecognitionEvent) => {
         let interimTranscript = '';
         let finalSegment = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -75,7 +158,7 @@ export function useVoice(options?: {
         setTranscript((finalTranscriptRef.current + interimTranscript).trim());
       };
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = (event: ISpeechRecognitionErrorEvent) => {
         console.error('Speech Recognition Error:', event.error);
         if (event.error === 'no-speech') return;
         let userMessage = `Error: ${event.error}`;
@@ -98,7 +181,7 @@ export function useVoice(options?: {
         // Auto-restart for continuous conversation mode
         if (shouldRestartRef.current) {
           setTimeout(() => {
-            if (shouldRestartRef.current) startRecordingViaBuild();
+            if (shouldRestartRef.current) startRecordingViaBuildRef.current?.();
           }, 400);
         }
       };
@@ -107,53 +190,6 @@ export function useVoice(options?: {
       recognition.start();
     } catch (err) {
       console.error('Failed to start recording:', err);
-      setIsRecording(false);
-    }
-  }, [buildRecognition]);
-
-  // Internal start for auto-restart (shorter, skips error state reset)
-  const startRecordingViaBuild = useCallback(() => {
-    try {
-      const recognition = buildRecognition(false);
-      if (!recognition) return;
-
-      finalTranscriptRef.current = '';
-      setIsRecording(true);
-
-      recognition.onresult = (event: any) => {
-        let interimTranscript = '';
-        let finalSegment = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalSegment += event.results[i][0].transcript;
-          } else {
-            interimTranscript += event.results[i][0].transcript;
-          }
-        }
-        if (finalSegment) finalTranscriptRef.current += finalSegment + ' ';
-        setTranscript((finalTranscriptRef.current + interimTranscript).trim());
-      };
-
-      recognition.onerror = (event: any) => {
-        if (event.error === 'no-speech' || event.error === 'aborted') return;
-        console.error('Recognition error:', event.error);
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-        const finalText = finalTranscriptRef.current.trim();
-        if (finalText) {
-          setTimeout(() => optionsRef.current?.onSpeechEnd?.(finalText), 100);
-        }
-        if (shouldRestartRef.current) {
-          setTimeout(() => { if (shouldRestartRef.current) startRecordingViaBuild(); }, 400);
-        }
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err) {
-      console.error('Failed to restart recording:', err);
       setIsRecording(false);
     }
   }, [buildRecognition]);
