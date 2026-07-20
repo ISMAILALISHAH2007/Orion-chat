@@ -12,6 +12,19 @@ const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // 0. Always let static assets pass through untouched.
+  //    Service Workers (.js) must NOT be redirected — browser spec disallows it.
+  if (
+    pathname === '/sw.js' ||
+    pathname === '/manifest.json' ||
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
+    pathname === '/favicon.ico'
+  ) {
+    return NextResponse.next();
+  }
+
   // 1. Rate Limiting for API routes
   if (pathname.startsWith('/api')) {
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown';
@@ -75,6 +88,7 @@ export const config = {
      * - favicon.ico (favicon file)
      * - public assets like images (.png, .jpg, .svg, etc.)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\\\.png$|.*\\\\.jpg$|.*\\\\.svg$|.*\\\\.ico$).*)',
+    // Exclude .js files (service workers, static scripts) and common static assets
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.js$|.*\\.png$|.*\\.jpg$|.*\\.svg$|.*\\.ico$|.*\\.json$|.*\\.webmanifest$).*)',
   ],
 };

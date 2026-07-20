@@ -19,10 +19,16 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="auth-container">
+      <div className="auth-bg-glow" />
+      <div className="auth-grid-pattern" />
       <div className="auth-card">
         <div className="auth-header">
           <div className="auth-logo flex items-center justify-center gap-2">
-            <Sparkles size={22} className="text-accent" /> ORION
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping rounded-full bg-accent/20" />
+              <Sparkles size={22} className="text-accent relative" />
+            </div>
+            ORION
           </div>
           <h2 className="auth-title">Reset password</h2>
           <p className="auth-subtitle">Enter your email to receive a reset link</p>

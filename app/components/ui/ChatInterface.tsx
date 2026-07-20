@@ -134,21 +134,11 @@ export default function ChatInterface() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewMode, setPreviewMode] = useState<'preview' | 'code'>('preview');
   const [isFullScreen, setIsFullScreen] = useState(false);
-
-  const handleDownloadPreview = () => {
-    if (!previewCode) return;
-    const blob = new Blob([previewCode], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `artifact.${previewLang === 'svg' ? 'svg' : (previewLang === 'html' ? 'html' : 'txt')}`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
   const [isMobile] = useState(() => {
     if (typeof window === 'undefined') return false;
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   });
+
   const { messages, sendMessage, isStreaming, isResearching, stop } = useChat();
   const { mode } = useMode();
   const { liveVoiceMode, setLiveVoiceMode, speak, aiVoiceEnabled, initAudioContext, voiceConversationOpen, setVoiceConversationOpen, voiceGender, setVoiceGender } = useTTS();
@@ -174,19 +164,42 @@ export default function ChatInterface() {
   const dragCounterRef = useRef(0);
   const prevStreamingRef = useRef(false);
   const searchAttemptsRef = useRef(0);
+  const lastSpokenMessageRef = useRef('');
   const { data: session } = useSession();
   const userName = session?.user?.name?.split(' ')[0] || 'there';
 
   const isEmpty = messages.length === 0;
 
-  let placeholder = MODE_PLACEHOLDERS[mode as keyof typeof MODE_PLACEHOLDERS] ?? MODE_PLACEHOLDERS.casual;
-  if (isImageMode) placeholder = "Describe the image you want to create...";
-  if (isVideoMode) placeholder = "Describe the AI video you want to generate...";
-  if (isSearchMode) placeholder = "Ask anything to search the web...";
+  const placeholder = (() => {
+    let p = MODE_PLACEHOLDERS[mode as keyof typeof MODE_PLACEHOLDERS] ?? MODE_PLACEHOLDERS.casual;
+    if (isImageMode) p = "Describe the image you want to create...";
+    if (isVideoMode) p = "Describe the AI video you want to generate...";
+    if (isSearchMode) p = "Ask anything to search the web...";
+    return p;
+  })();
+
+  const lastAiMsg = messages.filter(m => m.sender === 'ai' && !m.isHidden).slice(-1)[0];
+  const latestAiResponse = lastAiMsg?.text || '';
+
+  // === DOWNLOAD HELPER (kept above JSX for parity) ===
+  const handleDownloadPreview = () => {
+    if (!previewCode) return;
+    const blob = new Blob([previewCode], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `artifact.${previewLang === 'svg' ? 'svg' : (previewLang === 'html' ? 'html' : 'txt')}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const scrollBehaviorRef = useRef<'smooth' | 'auto'>('auto');
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    // Set desired behavior FIRST, then read it — so final scroll on stream-end is smooth
+    scrollBehaviorRef.current = isStreaming ? 'auto' : 'smooth';
+    messagesEndRef.current?.scrollIntoView({ behavior: scrollBehaviorRef.current });
+  }, [messages, isStreaming]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -194,15 +207,6 @@ export default function ChatInterface() {
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 160) + 'px';
   }, [input]);
-
-
-
-  // === LATEST AI RESPONSE FOR VOICE CONVERSATION MODE ===
-  const lastAiMsg = messages.filter(m => m.sender === 'ai' && !m.isHidden).slice(-1)[0];
-  const latestAiResponse = lastAiMsg?.text || '';
-
-  // === AI VOICE SPEAKING + WEB SEARCH HANDLER ===
-  const lastSpokenMessageRef = useRef('');
 
   useEffect(() => {
     if (prevStreamingRef.current && !isStreaming) {
@@ -456,9 +460,11 @@ export default function ChatInterface() {
             ) : (
               <>
                 {messages.filter(m => !m.isHidden).map((msg, idx, arr) => (
-                  <MessageBubble key={idx} index={messages.indexOf(msg)} sender={msg.sender} text={msg.text} mode={msg.mode} attachments={msg.attachments}
-                    isStreaming={isStreaming && idx === arr.length - 1 && msg.sender === 'ai'}
-                    onPreviewCode={handlePreviewCode} />
+                  <div key={idx} style={{ '--msg-stagger': idx } as React.CSSProperties}>
+                    <MessageBubble index={messages.indexOf(msg)} sender={msg.sender} text={msg.text} mode={msg.mode} attachments={msg.attachments}
+                      isStreaming={isStreaming && idx === arr.length - 1 && msg.sender === 'ai'}
+                      onPreviewCode={handlePreviewCode} />
+                  </div>
                 ))}
                 {isResearching && <ThinkingAnimation isSearch={isSearchQuery(messages.filter(m => m.sender === 'user').slice(-1)[0]?.text || '')} />}
                 <div ref={messagesEndRef} />
@@ -551,6 +557,7 @@ export default function ChatInterface() {
                 <button type="button" onClick={() => fileInputRef.current?.click()} className="gemini-icon-btn" title="Attach files"><Paperclip size={16} /></button>
                 <button type="button" onClick={() => { setIsSearchMode(!isSearchMode); setIsImageMode(false); setIsVideoMode(false); }} className={['gemini-icon-btn', isSearchMode ? 'active text-accent' : ''].join(' ')} title="Web Search"><Globe size={16} /></button>
                 <button type="button" onClick={() => { setIsImageMode(!isImageMode); setIsVideoMode(false); setIsSearchMode(false); }} className={['gemini-icon-btn', isImageMode ? 'active' : ''].join(' ')} title="Image"><Wand2 size={16} /></button>
+                <button type="button" onClick={() => { setIsVideoMode(!isVideoMode); setIsImageMode(false); setIsSearchMode(false); }} className={['gemini-icon-btn', isVideoMode ? 'active text-accent' : ''].join(' ')} title="Video"><Video size={16} /></button>
                 {isMobile && <button type="button" onClick={() => setShowCamera(true)} className="gemini-icon-btn" title="Camera"><Camera size={16} /></button>}
               </div>
             </div>

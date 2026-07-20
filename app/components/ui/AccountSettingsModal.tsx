@@ -1,8 +1,7 @@
 'use client';
 import { useSession, signOut } from 'next-auth/react';
 import { useTheme } from '@/app/components/providers/ThemeProvider';
-import { useTTS } from '@/app/components/providers/TTSProvider';
-import { X, Sun, Moon, Volume2, LogOut, Check, Settings } from 'lucide-react';
+import { X, Sun, Moon, LogOut, Check, Settings, ArrowLeftRight, Monitor } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 interface AccountSettingsModalProps {
@@ -12,7 +11,6 @@ interface AccountSettingsModalProps {
 export default function AccountSettingsModal({ onClose }: AccountSettingsModalProps) {
   const { data: session } = useSession();
   const { theme, setTheme } = useTheme();
-  const { voiceGender, setVoiceGender } = useTTS();
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,6 +26,12 @@ export default function AccountSettingsModal({ onClose }: AccountSettingsModalPr
   const userName = session?.user?.name || 'Commander';
   const userEmail = session?.user?.email || '';
   const initial = (userName || 'U').charAt(0).toUpperCase();
+
+  const themes: { id: 'light' | 'dark' | 'oled'; label: string; icon: typeof Sun; preview: string; accent: string }[] = [
+    { id: 'light', label: 'Light', icon: Sun, preview: 'bg-white', accent: 'text-amber-500' },
+    { id: 'dark', label: 'Dark', icon: Moon, preview: 'bg-zinc-800', accent: 'text-blue-400' },
+    { id: 'oled', label: 'Nebula', icon: Monitor, preview: 'bg-black', accent: 'text-fuchsia-400' },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in px-4">
@@ -60,54 +64,52 @@ export default function AccountSettingsModal({ onClose }: AccountSettingsModalPr
           </div>
 
           <div className="space-y-4">
-            {/* Theme Toggle */}
+            {/* Theme Toggle — Now with 3 themes! */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">Theme</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setTheme('light')}
-                  className={['flex items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-medium transition-all', theme === 'light' ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-transparent text-muted hover:bg-surface-2'].join(' ')}
-                >
-                  <Sun size={16} /> Light
-                  {theme === 'light' && <Check size={14} className="ml-1" />}
-                </button>
-                <button
-                  onClick={() => setTheme('dark')}
-                  className={['flex items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-medium transition-all', theme === 'dark' ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-transparent text-muted hover:bg-surface-2'].join(' ')}
-                >
-                  <Moon size={16} /> Dark
-                  {theme === 'dark' && <Check size={14} className="ml-1" />}
-                </button>
+              <div className="grid grid-cols-3 gap-2">
+                {themes.map((t) => {
+                  const Icon = t.icon;
+                  const active = theme === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setTheme(t.id)}
+                      className={[
+                        'flex flex-col items-center justify-center gap-1.5 rounded-xl border py-3 text-xs font-medium transition-all',
+                        active
+                          ? 'border-accent bg-accent/10 text-accent ring-1 ring-accent/30'
+                          : 'border-border bg-transparent text-muted hover:bg-surface-2 hover:text-foreground',
+                      ].join(' ')}
+                    >
+                      <div className={[
+                        'w-8 h-8 rounded-lg border flex items-center justify-center transition-transform',
+                        active ? 'scale-110' : '',
+                        t.preview,
+                        active ? 'border-accent/50' : 'border-border',
+                      ].join(' ')}>
+                        <Icon size={14} className={active ? t.accent : 'text-muted'} />
+                      </div>
+                      <span className="flex items-center gap-1">
+                        {t.label}
+                        {active && <Check size={10} className="shrink-0" />}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-            </div>
-
-            {/* AI Voice Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                <Volume2 size={16} className="text-muted" /> AI Voice
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setVoiceGender('male')}
-                  className={`flex-1 flex items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-medium transition-all ${voiceGender === 'male' ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-transparent text-muted hover:bg-surface-2'}`}
-                >
-                  Male
-                  {voiceGender === 'male' && <Check size={14} />}
-                </button>
-                <button
-                  onClick={() => setVoiceGender('female')}
-                  className={`flex-1 flex items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-medium transition-all ${voiceGender === 'female' ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-transparent text-muted hover:bg-surface-2'}`}
-                >
-                  Female
-                  {voiceGender === 'female' && <Check size={14} />}
-                </button>
-              </div>
-              <p className="text-xs text-muted">Select the AI voice gender for live conversations and read-aloud.</p>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-white/10 p-4">
+        <div className="border-t border-white/10 p-4 flex flex-col gap-2">
+          <button
+            onClick={() => signOut({ callbackUrl: '/sign-in' })}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-border py-3 text-sm font-semibold text-foreground transition-colors hover:bg-surface-2"
+          >
+            <ArrowLeftRight size={18} />
+            Switch Account
+          </button>
           <button
             onClick={() => signOut()}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-danger/10 py-3 text-sm font-semibold text-danger transition-colors hover:bg-danger/20"

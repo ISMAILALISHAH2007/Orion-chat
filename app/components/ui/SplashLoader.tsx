@@ -45,16 +45,13 @@ export default function SplashLoader({ children }: { children: React.ReactNode }
 
   if (!mounted) return null;
 
-  if (done) {
-    return <>{children}</>;
-  }
-
   return (
     <>
-      <div 
+      {/* Splash overlay — always rendered in the same tree position for stable React reconciliation */}
+      <div
         className={[
           'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#07090e] transition-opacity duration-500 ease-out select-none',
-          fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          done ? 'opacity-0 pointer-events-none' : fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
         ].join(' ')}
       >
         {/* Animated Background Ring */}

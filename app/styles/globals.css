@@ -496,13 +496,22 @@ body {
 }
 
 /* ==========================================================================
-   MESSAGE BUBBLES — Gemini-style
+   MESSAGE BUBBLES — Gemini-style with staggered entrance
    ========================================================================== */
+
+/* Staggered entrance — apply to parent for all child messages */
+@keyframes msg-stagger-in {
+  0% { opacity: 0; transform: translateY(12px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .gemini-msg-ai {
   display: flex;
   gap: 12px;
   margin-bottom: 24px;
-  animation: fade-in-up 0.3s ease forwards;
+  animation: msg-stagger-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(var(--msg-stagger, 0) * 50ms);
+  opacity: 0;
 }
 
 .gemini-msg-avatar {
@@ -516,6 +525,12 @@ body {
   border: 1px solid var(--border);
   flex-shrink: 0;
   margin-top: 4px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.gemini-msg-avatar:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .gemini-msg-content {
@@ -527,7 +542,9 @@ body {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 16px;
-  animation: fade-in-up 0.3s ease forwards;
+  animation: msg-stagger-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(var(--msg-stagger, 0) * 50ms);
+  opacity: 0;
 }
 
 .gemini-msg-user-bubble {
@@ -553,13 +570,14 @@ body {
 }
 
 /* ==========================================================================
-   INPUT AREA — Gemini-style floating pill
+   INPUT AREA — Gemini-style floating pill with glass-morphism
    ========================================================================== */
 .gemini-input-wrapper {
   padding: 8px 16px 16px;
   max-width: 768px;
   margin: 0 auto;
   width: 100%;
+  position: relative;
 }
 
 @media (max-width: 640px) {
@@ -577,11 +595,77 @@ body {
   box-shadow: var(--shadow-sm);
   transition: var(--transition-normal);
   overflow: hidden;
+  position: relative;
+}
+
+.gemini-input-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--accent-soft) 0%, transparent 50%, var(--accent-soft) 100%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
 .gemini-input-container:focus-within {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-md);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft), var(--shadow-md);
+}
+
+.gemini-input-container:focus-within::before {
+  opacity: 0.6;
+}
+
+/* Premium send button with hover glow */
+.gemini-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  transition: var(--transition-fast);
+  cursor: pointer;
+  border: none;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.gemini-send-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(255,255,255,0.2) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.gemini-send-btn:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+  box-shadow: 0 0 16px var(--accent-soft);
+}
+
+.gemini-send-btn:hover::after {
+  opacity: 1;
+}
+
+.gemini-send-btn:active {
+  transform: scale(0.95);
+}
+
+.gemini-send-btn:disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .gemini-input-row {
@@ -976,8 +1060,56 @@ body {
 .code-block code { font-family: var(--font-mono); font-size: 13px; line-height: 1.6; color: var(--foreground); }
 
 /* ==========================================================================
-   AUTH PAGES — Gemini-style
+   AUTH PAGES — Gemini-style Premium
    ========================================================================== */
+
+/* Background decoration — animated glowing orbs */
+.auth-bg-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.auth-bg-glow::before {
+  content: '';
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  top: -120px;
+  right: -120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-soft) 0%, transparent 70%);
+  animation: auth-glow-float 12s ease-in-out infinite alternate;
+}
+
+.auth-bg-glow::after {
+  content: '';
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  bottom: -100px;
+  left: -100px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(197, 138, 249, 0.08) 0%, transparent 70%);
+  animation: auth-glow-float 10s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes auth-glow-float {
+  0% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+  100% { transform: translate(30px, 30px) scale(1.15); opacity: 0.8; }
+}
+
+/* Subtle dot grid pattern overlay */
+.auth-grid-pattern {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, var(--border) 0.5px, transparent 0.5px);
+  background-size: 32px 32px;
+  opacity: 0.15;
+}
+
 .auth-container {
   display: flex;
   align-items: center;
@@ -990,6 +1122,7 @@ body {
   overflow: hidden;
 }
 
+/* Entrance animation for auth card */
 .auth-card {
   width: 100%;
   max-width: 400px;
@@ -997,12 +1130,18 @@ body {
   border-radius: var(--radius-lg);
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-xl);
   display: flex;
   flex-direction: column;
   gap: 24px;
   position: relative;
   z-index: 1;
+  animation: auth-card-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes auth-card-enter {
+  0% { opacity: 0; transform: translateY(20px) scale(0.97); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @media (max-width: 480px) {
@@ -1035,6 +1174,37 @@ body {
 .auth-form { display: flex; flex-direction: column; gap: 16px; }
 .form-group { display: flex; flex-direction: column; gap: 6px; }
 .form-label { font-size: 13px; font-weight: 500; color: var(--foreground); }
+
+/* Password input wrapper */
+.pass-input-wrapper {
+  position: relative;
+}
+
+.pass-input-wrapper .form-input {
+  padding-right: 56px;
+}
+
+/* Password toggle button */
+.pass-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: var(--transition-fast);
+}
+
+.pass-toggle:hover {
+  color: var(--foreground);
+  background: var(--surface-2);
+}
 
 .form-input {
   background: var(--background);
@@ -1092,8 +1262,16 @@ body {
   transition: var(--transition-fast);
 }
 
-.auth-button:hover { background: var(--accent-hover); }
-.auth-button:disabled { opacity: 0.6; cursor: not-allowed; }
+.auth-button:hover {
+  background: var(--accent-hover);
+  transform: scale(1.01);
+}
+
+.auth-button:active {
+  transform: scale(0.98);
+}
+
+.auth-button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
 .auth-button-outline {
   background: transparent;
@@ -1103,6 +1281,7 @@ body {
 
 .auth-button-outline:hover {
   background: var(--surface-2);
+  border-color: var(--border-strong);
 }
 
 .auth-footer { text-align: center; font-size: 14px; color: var(--muted); line-height: 1.6; }
@@ -1117,6 +1296,7 @@ body {
   border-radius: var(--radius-xs);
   background: rgba(217, 48, 37, 0.08);
   border: 1px solid rgba(217, 48, 37, 0.15);
+  animation: fade-in 0.25s ease forwards;
 }
 
 .auth-success {
@@ -1127,6 +1307,15 @@ body {
   border-radius: var(--radius-xs);
   background: rgba(52, 168, 83, 0.08);
   border: 1px solid rgba(52, 168, 83, 0.15);
+  animation: fade-in 0.25s ease forwards;
+}
+
+/* Google sign-in button with brand colors */
+.google-btn-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 
 /* ==========================================================================
@@ -1632,6 +1821,8 @@ body {
   align-items: center;
   gap: 12px;
   padding-top: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .voice-conv-btn {
@@ -1647,6 +1838,7 @@ body {
   border: 1px solid var(--border);
   background: transparent;
   color: var(--foreground);
+  white-space: nowrap;
 }
 
 .voice-conv-btn:hover {
@@ -1669,6 +1861,197 @@ body {
 
 .voice-conv-btn.end:hover {
   background: var(--surface-hover);
+}
+
+.voice-conv-btn.camera-on {
+  background: rgba(138, 180, 248, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.voice-conv-btn.camera-on:hover {
+  background: rgba(138, 180, 248, 0.25);
+}
+
+.voice-conv-btn.gender-male {
+  background: rgba(138, 180, 248, 0.15);
+  border-color: var(--gemini-blue);
+  color: var(--gemini-blue);
+}
+
+.voice-conv-btn.gender-male:hover {
+  background: rgba(138, 180, 248, 0.25);
+}
+
+.voice-conv-btn.gender-female {
+  background: rgba(217, 70, 239, 0.12);
+  border-color: var(--gemini-purple);
+  color: var(--gemini-purple);
+}
+
+.voice-conv-btn.gender-female:hover {
+  background: rgba(217, 70, 239, 0.2);
+}
+
+@media (max-width: 640px) {
+  .voice-conv-controls {
+    gap: 8px;
+  }
+  .voice-conv-btn {
+    padding: 7px 12px;
+    font-size: 11px;
+    gap: 5px;
+  }
+  .voice-conv-btn span {
+    display: none;
+  }
+  .voice-conv-btn.camera-on span,
+  .voice-conv-btn.gender-male span,
+  .voice-conv-btn.gender-female span,
+  .voice-conv-btn.end span {
+    display: inline;
+  }
+}
+
+/* ─── Live Camera PiP Overlay ─── */
+.voice-camera-pip {
+  position: fixed;
+  z-index: 70;
+  width: 520px;
+  height: 390px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 2px solid var(--accent);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7), 0 0 40px rgba(138, 180, 248, 0.3);
+  animation: camera-pip-in 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  cursor: grab;
+  user-select: none;
+  /* Desktop: bottom-right (standard PiP position like Zoom/Meet) */
+  top: auto;
+  bottom: 120px;
+  right: 24px;
+}
+
+.voice-camera-pip:active {
+  cursor: grabbing;
+}
+
+.voice-camera-pip-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+
+.voice-camera-pip-indicator {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+  animation: camera-indicator-pulse 1.5s ease-in-out infinite;
+  z-index: 1;
+}
+
+.voice-camera-pip-label {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 2px 6px;
+  border-radius: 4px;
+  z-index: 1;
+  backdrop-filter: blur(4px);
+}
+
+.voice-camera-pip-flip {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 2;
+  backdrop-filter: blur(6px);
+}
+
+.voice-camera-pip-flip:hover {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(1.1);
+}
+
+.voice-camera-pip-flip:active {
+  transform: scale(0.9);
+}
+
+.voice-camera-pip-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--accent), transparent, var(--gemini-purple));
+  opacity: 0.3;
+  z-index: -1;
+  animation: camera-glow-rotate 3s linear infinite;
+}
+
+@keyframes camera-pip-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.4) translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes camera-indicator-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.4); }
+}
+
+@keyframes camera-glow-rotate {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+@keyframes slide-up {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease forwards;
+}
+
+@media (max-width: 640px) {
+  .voice-camera-pip {
+    width: 280px;
+    height: 210px;
+    /* Mobile: centered horizontally above controls */
+    top: auto;
+    bottom: 100px;
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    transform: none;
+  }
 }
 
 /* Active indicator on TopNav */

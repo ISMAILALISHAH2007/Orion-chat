@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import Image from 'next/image';
 import { 
   Sparkles, 
@@ -64,9 +64,12 @@ export default function MessageBubble({
   const [editValue, setEditValue] = useState(text);
 
   const rawText = localTextOverride ?? text;
-  const reasoning = parseReasoning(rawText);
+  const reasoning = useMemo(() => parseReasoning(rawText), [rawText]);
   const displayText = reasoning ? reasoning.mainText : rawText;
   const reasoningText = reasoning?.reasoningText;
+
+  // Memoize parsed HTML — heavy operation, avoid re-running on every render
+  const parsedHtml = useMemo(() => parseMarkdown(displayText), [displayText]);
 
   // Background Media Generation Trigger
   useEffect(() => {
@@ -181,9 +184,21 @@ export default function MessageBubble({
     }
   };
 
+  // Track last DOM-parsed text to avoid redundant rescans
+  const lastParsedRef = useRef('');
+
   useEffect(() => {
     const root = contentRef.current;
     if (!root) return;
+    
+    // Skip DOM rescans during active streaming (text is changing too fast)
+    if (isStreaming) return;
+    
+    // Only rescan DOM if the actual text content changed
+    const currentText = root.textContent || '';
+    if (currentText === lastParsedRef.current) return;
+    lastParsedRef.current = currentText;
+    
     const cleanups: Array<() => void> = [];
 
     const copyButtons = Array.from(root.querySelectorAll<HTMLButtonElement>('.code-copy'));
@@ -313,14 +328,14 @@ export default function MessageBubble({
               )}
             </div>
             
-            {/* Inline editing button on hover */}
+            {/* Inline editing button — always visible on mobile, hover to show on desktop */}
             <button
               onClick={() => {
                 setEditValue(text);
                 setIsEditing(true);
               }}
               title="Edit & Resend"
-              className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 rounded-full border border-border bg-surface-1 text-muted opacity-0 group-hover:opacity-100 hover:text-foreground hover:scale-105 active:scale-95 transition-all shadow-sm"
+              className="absolute -left-8 top-1/2 -translate-y-1/2 p-1.5 rounded-full border border-border bg-surface-1 text-muted md:opacity-0 md:group-hover:opacity-100 opacity-100 hover:text-foreground hover:scale-105 active:scale-95 transition-all shadow-sm"
             >
               <Edit2 size={11} />
             </button>
@@ -356,20 +371,20 @@ export default function MessageBubble({
           </div>
         )}
 
-        {/* Main answer */}
+        {/* Main answer — memoized HTML */}
         <div
           ref={contentRef}
           className="msg-content"
           dangerouslySetInnerHTML={{
-            __html: parseMarkdown(displayText) + (isStreaming
+            __html: parsedHtml + (isStreaming
               ? '<span class="ml-1 inline-block h-4 w-2 animate-pulse bg-accent align-middle shadow-[0_0_6px_var(--accent)] rounded-full"></span>'
               : '')
           }}
         />
 
-        {/* AI Message Actions Bar */}
+        {/* AI Message Actions Bar — always visible on mobile, hover to show on desktop */}
         {!isStreaming && (
-          <div className="flex items-center gap-1.5 mt-3 opacity-0 group-hover:opacity-100 transition-opacity flex-wrap">
+          <div className="flex items-center gap-1.5 mt-3 md:opacity-0 md:group-hover:opacity-100 opacity-100 transition-opacity flex-wrap">
             {/* Copy button */}
             <button
               onClick={handleCopyText}

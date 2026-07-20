@@ -11,6 +11,7 @@ import {
   PanelLeftOpen,
   MessageSquare,
   NotebookPen,
+  Image as ImageIcon,
   Settings,
   X,
   Pin,
@@ -20,12 +21,18 @@ import {
   ChevronRight,
   Edit2,
   Check,
+  LogOut,
+  ArrowLeftRight,
+  Download,
 } from 'lucide-react';
+import { signOut } from 'next-auth/react';
+import { showInstallInstructions } from '@/app/lib/utils/install';
 import { useChat, type ChatSessionItem } from '@/app/components/providers/ChatProvider';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Chat', icon: MessageSquare },
   { href: '/notes', label: 'Notes', icon: NotebookPen },
+  { href: '/images', label: 'Gallery', icon: ImageIcon },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -243,9 +250,9 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* Action icons (show on hover) */}
+        {/* Action icons — always visible on mobile, hover to show on desktop */}
         {!isEditing && (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -525,20 +532,19 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* Profile / Account Settings */}
+        {/* Profile / Account Settings with Actions */}
         <div className="border-t border-border p-3">
-          <Link
-            href="/settings"
-            onClick={() => {
-              onCloseMobile();
-            }}
-            title={collapsed ? 'Settings' : undefined}
-            className={[
-              'gemini-nav-item w-full flex items-center justify-between gap-2.5 p-2 rounded-xl transition-all',
-              collapsed ? 'justify-center px-0' : 'hover:bg-surface-2',
-            ].join(' ')}
-          >
-            <div className="flex items-center gap-2 truncate">
+          <div className={[
+            'w-full flex items-center gap-1.5 p-2 rounded-xl transition-all',
+            collapsed ? 'flex-col justify-center' : '',
+          ].join(' ')}>
+            {/* User Avatar + Name (clickable to settings) */}
+            <Link
+              href="/settings"
+              onClick={onCloseMobile}
+              title={collapsed ? 'Settings' : undefined}
+              className="flex items-center gap-2 truncate flex-1 min-w-0"
+            >
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground shadow-md shadow-accent/10">
                 {initial}
               </span>
@@ -547,9 +553,57 @@ export default function Sidebar({
                   <span className="block truncate text-sm font-medium text-foreground">{userName}</span>
                 </span>
               )}
+            </Link>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-0.5 shrink-0">
+              {/* Switch Account */}
+              <button
+                onClick={() => signOut({ callbackUrl: '/sign-in' })}
+                title="Switch Account"
+                className="flex items-center justify-center w-8 h-8 rounded-full text-muted hover:bg-surface-2 hover:text-foreground transition-all"
+              >
+                <ArrowLeftRight size={14} />
+              </button>
+              {/* Logout */}
+              <button
+                onClick={() => signOut({ callbackUrl: '/sign-in' })}
+                title="Sign Out"
+                className="flex items-center justify-center w-8 h-8 rounded-full text-muted hover:bg-danger/10 hover:text-danger transition-all"
+              >
+                <LogOut size={14} />
+              </button>
+              {/* Settings */}
+              {!collapsed && (
+                <Link
+                  href="/settings"
+                  onClick={onCloseMobile}
+                  title="Settings"
+                  className="flex items-center justify-center w-8 h-8 rounded-full text-muted hover:bg-surface-2 hover:text-foreground transition-all"
+                >
+                  <Settings size={14} />
+                </Link>
+              )}
             </div>
-            {!collapsed && <Settings size={15} className="shrink-0 text-muted" />}
-          </Link>
+          </div>
+
+          {/* Download App link — always accessible, never annoying */}
+          <button
+            onClick={() => {
+              const isAndroid = /Android/i.test(navigator.userAgent);
+              showInstallInstructions(isAndroid);
+            }}
+            title="Download App"
+            className={[
+              'flex w-full items-center gap-2 rounded-xl text-xs font-medium text-muted hover:text-accent hover:bg-accent/5 transition-all',
+              collapsed
+                ? 'justify-center p-2'
+                : 'px-3 py-2'
+            ].join(' ')}
+          >
+            <Download size={14} className="shrink-0" />
+            {!collapsed && <span>Download App</span>}
+          </button>
         </div>
       </aside>
     </>

@@ -3,7 +3,7 @@ import { useMode, useTheme } from '@/app/components/providers/ThemeProvider';
 import { useTTS } from '@/app/components/providers/TTSProvider';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Menu, ChevronDown, Check, Sun, Moon, Sparkles, Headphones } from 'lucide-react';
+import { Menu, ChevronDown, Check, Sun, Moon, Monitor, Sparkles, Headphones } from 'lucide-react';
 
 const MODELS: { id: string; name: string; description: string; placeholder: string }[] = [
   {
@@ -38,7 +38,7 @@ interface TopNavProps {
 
 export default function TopNav({ onOpenSidebar }: TopNavProps) {
   const { mode, setMode } = useMode();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const {
     liveVoiceMode,
     setLiveVoiceMode,
@@ -178,11 +178,15 @@ export default function TopNav({ onOpenSidebar }: TopNavProps) {
           </button>
 
           <button
-            onClick={toggleTheme}
-            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            onClick={() => {
+              // Cycle through themes: dark → light → oled → dark
+              const next = theme === 'dark' ? 'light' : theme === 'light' ? 'oled' : 'dark';
+              setTheme(next);
+            }}
+            title={theme === 'dark' ? 'Switch to Light' : theme === 'light' ? 'Switch to Nebula' : 'Switch to Dark'}
             className="gemini-icon-btn"
           >
-            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            {theme === 'dark' ? <Sun size={16} /> : theme === 'light' ? <Monitor size={16} /> : <Moon size={16} />}
           </button>
         </div>
       </header>

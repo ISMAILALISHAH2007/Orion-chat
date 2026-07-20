@@ -1,6 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { DownloadCloud, X } from 'lucide-react';
+import { showInstallInstructions } from '@/app/lib/utils/install';
+
+const DISMISSED_KEY = 'orion-install-dismissed';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -15,9 +18,25 @@ export default function InstallPrompt() {
     return /Android/i.test(navigator.userAgent);
   });
 
+  // Check if already dismissed — only show once
+  const wasDismissed = () => {
+    if (typeof window === 'undefined') return false;
+    return !!localStorage.getItem(DISMISSED_KEY);
+  };
+
+  const markDismissed = () => {
+    try {
+      localStorage.setItem(DISMISSED_KEY, 'true');
+    } catch {}
+  };
+
   useEffect(() => {
+    // Skip entirely if already dismissed once
+    if (wasDismissed()) return;
+
     // Register Service Worker for PWA if supported
-    if ('serviceWorker' in navigator) {
+    // Skipped in development to avoid Turbopack/HTTPS redirect issues
+    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch(err => {
           console.error('ServiceWorker registration failed: ', err);
@@ -34,12 +53,13 @@ export default function InstallPrompt() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     
-    // Fallback: If on mobile, show the prompt manually after 2 seconds
+    // Fallback: If on mobile, show the prompt manually after 3 seconds
+    // but only if NOT already dismissed
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     let fallbackTimer: NodeJS.Timeout;
     if (isMobile) {
       fallbackTimer = setTimeout(() => {
-        if (!installPromptEvent) {
+        if (!installPromptEvent && !wasDismissed()) {
           setShowPrompt(true);
         }
       }, 3000);
@@ -53,23 +73,8 @@ export default function InstallPrompt() {
 
   const handleInstallClick = async () => {
     if (!installPromptEvent) {
-      // On Android Chrome, if no install prompt, guide to use browser menu
-      if (isAndroid) {
-        alert(
-          '📱 To install ORION on your Android device:\n\n' +
-          '1. Tap the ⋮ (three dots) menu in your browser\n' +
-          '2. Select "Install app" or "Add to Home screen"\n' +
-          '3. Follow the on-screen instructions\n\n' +
-          'This installs the Progressive Web App (PWA) - no APK file needed!'
-        );
-      } else {
-        alert(
-          '📱 To install ORION:\n\n' +
-          '• On iPhone/iPad: Tap the Share icon (📤) → "Add to Home Screen"\n' +
-          '• On Android: Tap the browser menu (⋮) → "Install App" or "Add to Home Screen"\n' +
-          '• On Desktop: Look for the install icon (➕) in the address bar'
-        );
-      }
+      showInstallInstructions(isAndroid);
+      markDismissed();
       setShowPrompt(false);
       return;
     }
@@ -80,7 +85,7 @@ export default function InstallPrompt() {
     const { outcome } = await installPromptEvent.userChoice;
     if (outcome === 'accepted') {
       console.log('User accepted the install prompt');
-      setShowPrompt(false);
+      markDismissed();
     }
     
     setInstallPromptEvent(null);
@@ -88,31 +93,41 @@ export default function InstallPrompt() {
   };
 
   const handleDismiss = () => {
+    markDismissed();
     setShowPrompt(false);
   };
 
   if (!showPrompt) return null;
 
   return (
-    <div className="fixed left-3 right-3 top-4 z-50 flex items-center justify-between rounded-2xl px-4 py-3 shadow-2xl animate-fade-in-down glass-panel border border-white/20 sm:left-auto sm:right-6 sm:top-6 sm:w-[380px]">
+    <div className="fixed left-3 right-3 top-4 z-50 flex items-center justify-between rounded-2xl px-4 py-3 shadow-2xl animate-fade-in-down sm:left-auto sm:right-6 sm:top-6 sm:w-[380px]"
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        backdropFilter: 'blur(16px)',
+        boxShadow: 'var(--shadow-xl)'
+      }}
+    >
       <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-accent/20 text-accent backdrop-blur-md">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px]"
+          style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
+        >
           <DownloadCloud size={20} />
         </div>
         <div className="flex flex-col">
-          <span className="text-[15px] font-semibold text-foreground">Install ORION</span>
-          <span className="text-[13px] text-muted">{isAndroid ? 'Add to home screen' : 'Install PWA for best experience'}</span>
+          <span className="text-sm font-semibold text-foreground">Install ORION</span>
+          <span className="text-xs text-muted">{isAndroid ? 'Add to home screen' : 'Install PWA for best experience'}</span>
         </div>
       </div>
       
       <div className="ml-4 flex items-center gap-2">
         <button
           onClick={handleInstallClick}
-          className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-105 active:scale-95 whitespace-nowrap"
+          className="rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-accent-foreground shadow-sm transition-all hover:scale-105 active:scale-95 whitespace-nowrap hover:opacity-90"
         >
           {installPromptEvent ? 'Install' : 'How to Install'}
         </button>
-        <button onClick={handleDismiss} className="rounded-full bg-surface-2 p-1.5 text-muted hover:text-foreground transition-colors" aria-label="Dismiss">
+        <button onClick={handleDismiss} className="flex items-center justify-center w-8 h-8 rounded-full bg-surface-2 text-muted hover:text-foreground hover:bg-surface-hover transition-colors" aria-label="Dismiss">
           <X size={16} />
         </button>
       </div>

@@ -11,6 +11,7 @@ export default function CameraModal({ onCapture, onClose }: CameraModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const [flash, setFlash] = useState(false);
 
   const startCamera = useCallback(async (mode: 'user' | 'environment') => {
     if (streamRef.current) {
@@ -49,6 +50,10 @@ export default function CameraModal({ onCapture, onClose }: CameraModalProps) {
 
   const handleSnap = () => {
     if (!videoRef.current) return;
+    // Flash effect
+    setFlash(true);
+    setTimeout(() => setFlash(false), 300);
+    
     const canvas = document.createElement('canvas');
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
@@ -56,7 +61,7 @@ export default function CameraModal({ onCapture, onClose }: CameraModalProps) {
     if (ctx) {
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       const dataUri = canvas.toDataURL('image/jpeg', 0.85); // compress slightly
-      onCapture(dataUri);
+      setTimeout(() => onCapture(dataUri), 200); // Small delay for flash to show
     }
   };
 
@@ -75,6 +80,11 @@ export default function CameraModal({ onCapture, onClose }: CameraModalProps) {
 
         {/* Video Feed */}
         <div className="relative h-full w-full bg-black">
+          {/* Flash overlay */}
+          <div className={[
+            'absolute inset-0 z-10 bg-white transition-opacity duration-200 pointer-events-none',
+            flash ? 'opacity-70' : 'opacity-0'
+          ].join(' ')} />
           <video
             ref={videoRef}
             autoPlay

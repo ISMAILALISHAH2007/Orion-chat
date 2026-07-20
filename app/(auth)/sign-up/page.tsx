@@ -32,10 +32,16 @@ export default function SignUpPage() {
 
   return (
     <div className="auth-container">
+      <div className="auth-bg-glow" />
+      <div className="auth-grid-pattern" />
       <div className="auth-card">
         <div className="auth-header">
           <div className="auth-logo flex items-center justify-center gap-2">
-            <Sparkles size={22} className="text-accent" /> ORION
+            <div className="relative">
+              <div className="absolute inset-0 animate-ping rounded-full bg-accent/20" />
+              <Sparkles size={22} className="text-accent relative" />
+            </div>
+            ORION
           </div>
           <h2 className="auth-title">Create account</h2>
           <p className="auth-subtitle">Get started with ORION</p>
@@ -57,13 +63,12 @@ export default function SignUpPage() {
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="password">Password</label>
-            <div style={{ position: 'relative' }}>
+            <div className="pass-input-wrapper">
               <input className="form-input" id="password" type={showPassword ? 'text' : 'password'}
                 placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)}
-                required disabled={loading || success} style={{ paddingRight: '60px' }} />
+                required disabled={loading || success} />
               <button type="button" onClick={() => setShowPassword(!showPassword)}
-                style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '13px' }}>
+                className="pass-toggle">
                 {showPassword ? 'Hide' : 'Show'}
               </button>
             </div>

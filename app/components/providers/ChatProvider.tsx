@@ -349,14 +349,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const reader = response.body!.getReader();
         const decoder = new TextDecoder();
         let accumulated = '';
+        let lastThrottledText = '';
+        let throttleTimer: ReturnType<typeof setTimeout> | null = null;
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          accumulated += decoder.decode(value, { stream: true });
-          
-          if (accumulated.length > 0) setIsResearching(false);
-
+        const flushUpdate = () => {
+          if (accumulated === lastThrottledText) return;
+          lastThrottledText = accumulated;
           setMessages((prev) => {
             const last = prev[prev.length - 1];
             if (last && last.sender === 'ai') {
@@ -365,6 +363,37 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               return [...prev, { sender: 'ai', text: accumulated, mode }];
             }
           });
+        };
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            // Final flush on stream end
+            flushUpdate();
+            break;
+          }
+          accumulated += decoder.decode(value, { stream: true });
+          
+          if (accumulated.length > 0) setIsResearching(false);
+
+          // Throttle: update UI every 80ms max instead of on every chunk
+          if (!throttleTimer) {
+            // But always do the first update immediately for instant feedback
+            if (lastThrottledText === '') {
+              flushUpdate();
+            } else {
+              throttleTimer = setTimeout(() => {
+                throttleTimer = null;
+                flushUpdate();
+              }, 80);
+            }
+          }
+        }
+
+        // Clear any pending throttle
+        if (throttleTimer) {
+          clearTimeout(throttleTimer);
+          flushUpdate(); // Ensure final text is rendered
         }
 
         if (justCreated) {

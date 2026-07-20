@@ -2,6 +2,58 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/lib/auth';
 import { prisma } from '@/app/lib/db';
+import Replicate from 'replicate';
+
+// List of free Hugging Face text-to-video models to try in order
+const HF_VIDEO_MODELS = [
+  'https://api-inference.huggingface.co/models/damo-vilab/text-to-video-ms-1.7b',
+  'https://api-inference.huggingface.co/models/ali-vilab/text-to-video-ms-1.7b',
+  'https://api-inference.huggingface.co/models/THUDM/CogVideoX-2b',
+];
+
+/**
+ * Generate a video using Replicate (free trial credits available).
+ * Uses async predictions with polling.
+ */
+async function generateReplicateVideo(prompt: string): Promise<string> {
+  const token = process.env.REPLICATE_API_KEY || '';
+  if (!token) throw new Error('REPLICATE_API_KEY missing');
+
+  console.log(`[Media API] Starting Replicate video generation: "${prompt}"`);
+
+  const replicate = new Replicate({ auth: token });
+
+  // Use a reliable open-source text-to-video model
+  // Wan 2.1 is a strong open-source choice with fast inference
+  const output = await replicate.run(
+    "wavespeedai/wan-2.1-t2v:9de0b9cae97e65c1095934cf0f45b26cd0f7020c66426e354486e36af6f81836",
+    {
+      input: {
+        prompt: prompt,
+        num_frames: 16,
+        frame_rate: 8,
+        num_inference_steps: 25,
+      },
+    }
+  );
+
+  if (!output) throw new Error('Replicate returned no output');
+
+  // Output can be a single URL string or an array of URLs
+  const videoUrl = Array.isArray(output) ? output[0] : output;
+  if (!videoUrl || typeof videoUrl !== 'string') throw new Error('Replicate returned invalid output');
+
+  console.log(`[Media API] Replicate video ready: ${videoUrl}`);
+
+  // Download and store the video
+  const videoRes = await fetch(videoUrl);
+  if (!videoRes.ok) throw new Error('Failed to download generated video from Replicate');
+
+  const arrayBuffer = await videoRes.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const base64 = buffer.toString('base64');
+  return `data:video/mp4;base64,${base64}`;
+}
 
 async function startVideoJob(prompt: string): Promise<string> {
   const mhToken = process.env.MAGIC_HOUR_API_KEY || '';
@@ -60,7 +112,6 @@ export async function GET(req: Request) {
       if (statusRes.status >= 400 && statusRes.status < 500) {
         return NextResponse.json({ error: `Job not found or invalid (${statusRes.status})` }, { status: 500 });
       }
-      // Only retry on 5xx server errors
       return NextResponse.json({ status: 'processing' }, { status: 200 });
     }
 
@@ -138,7 +189,6 @@ async function generateHuggingFaceImage(prompt: string, userId?: string): Promis
   
   console.log(`[Media API] Starting Hugging Face image generation: "${prompt}"`);
   
-  // Truncate to prevent token limits
   const truncatedPrompt = prompt.length > 800 ? prompt.substring(0, 800) : prompt;
   
   const res = await fetch("https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0", {
@@ -173,7 +223,6 @@ async function generateHuggingFaceImage(prompt: string, userId?: string): Promis
 async function generateImage(userId: string | undefined, prompt: string): Promise<string> {
   console.log(`[Media API] Using unlimited Pollinations.ai for image: "${prompt}"`);
   
-  // Truncate prompt to prevent 414 URI Too Long errors from Pollinations or Cloudflare
   const truncatedPrompt = prompt.length > 600 ? prompt.substring(0, 600) : prompt;
   const encodedPrompt = encodeURIComponent(truncatedPrompt);
   const seed = Math.floor(Math.random() * 1000000);
@@ -197,40 +246,99 @@ async function generateImage(userId: string | undefined, prompt: string): Promis
   return imageUrl; 
 }
 
+/**
+ * Try to generate a video using Hugging Face Inference API.
+ * Attempts multiple free models with timeout to find one that works.
+ */
 async function generateHuggingFaceVideo(prompt: string, userId?: string): Promise<string> {
   const hfToken = process.env.HUGGINGFACE_API_KEY || '';
   if (!hfToken) throw new Error('HUGGINGFACE_API_KEY missing');
   
-  console.log(`[Media API] Starting Hugging Face video generation: "${prompt}"`);
+  console.log(`[Media API] Starting Hugging Face video generation for: "${prompt}"`);
   
-  // Use a reliable text-to-video model on HF
-  const res = await fetch("https://api-inference.huggingface.co/models/damo-vilab/text-to-video-ms-1.7b", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${hfToken}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ inputs: prompt })
-  });
+  let lastError: string = '';
+  
+  for (const modelUrl of HF_VIDEO_MODELS) {
+    try {
+      console.log(`[Media API] Trying HF model: ${modelUrl}`);
+      
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90000);
+      
+      const res = await fetch(modelUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${hfToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ inputs: prompt }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeout);
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        lastError = `Model ${modelUrl.split('/').pop()} failed: ${errorText.substring(0, 200)}`;
+        console.warn(`[Media API] ${lastError}`);
+        continue;
+      }
 
-  if (!res.ok) {
-     const error = await res.text();
-     throw new Error(`Hugging Face API Error: ${error}`);
+      const arrayBuffer = await res.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64 = buffer.toString('base64');
+      const videoUrl = `data:video/mp4;base64,${base64}`;
+
+      if (userId) {
+        await prisma.video.create({
+          data: { userId, prompt, videoUrl: base64 },
+          select: { id: true }
+        });
+      }
+
+      console.log(`[Media API] Video generated successfully with HF model!`);
+      return videoUrl;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      lastError = `Model ${modelUrl.split('/').pop()} error: ${msg.substring(0, 200)}`;
+      console.warn(`[Media API] ${lastError}`);
+    }
   }
+  
+  throw new Error(`All Hugging Face models failed. Last error: ${lastError}`);
+}
 
-  const arrayBuffer = await res.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  const base64 = buffer.toString('base64');
-  const videoUrl = `data:video/mp4;base64,${base64}`;
-
+/** Save video to DB and update message, then return final URL */
+async function saveVideoAndUpdateMessage(
+  base64: string, userId: string | undefined, prompt: string, sessionId: string
+): Promise<string> {
+  let recordId = '';
   if (userId) {
-    await prisma.video.create({
+    const record = await prisma.video.create({
       data: { userId, prompt, videoUrl: base64 },
       select: { id: true }
     });
+    recordId = record.id;
   }
+  
+  const finalUrl = recordId ? `/api/video?id=${recordId}` : `data:video/mp4;base64,${base64}`;
 
-  return videoUrl;
+  if (sessionId !== 'current') {
+    const searchTag = `[GENERATING_VIDEO: ${prompt}]`;
+    const replacementTag = `[VIDEO: ${finalUrl}]`;
+    const msg = await prisma.message.findFirst({
+      where: { chatSessionId: sessionId, role: 'assistant', content: { contains: searchTag } },
+      orderBy: { createdAt: 'desc' }
+    });
+    if (msg) {
+      await prisma.message.update({
+        where: { id: msg.id },
+        data: { content: msg.content.replace(searchTag, replacementTag) }
+      });
+    }
+  }
+  
+  return finalUrl;
 }
 
 export async function POST(req: Request) {
@@ -244,38 +352,64 @@ export async function POST(req: Request) {
     }
     
     if (type === 'video') {
+      // Strategy: Try free options first (Replicate → Hugging Face), then paid (Magic Hour)
+      
+      // 1. Try Replicate (free trial credits for new users)
+      if (process.env.REPLICATE_API_KEY) {
+        try {
+          const base64 = await generateReplicateVideo(prompt);
+          const finalUrl = await saveVideoAndUpdateMessage(base64, userId, prompt, sessionId);
+          return NextResponse.json({ url: finalUrl }, { status: 200 });
+        } catch (repErr) {
+          const repMsg = repErr instanceof Error ? repErr.message : String(repErr);
+          console.error("[Media API] Replicate failed:", repMsg);
+          // Fall through to next option
+        }
+      }
+      
+      // 2. Try Hugging Face free models
       if (process.env.HUGGINGFACE_API_KEY) {
         try {
-          const finalUrl = await generateHuggingFaceVideo(prompt, userId);
-          
-          if (sessionId !== 'current') {
-            const searchTag = `[GENERATING_VIDEO: ${prompt}]`;
-            const replacementTag = `[VIDEO: ${finalUrl}]`;
-
-            const msg = await prisma.message.findFirst({
-              where: { chatSessionId: sessionId, role: 'assistant', content: { contains: searchTag } },
-              orderBy: { createdAt: 'desc' }
-            });
-
-            if (msg) {
-              await prisma.message.update({
-                where: { id: msg.id },
-                data: { content: msg.content.replace(searchTag, replacementTag) }
-              });
-            }
-          }
-
+          const base64 = await generateHuggingFaceVideo(prompt, userId);
+          const finalUrl = await saveVideoAndUpdateMessage(base64, userId, prompt, sessionId);
           return NextResponse.json({ url: finalUrl }, { status: 200 });
-        } catch (e: unknown) {
-          const errMsg = e instanceof Error ? e.message : String(e);
-          console.error("[Media API] Hugging Face failed, falling back to Magic Hour:", errMsg);
+        } catch (hfErr) {
+          const hfMsg = hfErr instanceof Error ? hfErr.message : String(hfErr);
+          console.error("[Media API] Hugging Face video failed:", hfMsg);
+          // Fall through to next option
+        }
+      }
+      
+      // 3. Try Magic Hour (paid) as last resort
+      if (process.env.MAGIC_HOUR_API_KEY) {
+        try {
           const jobId = await startVideoJob(prompt);
           return NextResponse.json({ jobId }, { status: 200 });
+        } catch (mhErr) {
+          const mhMsg = mhErr instanceof Error ? mhErr.message : String(mhErr);
+          console.error("[Media API] Magic Hour failed:", mhMsg);
+          
+          if (mhMsg.toLowerCase().includes('credit')) {
+            return NextResponse.json({ 
+              error: 'Video generation needs API credits. All providers failed:\n' +
+                '- Replicate: Check your REPLICATE_API_KEY and free trial status\n' +
+                '- Hugging Face: Free tier may not support video models\n' +
+                '- Magic Hour: Needs credits'
+            }, { status: 402 });
+          }
+          
+          return NextResponse.json({ error: `Video generation failed: ${mhMsg}` }, { status: 500 });
         }
-      } else {
-        const jobId = await startVideoJob(prompt);
-        return NextResponse.json({ jobId }, { status: 200 });
       }
+      
+      // 4. No working API keys configured
+      return NextResponse.json({ 
+        error: 'Video generation requires an API key. Configure one in your .env:\n' +
+          '- REPLICATE_API_KEY (free trial credits available → replicate.com)\n' +
+          '- HUGGINGFACE_API_KEY (free tier)\n' +
+          '- MAGIC_HOUR_API_KEY (paid, needs credits)'
+      }, { status: 500 });
+      
     } else if (type === 'image') {
       let finalUrl = '';
       if (process.env.HUGGINGFACE_API_KEY) {
